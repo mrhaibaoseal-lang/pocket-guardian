@@ -11,12 +11,12 @@ interface SafeConfirmButtonProps {
 }
 
 /**
- * 🛡️ 二次確認防誤觸按鈕 (Safe Undo / Delete):
- * First tap arms the button in amber for 3 seconds; second tap executes.
+ * 🛡️ 二次確認防誤觸按鈕 (Desert Titanium & Warm Amber Liquid Glass):
+ * First tap arms the button in warm champagne gold for 3 seconds; second tap executes.
  */
 export function SafeConfirmButton({
   label,
-  confirmLabel = '⚠️ 再按一次確認 (3s)',
+  confirmLabel = '再按一次確認 (3s)',
   onConfirm,
   style,
   compact = false,
@@ -64,34 +64,35 @@ const styles = StyleSheet.create({
   base: {
     paddingVertical: 10,
     paddingHorizontal: 14,
-    borderRadius: 12,
+    borderRadius: 999,
+    borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    borderWidth: 0.8,
   },
   compact: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 11,
+    borderRadius: 999,
   },
   idle: {
-    backgroundColor: 'rgba(239, 68, 68, 0.14)',
-    borderColor: 'rgba(239, 68, 68, 0.35)',
+    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    borderColor: 'rgba(230, 213, 184, 0.25)',
   },
   armed: {
-    backgroundColor: '#F59E0B',
-    borderColor: '#FBBF24',
+    backgroundColor: '#FBBF24',
+    borderColor: '#FDE68A',
   },
   text: {
-    color: '#FCA5A5',
-    fontSize: 13,
+    color: '#E6D5B8',
+    fontSize: 12,
     fontWeight: '700',
   },
   compactText: {
-    fontSize: 12,
+    fontSize: 11,
   },
   armedText: {
-    color: '#0F172A',
+    color: '#080705',
     fontWeight: '800',
   },
 });

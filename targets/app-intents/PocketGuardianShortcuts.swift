@@ -52,7 +52,7 @@ struct IngestNotificationIntent: AppIntent {
            let message = json["message"] as? String {
             return .result(value: message, dialog: IntentDialog(stringLiteral: message))
         }
-        return .result(value: "✅ 已傳送至守財靈", dialog: "✅ 已傳送至守財靈")
+        return .result(value: "✅ 已傳送至錢呢[BROKE AF]", dialog: "✅ 已傳送至錢呢[BROKE AF]")
     }
 }
 

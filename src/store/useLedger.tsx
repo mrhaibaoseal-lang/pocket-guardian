@@ -28,8 +28,8 @@ import type {
   Transaction,
 } from '../../core';
 
-const STORAGE_KEY = 'POCKET_GUARDIAN_LEDGER_V3_1';
-const META_KEY = 'POCKET_GUARDIAN_META_V3_1';
+const STORAGE_KEY = 'POCKET_GUARDIAN_LEDGER_V3_2_CLEAN';
+const META_KEY = 'POCKET_GUARDIAN_META_V3_2';
 
 export interface AppMeta {
   workerUrl: string;
@@ -38,84 +38,26 @@ export interface AppMeta {
 }
 
 function createInitialDemoLedger(): LedgerData {
-  const now = new Date().toISOString();
-  const l = new MemoryLedger({
+  return {
     settings: {
       ...DEFAULT_SETTINGS,
-      openingBank: 24500,
-      openingCash: 1200,
-      monthlyBudget: 15000,
+      openingBank: 0,
+      openingCash: 0,
+      monthlyBudget: 0,
       cycleStartDay: 1,
-      safetyFloor: 3000,
-      hourlyWage: 200,
-      bentoPrice: 120,
+      safetyFloor: 0,
+      hourlyWage: 0,
+      bentoPrice: 0,
       ownAccountSuffix: '83151',
-      piggyBankSaved: 680,
-      resistedImpulseTotal: 1890,
+      piggyBankSaved: 0,
+      resistedImpulseTotal: 0,
       lastSettledDate: null,
     },
     transactions: [],
     events: [],
-    payees: [
-      {
-        id: 'payee-friend-24126',
-        bankCode: '808',
-        accountSuffix: '24126',
-        displayName: '朋友 (24126)',
-        defaultCategory: '轉帳',
-      },
-    ],
-    subscriptions: [
-      {
-        id: 'sub-netflix',
-        name: 'Netflix 訂閱',
-        amount: 390,
-        billingDay: 29,
-        accountId: 'bank',
-        isActive: true,
-        autoPost: false,
-        lastChargedMonth: null,
-      },
-      {
-        id: 'sub-icloud',
-        name: 'iCloud+ 200GB',
-        amount: 90,
-        billingDay: 28,
-        accountId: 'bank',
-        isActive: true,
-        autoPost: false,
-        lastChargedMonth: null,
-      },
-    ],
-  });
-
-  // Seed with the user's real screenshot sample ($81 樂家康 Apple Pay + e.Fingo merged)
-  const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-  l.ingest(
-    'wallet',
-    { text: '玉山銀行 E.SUN BANK\n樂家康, 新北市新店區\n$81.00' },
-    tenMinAgo,
-  );
-  l.ingest(
-    'efingo',
-    { text: '玉山銀行\n簽帳金融卡消費 81元通知' },
-    new Date(Date.now() - 9 * 60 * 1000 - 50 * 1000).toISOString(),
-  );
-
-  // Seed one cash breakfast
-  l.upsert(
-    createManualExpense({
-      id: uuid(),
-      amount: 65,
-      method: 'cash',
-      category: '早餐',
-      merchant: '早餐店蛋餅紅茶',
-      occurredAt: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
-      now,
-    }),
-  );
-
-  return l.data;
+    payees: [],
+    subscriptions: [],
+  };
 }
 
 interface LedgerContextValue {
@@ -138,6 +80,7 @@ interface LedgerContextValue {
   reconcileAccount: (accountId: AccountId, actual: number, affectsBudget: boolean) => void;
   splitMergedTx: (id: string) => void;
   toggleAdvanceTx: (id: string) => void;
+  updateTxCategory: (id: string, category: string) => void;
   softDeleteTx: (id: string) => void;
   restoreTx: (id: string) => void;
   runScold: (item: string, price: number, mode: ScoldMode) => ScoldResult;
@@ -341,6 +284,18 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
     [data, persist, triggerHaptic],
   );
 
+  const updateTxCategory = useCallback(
+    (id: string, category: string) => {
+      const ledger = new MemoryLedger(data);
+      const target = ledger.data.transactions.find((t) => t.id === id);
+      if (!target) return;
+      ledger.update(id, { category });
+      persist(ledger.data);
+      triggerHaptic('light');
+    },
+    [data, persist, triggerHaptic],
+  );
+
   const softDeleteTx = useCallback(
     (id: string) => {
       const now = new Date().toISOString();
@@ -538,7 +493,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
     const fresh = createInitialDemoLedger();
     persist(fresh);
     setLastUndoableId(null);
-    setLastToast('🔄 已重置為預設範例帳本');
+    setLastToast('🧹 已將所有帳目與設定歸零');
     triggerHaptic('warning');
   }, [persist, triggerHaptic]);
 
@@ -557,6 +512,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       reconcileAccount,
       splitMergedTx,
       toggleAdvanceTx,
+      updateTxCategory,
       softDeleteTx,
       restoreTx,
       runScold,
@@ -601,6 +557,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       toggleSubscription,
       updateMeta,
       updateSettings,
+      updateTxCategory,
     ],
   );
 

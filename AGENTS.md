@@ -1,3 +1,46 @@
+# AGENTS.md — 專案開發與多 Agent 協作規範
+
+> 本文件為所有開發工具（**Antigravity** 與備援工具 **Cline**）共用的最高開發準則。任何 Agent 開始工作前必須遵守以下規範。
+
+## 1. 工具配置與模型分工（嚴禁重複工作）
+
+本專案僅使用 **Antigravity**（主力）與 **Cline**（備援），**不使用 Claude Code**。各模型依預設職責分工，可依任務難度彈性調整，但**絕不讓兩個模型重複執行同一件工作**：
+
+| 工具 / 模型 | 角色定位 | 負責範圍與觸發時機 |
+| :--- | :--- | :--- |
+| **Antigravity — Gemini 4** | **主力預設模型** | 1. 需求整理、功能規劃、任務拆解（維護 `TASKS.md`）<br>2. 一般程式開發、UI 元件修改、API 串接、常規重構<br>3. 撰寫與執行單元測試、日常小問題修正<br>4. 暫停或額度耗盡前更新 `HANDOFF.md` 與 `TASKS.md` |
+| **Antigravity — Claude Opus 5.5** | **高階架構與疑難專家** | **僅在關鍵時刻介入（不必檢查每個小修改）**：<br>1. 複雜跨模組架構分析（如原生 Swift `AppIntents` / `WidgetKit` 與 Expo 橋接）<br>2. Gemini 4 嘗試 2 次仍未解決的疑難 Bug 或 Race Condition<br>3. 重大資料結構或帳務邏輯修改前的方案審查<br>4. 核心關鍵程式碼（如 `core/dedupe.ts`、D1 原子鎖、金額計算）的品質檢查 |
+| **Cline + Google Gemini API** | **額度耗盡備援工具** | **僅在 Antigravity 用量耗盡時使用**：<br>1. 啟動後先讀取 `HANDOFF.md`、`TASKS.md`、檢查 `git status` / `git diff` 與目標程式碼<br>2. 嚴格沿用既有架構，接手完成 `TASKS.md` 中尚未完成的任務<br>3. 階段完成或切換回 Antigravity 前，更新 `HANDOFF.md` 與 `TASKS.md` |
+
+---
+
+## 2. 安全鐵律與單一寫入鎖定
+
+1. **單一 Agent 修改鎖定**：同一時間只允許**一個工具、一個 Agent** 修改工作目錄。切換 Antigravity 與 Cline 前，必須確認前一個 Agent 已完全停止。
+2. **禁止覆蓋未提交修改**：動手修改任何檔案前，必先檢查 `git status` 與 `git diff`。**嚴禁覆蓋、還原或丟棄工作區內尚未 commit 的修改**。
+3. **禁止擅自重寫已完成功能**：已在 `TASKS.md` 標記為完成 `[x]` 的模組，除非使用者明確要求修改或發現 Bug，否則**不得擅自重構、改寫或更換實作方式**。
+4. **禁止破壞性操作與自動推送／部署**：除非使用者在當次對話中**明確要求**，否則**嚴禁自行執行**：
+   - `git reset --hard`、`git checkout -- .`、`git restore .`、`git clean -fd`
+   - `git push`、`git push --force`
+   - `wrangler deploy`、`eas build`、`eas update` 或刪除任何資料庫／檔案。
+
+---
+
+## 3. 低成本與省 Token 讀取規範（Context Economy）
+
+1. **禁止無差別掃描全專案**：接手任務時，請嚴格依以下最小路徑讀取上下文：
+   - **Step 1**：讀取 `HANDOFF.md`（掌握最新進度、未提交檔案、待解問題與下一步）。
+   - **Step 2**：讀取 `TASKS.md`（對照當前任務項目與驗收條件）。
+   - **Step 3**：執行 `git status --short` 與 `git diff --stat`（確認實際程式碼異動）。
+   - **Step 4**：**只讀取與當前任務直接相關的 1～3 個程式碼檔案**。
+2. **禁止重複建立規劃文件**：本專案的產品需求（PRD）與系統架構已完整記錄於 `PLAN.md`，**無須另外建立 `PRD.md` 或 `ARCHITECTURE.md`**，亦不得在每次對話中重新規劃已定案的架構。
+3. **交接更新義務**：
+   - 當一個任務階段完成、準備暫停，或 Antigravity 用量即將耗盡時，當前 Agent 必須同步更新 `TASKS.md`（勾選狀態）與 `HANDOFF.md`（記錄修改檔案、測試結果與下一步）。
+
+---
+
+## 4. Expo / React Native 技術規範（既有規則）
+
 This is an Expo/React Native mobile application. Prioritize mobile-first patterns, performance, and cross-platform compatibility.
 
 ## Expo has changed — do not trust your training data
@@ -22,6 +65,12 @@ npx expo install --fix      # fix incompatible package versions
 ```
 
 Run lint and typecheck before declaring any task done.
+
+> **Windows PowerShell 環境提示**：若在非互動式 PowerShell 執行 `npx` 遇到 `"node" 不是內部或外部命令`，請直接使用完整 Node 路徑（避免重複嘗試浪費 Token）：
+> ```powershell
+> & "C:\Program Files\nodejs\node.exe" .\node_modules\typescript\bin\tsc --noEmit
+> & "C:\Program Files\nodejs\node.exe" .\node_modules\vitest\vitest.mjs run
+> ```
 
 ## Navigation & Routing
 

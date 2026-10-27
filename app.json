@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "PocketGuardian",
-    "slug": "pocket-guardian",
+    "name": "錢呢[BROKE AF]",
+    "slug": "broke-af",
     "owner": "laoshu77",
     "scheme": "myledger",
-    "version": "3.1.1",
+    "version": "3.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -12,8 +12,8 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.mrhaibaoseal.pocketguardian",
       "infoPlist": {
-        "CFBundleName": "PocketGuardian",
-        "CFBundleDisplayName": "PocketGuardian",
+        "CFBundleName": "BrokeAF",
+        "CFBundleDisplayName": "BrokeAF",
         "ITSAppUsesNonExemptEncryption": false
       }
     },

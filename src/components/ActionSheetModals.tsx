@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -18,13 +18,14 @@ export type ActiveModal = 'none' | 'expense' | 'atm' | 'scold' | 'reconcile';
 
 interface ActionSheetModalsProps {
   active: ActiveModal;
+  presetCategory?: string;
   onClose: () => void;
 }
 
-const CATEGORIES = ['早餐', '午餐/便當', '晚餐/宵夜', '飲料', '超商', '交通', '日用品', '轉帳', '娛樂'];
+const CATEGORIES = ['超商', '食物', '飲料', '車費', '早餐', '午餐/便當', '晚餐/宵夜', '日用品', '轉帳', '娛樂'];
 const ATM_AMOUNTS = [1000, 2000, 3000, 5000];
 
-export function ActionSheetModals({ active, onClose }: ActionSheetModalsProps) {
+export function ActionSheetModals({ active, presetCategory, onClose }: ActionSheetModalsProps) {
   const {
     data,
     summary,
@@ -40,10 +41,20 @@ export function ActionSheetModals({ active, onClose }: ActionSheetModalsProps) {
   const [entryMode, setEntryMode] = useState<'expense' | 'income'>('expense');
   const [amountStr, setAmountStr] = useState('');
   const [payMethod, setPayMethod] = useState<Exclude<PayMethod, 'atm' | 'other'>>('cash');
-  const [category, setCategory] = useState('午餐/便當');
+  const [category, setCategory] = useState('超商');
   const [merchant, setMerchant] = useState('');
   const [quickSentence, setQuickSentence] = useState('');
   const [incomeAccount, setIncomeAccount] = useState<AccountId>('bank');
+
+  useEffect(() => {
+    if (active === 'expense' && presetCategory) {
+      setEntryMode('expense');
+      setPayMethod('cash');
+      setCategory(presetCategory);
+      setAmountStr('');
+      setMerchant('');
+    }
+  }, [active, presetCategory]);
 
   // --- ATM state ---
   const [atmDir, setAtmDir] = useState<'withdraw' | 'deposit'>('withdraw');
@@ -241,6 +252,8 @@ export function ActionSheetModals({ active, onClose }: ActionSheetModalsProps) {
                     placeholder="輸入金額"
                     placeholderTextColor="#64748B"
                     style={styles.amountInput}
+                    autoFocus
+                    onSubmitEditing={handleExpenseSubmit}
                   />
                   {amountStr.length > 0 && (
                     <SafeConfirmButton
@@ -498,19 +511,26 @@ export function ActionSheetModals({ active, onClose }: ActionSheetModalsProps) {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(2, 6, 23, 0.78)',
+    backgroundColor: 'rgba(8, 7, 5, 0.78)',
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: '#0F172A',
+    width: '100%',
+    maxWidth: 430,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(24, 20, 16, 0.95)',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
+    borderCurve: 'continuous',
     paddingHorizontal: 18,
     paddingTop: 16,
     paddingBottom: 28,
     maxHeight: '88%',
-    borderTopWidth: 1,
-    borderColor: '#1E293B',
+    borderWidth: 0.8,
+    borderTopColor: 'rgba(255, 230, 190, 0.38)',
+    borderLeftColor: 'rgba(255, 230, 190, 0.20)',
+    borderRightColor: 'rgba(212, 175, 55, 0.06)',
+    borderBottomColor: 'rgba(212, 175, 55, 0.06)',
   },
   sheetHeader: {
     flexDirection: 'row',
@@ -519,20 +539,23 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sheetTitle: {
-    color: '#F8FAFC',
-    fontSize: 17,
-    fontWeight: '800',
+    color: '#FAF6F0',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.3,
   },
   closeBtn: {
     paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: '#1E293B',
+    borderRadius: 999,
+    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    borderWidth: 0.8,
+    borderColor: 'rgba(230, 213, 184, 0.25)',
   },
   closeBtnText: {
-    color: '#94A3B8',
-    fontSize: 13,
-    fontWeight: '700',
+    color: '#E6D5B8',
+    fontSize: 12,
+    fontWeight: '600',
   },
   body: {
     paddingBottom: 12,
@@ -542,42 +565,46 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   helperText: {
-    color: '#94A3B8',
-    fontSize: 13,
-    lineHeight: 19,
+    color: 'rgba(235, 225, 210, 0.5)',
+    fontSize: 12,
+    lineHeight: 18,
   },
   nlBox: {
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
-    backgroundColor: '#1E293B',
-    borderRadius: 14,
-    padding: 6,
-    borderWidth: 1,
-    borderColor: '#334155',
+    backgroundColor: 'rgba(28, 24, 20, 0.6)',
+    borderRadius: 999,
+    padding: 5,
+    borderWidth: 0.8,
+    borderTopColor: 'rgba(255, 230, 190, 0.38)',
+    borderLeftColor: 'rgba(255, 230, 190, 0.20)',
+    borderRightColor: 'rgba(212, 175, 55, 0.06)',
+    borderBottomColor: 'rgba(212, 175, 55, 0.06)',
   },
   nlInput: {
     flex: 1,
-    color: '#F8FAFC',
-    fontSize: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    minWidth: 0,
+    color: '#FAF6F0',
+    fontSize: 13,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
   },
   nlBtn: {
-    backgroundColor: '#10B981',
-    paddingVertical: 9,
+    backgroundColor: '#FBBF24',
+    paddingVertical: 8,
     paddingHorizontal: 14,
-    borderRadius: 10,
+    borderRadius: 999,
   },
   nlBtnText: {
-    color: '#052E16',
-    fontWeight: '800',
-    fontSize: 13,
+    color: '#080705',
+    fontWeight: '700',
+    fontSize: 12,
   },
   label: {
-    color: '#94A3B8',
+    color: 'rgba(235, 225, 210, 0.5)',
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '600',
     marginTop: 4,
   },
   segmentRow: {
@@ -588,74 +615,76 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     paddingHorizontal: 10,
-    borderRadius: 12,
-    backgroundColor: '#1E293B',
+    borderRadius: 999,
+    backgroundColor: 'rgba(214, 195, 165, 0.12)',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#334155',
+    borderWidth: 0.8,
+    borderColor: 'rgba(230, 213, 184, 0.25)',
   },
   segmentActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#60A5FA',
+    backgroundColor: 'rgba(245, 158, 11, 0.22)',
+    borderColor: 'rgba(251, 191, 36, 0.45)',
   },
   segmentActiveGreen: {
-    backgroundColor: '#059669',
-    borderColor: '#34D399',
+    backgroundColor: 'rgba(245, 158, 11, 0.22)',
+    borderColor: 'rgba(251, 191, 36, 0.45)',
   },
   segmentText: {
-    color: '#94A3B8',
-    fontSize: 13,
-    fontWeight: '700',
+    color: '#E6D5B8',
+    fontSize: 12,
+    fontWeight: '600',
   },
   segmentTextActive: {
-    color: '#FFFFFF',
+    color: '#FBBF24',
+    fontWeight: '700',
   },
   chipBtn: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: '#1E293B',
+    paddingVertical: 9,
+    borderRadius: 999,
+    backgroundColor: 'rgba(214, 195, 165, 0.12)',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#334155',
+    borderWidth: 0.8,
+    borderColor: 'rgba(230, 213, 184, 0.25)',
   },
   chipBtnActive: {
-    backgroundColor: '#1D4ED8',
-    borderColor: '#60A5FA',
+    backgroundColor: 'rgba(245, 158, 11, 0.22)',
+    borderColor: 'rgba(251, 191, 36, 0.45)',
   },
   chipText: {
-    color: '#CBD5E1',
-    fontSize: 13,
-    fontWeight: '700',
+    color: '#E6D5B8',
+    fontSize: 12,
+    fontWeight: '600',
   },
   chipTextActive: {
-    color: '#FFFFFF',
+    color: '#FBBF24',
+    fontWeight: '700',
   },
   wrapRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
   },
   tagBtn: {
-    paddingVertical: 8,
+    paddingVertical: 7,
     paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: '#1E293B',
-    borderWidth: 1,
-    borderColor: '#334155',
+    borderRadius: 999,
+    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    borderWidth: 0.8,
+    borderColor: 'rgba(230, 213, 184, 0.25)',
   },
   tagBtnActive: {
-    backgroundColor: '#0EA5E9',
-    borderColor: '#7DD3FC',
+    backgroundColor: 'rgba(245, 158, 11, 0.22)',
+    borderColor: 'rgba(251, 191, 36, 0.45)',
   },
   tagText: {
-    color: '#CBD5E1',
-    fontSize: 13,
+    color: '#E6D5B8',
+    fontSize: 12,
     fontWeight: '600',
   },
   tagTextActive: {
-    color: '#082F49',
-    fontWeight: '800',
+    color: '#FBBF24',
+    fontWeight: '700',
   },
   amountInputRow: {
     flexDirection: 'row',
@@ -664,144 +693,157 @@ const styles = StyleSheet.create({
   },
   amountInput: {
     flex: 1,
-    backgroundColor: '#020617',
-    color: '#F8FAFC',
-    fontSize: 22,
-    fontWeight: '800',
-    paddingHorizontal: 14,
+    minWidth: 0,
+    backgroundColor: 'rgba(28, 24, 20, 0.65)',
+    color: '#FAF6F0',
+    fontSize: 24,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.5,
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#334155',
+    borderRadius: 18,
+    borderWidth: 0.8,
+    borderTopColor: 'rgba(255, 230, 190, 0.38)',
+    borderLeftColor: 'rgba(255, 230, 190, 0.20)',
+    borderRightColor: 'rgba(212, 175, 55, 0.06)',
+    borderBottomColor: 'rgba(212, 175, 55, 0.06)',
   },
   textInput: {
-    backgroundColor: '#020617',
-    color: '#F8FAFC',
-    fontSize: 15,
+    minWidth: 0,
+    backgroundColor: 'rgba(28, 24, 20, 0.65)',
+    color: '#FAF6F0',
+    fontSize: 14,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#334155',
+    paddingVertical: 11,
+    borderRadius: 16,
+    borderWidth: 0.8,
+    borderColor: 'rgba(230, 213, 184, 0.25)',
   },
   feelingHint: {
     color: '#FBBF24',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   primaryBtn: {
-    backgroundColor: '#10B981',
-    paddingVertical: 15,
-    borderRadius: 16,
+    backgroundColor: '#FBBF24',
+    paddingVertical: 14,
+    borderRadius: 999,
     alignItems: 'center',
     marginTop: 6,
   },
   primaryBtnText: {
-    color: '#022C22',
-    fontSize: 15,
-    fontWeight: '900',
+    color: '#080705',
+    fontSize: 14,
+    fontWeight: '800',
   },
   atmChip: {
     flex: 1,
     minWidth: '22%',
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: '#1E293B',
+    paddingVertical: 11,
+    borderRadius: 999,
+    backgroundColor: 'rgba(214, 195, 165, 0.12)',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#334155',
+    borderWidth: 0.8,
+    borderColor: 'rgba(230, 213, 184, 0.25)',
   },
   atmChipActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#60A5FA',
+    backgroundColor: 'rgba(245, 158, 11, 0.22)',
+    borderColor: 'rgba(251, 191, 36, 0.45)',
   },
   atmChipText: {
-    color: '#E2E8F0',
-    fontSize: 14,
-    fontWeight: '800',
+    color: '#E6D5B8',
+    fontSize: 13,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#1E293B',
+    backgroundColor: 'rgba(28, 24, 20, 0.6)',
     padding: 12,
-    borderRadius: 12,
+    borderRadius: 16,
+    borderWidth: 0.8,
+    borderColor: 'rgba(230, 213, 184, 0.2)',
   },
   switchLabel: {
-    color: '#E2E8F0',
-    fontSize: 13,
+    color: '#E6D5B8',
+    fontSize: 12,
     flex: 1,
     marginRight: 8,
   },
   scoldCard: {
     padding: 14,
-    borderRadius: 16,
-    borderWidth: 1,
+    borderRadius: 20,
+    borderWidth: 0.8,
+    borderTopColor: 'rgba(255, 230, 190, 0.38)',
+    borderLeftColor: 'rgba(255, 230, 190, 0.20)',
+    borderRightColor: 'rgba(212, 175, 55, 0.06)',
+    borderBottomColor: 'rgba(212, 175, 55, 0.06)',
+    backgroundColor: 'rgba(28, 24, 20, 0.7)',
     gap: 6,
   },
   scoldStop: {
-    backgroundColor: 'rgba(239, 68, 68, 0.16)',
-    borderColor: '#EF4444',
+    backgroundColor: 'rgba(245, 158, 11, 0.14)',
   },
   scoldThink: {
-    backgroundColor: 'rgba(245, 158, 11, 0.16)',
-    borderColor: '#F59E0B',
+    backgroundColor: 'rgba(214, 195, 165, 0.12)',
   },
   scoldOk: {
-    backgroundColor: 'rgba(16, 185, 129, 0.16)',
-    borderColor: '#10B981',
+    backgroundColor: 'rgba(28, 24, 20, 0.6)',
   },
   scoldHeadline: {
-    color: '#F8FAFC',
-    fontSize: 16,
-    fontWeight: '900',
+    color: '#FAF6F0',
+    fontSize: 15,
+    fontWeight: '700',
     marginBottom: 4,
   },
   scoldLine: {
-    color: '#E2E8F0',
+    color: '#E6D5B8',
     fontSize: 13,
     lineHeight: 20,
   },
   scoldActions: {
-    gap: 10,
+    gap: 8,
     marginTop: 6,
   },
   resistBtn: {
-    backgroundColor: '#10B981',
-    paddingVertical: 14,
+    backgroundColor: '#FBBF24',
+    paddingVertical: 13,
     paddingHorizontal: 14,
-    borderRadius: 14,
+    borderRadius: 999,
     alignItems: 'center',
   },
   resistBtnText: {
-    color: '#022C22',
-    fontWeight: '900',
-    fontSize: 14,
-  },
-  buyAnywayBtn: {
-    backgroundColor: 'rgba(239, 68, 68, 0.18)',
-    paddingVertical: 12,
-    borderRadius: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.4)',
-  },
-  buyAnywayText: {
-    color: '#FCA5A5',
-    fontWeight: '700',
+    color: '#080705',
+    fontWeight: '800',
     fontSize: 13,
   },
+  buyAnywayBtn: {
+    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    paddingVertical: 11,
+    borderRadius: 999,
+    alignItems: 'center',
+    borderWidth: 0.8,
+    borderColor: 'rgba(230, 213, 184, 0.25)',
+  },
+  buyAnywayText: {
+    color: 'rgba(235, 225, 210, 0.5)',
+    fontWeight: '600',
+    fontSize: 12,
+  },
   deltaBox: {
-    backgroundColor: '#1E293B',
+    backgroundColor: 'rgba(245, 158, 11, 0.14)',
     padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#334155',
+    borderRadius: 16,
+    borderWidth: 0.8,
+    borderColor: 'rgba(251, 191, 36, 0.3)',
   },
   deltaText: {
-    color: '#FBBF24',
-    fontSize: 14,
-    fontWeight: '800',
+    color: '#FAF6F0',
+    fontSize: 13,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
 });
