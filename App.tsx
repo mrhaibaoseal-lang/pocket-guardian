@@ -7,7 +7,10 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import { ActionSheetModals, type ActiveModal } from './src/components/ActionSheetModals';
 import { LiquidGlassCard } from './src/components/LiquidGlassView';
 import { SafeConfirmButton } from './src/components/SafeConfirmButton';
@@ -25,6 +28,25 @@ const TABS: ReadonlyArray<{ key: TabKey; glyph: string; label: string }> = [
   { key: 'testbench', glyph: '⚡', label: '捷徑' },
   { key: 'settings', glyph: '⚙', label: '設定' },
 ];
+
+// Hardware-accurate iPhone 16 Plus (6.7") Safe Area Insets:
+// Top (Dynamic Island + Status Bar): 59pt | Bottom (Home Indicator): 34pt
+const IPHONE_16_PLUS_TOP_INSET = 59;
+const IPHONE_16_PLUS_BOTTOM_INSET = 34;
+
+function useHardwareSafeInsets() {
+  const rawInsets = useSafeAreaInsets();
+  if (Platform.OS === 'web') {
+    return {
+      top: IPHONE_16_PLUS_TOP_INSET,
+      bottom: IPHONE_16_PLUS_BOTTOM_INSET,
+    };
+  }
+  return {
+    top: Math.max(rawInsets.top, IPHONE_16_PLUS_TOP_INSET),
+    bottom: Math.max(rawInsets.bottom, IPHONE_16_PLUS_BOTTOM_INSET),
+  };
+}
 
 /**
  * 【一、底層暖調環境光畫布 (Ambient Canvas)】
@@ -71,6 +93,7 @@ function AmbientLightCanvas() {
 
 function MainShell() {
   const { lastUndoableTx, lastToast, clearToast, softDeleteTx } = useLedger();
+  const safeInsets = useHardwareSafeInsets();
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
   const [activeModal, setActiveModal] = useState<ActiveModal>('none');
   const [presetCategory, setPresetCategory] = useState<string>('超商');
@@ -102,7 +125,7 @@ function MainShell() {
         margin: 0;
         padding: 0;
         height: 100%;
-        background-color: #050403;
+        background-color: #040302;
         overflow: hidden;
         user-select: none;
         -webkit-font-smoothing: antialiased;
@@ -129,18 +152,25 @@ function MainShell() {
     };
   }, []);
 
+  // Total height of Sticky Header (59pt safe top + 46pt brand bar = 105pt)
+  const headerTotalHeight = safeInsets.top + 46;
+  // Space reserved at bottom for Floating Bar + Home Indicator (34pt + 66pt = 100pt)
+  const bottomTotalPad = safeInsets.bottom + 68;
+
   const content = (
     <View style={styles.rootViewport}>
       {/* Layer 1: Desert Titanium & Warm Amber Ambient Canvas */}
       <AmbientLightCanvas />
 
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
+      <View style={styles.safeArea}>
         <StatusBar style="light" />
 
         {/* Main Screen Content (Scrolls over the Ambient Light Canvas) */}
         <View style={styles.screenBody}>
           {activeTab === 'dashboard' && (
             <DashboardScreen
+              topInsetPadding={headerTotalHeight + 10}
+              bottomInsetPadding={bottomTotalPad + 16}
               onOpenModal={(m, cat) => {
                 if (cat) setPresetCategory(cat);
                 setActiveModal(m);
@@ -153,29 +183,54 @@ function MainShell() {
             />
           )}
           {activeTab === 'transactions' && (
-            <View style={styles.subScreenPad}>
+            <View
+              style={[
+                styles.subScreenPad,
+                {
+                  paddingTop: headerTotalHeight + 6,
+                  paddingBottom: bottomTotalPad,
+                },
+              ]}
+            >
               <TransactionsScreen />
             </View>
           )}
           {activeTab === 'testbench' && (
-            <View style={styles.subScreenPad}>
+            <View
+              style={[
+                styles.subScreenPad,
+                {
+                  paddingTop: headerTotalHeight + 6,
+                  paddingBottom: bottomTotalPad,
+                },
+              ]}
+            >
               <ShortcutsTestBenchScreen />
             </View>
           )}
           {activeTab === 'settings' && (
-            <View style={styles.subScreenPad}>
+            <View
+              style={[
+                styles.subScreenPad,
+                {
+                  paddingTop: headerTotalHeight + 6,
+                  paddingBottom: bottomTotalPad,
+                },
+              ]}
+            >
               <SettingsAndSubsScreen />
             </View>
           )}
         </View>
 
         {/* ====================================================================
-            STICKY FROSTED BLUR HEADER (浮動毛玻璃頂部列)
+            STICKY FROSTED BLUR HEADER (浮動毛玻璃頂部列 — 自動避開動態島 59pt)
            ==================================================================== */}
         <View style={styles.stickyHeaderContainer} pointerEvents="box-none">
           <View
             style={[
               styles.stickyHeaderBlurWrap,
+              { paddingTop: safeInsets.top + 6 },
               Platform.OS === 'web' ? styles.webStickyBackdrop : null,
             ]}
           >
@@ -237,9 +292,15 @@ function MainShell() {
         </View>
 
         {/* ====================================================================
-            SHRINKING FLOATING LIQUID GLASS BAR (隨滾動縮放的懸浮導覽膠囊)
+            SHRINKING FLOATING LIQUID GLASS BAR (自動避開底部 Home 條 34pt)
            ==================================================================== */}
-        <View style={styles.floatingBarOuter} pointerEvents="box-none">
+        <View
+          style={[
+            styles.floatingBarOuter,
+            { bottom: safeInsets.bottom - 6 },
+          ]}
+          pointerEvents="box-none"
+        >
           <Animated.View style={[styles.floatingBarAnimWrap, floatingBarAnimStyle]}>
             <LiquidGlassCard
               shape="pill"
@@ -296,28 +357,41 @@ function MainShell() {
           presetCategory={presetCategory}
           onClose={() => setActiveModal('none')}
         />
-      </SafeAreaView>
+      </View>
     </View>
   );
 
-  // On Windows PC Web Browser: Wrap inside an exact 1:1 iPhone 16 Plus (430x932 pt) Simulator Frame!
+  // On Windows PC Web Browser: True-to-Hardware iPhone 16 Plus (430x932 pt) Simulator!
+  // Crucially, the Status Bar + Dynamic Island (top 59pt) and Home Indicator (bottom 34pt)
+  // are overlaid INSIDE the viewport with position: 'absolute', matching real iOS 1:1!
   if (Platform.OS === 'web') {
     return (
       <View style={styles.webDesktopBackdrop}>
         <View style={styles.iphone16PlusFrame}>
-          {/* Simulated iOS Status Bar + Dynamic Island */}
-          <View style={styles.statusBarRow}>
-            <Text style={styles.statusBarTime}>9:41</Text>
-            <View style={styles.dynamicIsland} />
-            <Text style={styles.statusBarIcons}>5G 🔋</Text>
-          </View>
+          {/* Inner 430x932 Viewport */}
+          <View style={styles.iphoneInnerScreen}>
+            {content}
 
-          {/* Inner Screen Viewport */}
-          <View style={styles.iphoneInnerScreen}>{content}</View>
+            {/* Overlay 1: Real iPhone 16 Plus Top 59pt Status Bar + Dynamic Island */}
+            <View style={styles.statusBarOverlay} pointerEvents="none">
+              <View style={styles.statusBarLeft}>
+                <Text style={styles.statusBarTime}>4:04</Text>
+                <Text style={styles.statusBarMuteIcon}>🔕</Text>
+              </View>
+              <View style={styles.dynamicIsland} />
+              <View style={styles.statusBarRight}>
+                <Text style={styles.statusBarSignal}>▂▄▆█</Text>
+                <Text style={styles.statusBarWifi}>◔</Text>
+                <View style={styles.batteryPill}>
+                  <Text style={styles.batteryText}>54</Text>
+                </View>
+              </View>
+            </View>
 
-          {/* Simulated iOS Home Indicator */}
-          <View style={styles.homeIndicatorRow}>
-            <View style={styles.homeIndicatorPill} />
+            {/* Overlay 2: Real iPhone 16 Plus Bottom 34pt Home Indicator Bar */}
+            <View style={styles.homeIndicatorOverlay} pointerEvents="none">
+              <View style={styles.homeIndicatorPill} />
+            </View>
           </View>
         </View>
       </View>
@@ -405,64 +479,110 @@ const styles = StyleSheet.create({
     backgroundColor: '#040302',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   iphone16PlusFrame: {
     width: 430,
-    height: 920,
-    maxHeight: '97%',
+    height: 932,
+    maxHeight: '98%',
     backgroundColor: '#080705',
-    borderRadius: 48,
+    borderRadius: 52,
     borderWidth: 8,
     borderColor: 'rgba(230, 213, 184, 0.22)',
     overflow: 'hidden',
   },
-  statusBarRow: {
-    height: 36,
-    backgroundColor: '#080705',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
-  },
-  statusBarTime: {
-    color: '#FAF6F0',
-    fontSize: 13,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
-    width: 48,
-  },
-  dynamicIsland: {
-    width: 116,
-    height: 24,
-    borderRadius: 999,
-    backgroundColor: '#000000',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255, 230, 190, 0.2)',
-  },
-  statusBarIcons: {
-    color: '#FAF6F0',
-    fontSize: 11,
-    fontWeight: '600',
-    width: 48,
-    textAlign: 'right',
-  },
   iphoneInnerScreen: {
     flex: 1,
     minHeight: 0,
+    position: 'relative',
     overflow: 'hidden',
   },
-  homeIndicatorRow: {
-    height: 18,
-    backgroundColor: '#080705',
+  // Overlaid inside the top 59pt of the viewport — 1:1 with real iPhone 16 Plus!
+  statusBarOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: IPHONE_16_PLUS_TOP_INSET,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 26,
+    paddingTop: 14,
+    zIndex: 999,
+  },
+  statusBarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    width: 82,
+  },
+  statusBarTime: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.3,
+  },
+  statusBarMuteIcon: {
+    fontSize: 12,
+  },
+  dynamicIsland: {
+    width: 122,
+    height: 35,
+    borderRadius: 999,
+    backgroundColor: '#000000',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 230, 190, 0.16)',
+  },
+  statusBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 6,
+    width: 82,
+  },
+  statusBarSignal: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  statusBarWifi: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  batteryPill: {
+    backgroundColor: 'rgba(255, 255, 255, 0.28)',
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
+  },
+  batteryText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  // Overlaid inside the bottom 34pt of the viewport — 1:1 with real iPhone 16 Plus!
+  homeIndicatorOverlay: {
+    position: 'absolute',
+    bottom: 8,
+    left: 0,
+    right: 0,
+    height: 5,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 999,
   },
   homeIndicatorPill: {
-    width: 134,
+    width: 138,
     height: 5,
     borderRadius: 999,
-    backgroundColor: 'rgba(235, 225, 210, 0.35)',
+    backgroundColor: '#FFFFFF',
   },
   safeArea: {
     flex: 1,
@@ -474,8 +594,6 @@ const styles = StyleSheet.create({
   },
   subScreenPad: {
     flex: 1,
-    paddingTop: 52,
-    paddingBottom: 78,
   },
   stickyHeaderContainer: {
     position: 'absolute',
@@ -486,8 +604,8 @@ const styles = StyleSheet.create({
   },
   stickyHeaderBlurWrap: {
     paddingHorizontal: 16,
-    paddingVertical: 11,
-    backgroundColor: 'rgba(18, 15, 12, 0.56)',
+    paddingBottom: 11,
+    backgroundColor: 'rgba(18, 15, 12, 0.58)',
     borderBottomWidth: 0.8,
     borderBottomColor: 'rgba(255, 230, 190, 0.16)',
     overflow: 'hidden',
@@ -575,7 +693,6 @@ const styles = StyleSheet.create({
   },
   floatingBarOuter: {
     position: 'absolute',
-    bottom: 12,
     left: 0,
     right: 0,
     alignItems: 'center',

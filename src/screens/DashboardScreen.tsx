@@ -20,6 +20,8 @@ import {
 import { useLedger } from '../store/useLedger';
 
 interface DashboardScreenProps {
+  topInsetPadding?: number;
+  bottomInsetPadding?: number;
   onOpenModal: (modal: ActiveModal, presetCategory?: string) => void;
   onNavigateTab: (tab: 'dashboard' | 'transactions' | 'testbench' | 'settings') => void;
   onScrollShrinkChange?: (shrunk: boolean) => void;
@@ -62,6 +64,8 @@ function glyphForTx(tx: Transaction): string {
 }
 
 export function DashboardScreen({
+  topInsetPadding = 114,
+  bottomInsetPadding = 116,
   onOpenModal,
   onNavigateTab,
   onScrollShrinkChange,
@@ -130,7 +134,13 @@ export function DashboardScreen({
     <View style={styles.container}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingTop: topInsetPadding,
+            paddingBottom: bottomInsetPadding,
+          },
+        ]}
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
         onScroll={handleScroll}
