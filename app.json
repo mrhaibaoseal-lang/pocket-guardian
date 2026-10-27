@@ -1,9 +1,10 @@
 {
   "expo": {
-    "name": "守財靈 PocketGuardian",
+    "name": "PocketGuardian",
     "slug": "pocket-guardian",
+    "owner": "laoshu77",
     "scheme": "myledger",
-    "version": "3.1.0",
+    "version": "3.1.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -11,7 +12,8 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.mrhaibaoseal.pocketguardian",
       "infoPlist": {
-        "CFBundleDisplayName": "守財靈",
+        "CFBundleName": "PocketGuardian",
+        "CFBundleDisplayName": "PocketGuardian",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
