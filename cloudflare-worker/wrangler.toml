@@ -1,0 +1,13 @@
+name = "pocket-guardian-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# D1 SQLite Database binding (create with: npx wrangler d1 create pocket-guardian-db)
+[[d1_databases]]
+binding = "DB"
+database_name = "pocket-guardian-db"
+database_id = "04989ce0-5883-406d-a306-91549540eb8f"
+
+[vars]
+DEFAULT_OWN_ACCOUNT_SUFFIX = "83151"
+# Set INGEST_TOKEN as a secret: npx wrangler secret put INGEST_TOKEN

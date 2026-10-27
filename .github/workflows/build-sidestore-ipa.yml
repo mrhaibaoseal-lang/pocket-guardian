@@ -1,0 +1,75 @@
+name: Build Unsigned SideStore IPA (iPhone 16 Plus / iOS 27)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build-unsigned-ipa:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Prebuild native iOS project (iOS 17.0+ compatible with iOS 27)
+        env:
+          CI: "1"
+        run: npx expo prebuild --platform ios --clean
+
+      - name: Inject Swift AppIntents into Xcode Target
+        run: |
+          APP_DIR=$(find ios -maxdepth 1 -type d ! -name "ios" ! -name "Pods" ! -name "build" ! -name "*.xcodeproj" ! -name "*.xcworkspace" | head -n 1)
+          cp targets/app-intents/PocketGuardianShortcuts.swift "$APP_DIR/PocketGuardianShortcuts.swift"
+          ruby -e '
+            require "xcodeproj"
+            proj_path = Dir.glob("ios/*.xcodeproj").first
+            project = Xcodeproj::Project.open(proj_path)
+            target = project.targets.first
+            app_name = File.basename(proj_path, ".xcodeproj")
+            group = project.main_group.find_subpath(app_name, true)
+            file_ref = group.new_file("PocketGuardianShortcuts.swift")
+            target.add_file_references([file_ref])
+            project.save
+            puts "Injected PocketGuardianShortcuts.swift into #{target.name}"
+          '
+
+      - name: Build unsigned .app (Bypassing Xcode code signing for SideStore)
+        run: |
+          WORKSPACE=$(ls -d ios/*.xcworkspace | head -n 1)
+          SCHEME=$(basename "$WORKSPACE" .xcworkspace)
+          xcodebuild \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath ios/build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+             clean build
+
+      - name: Package Payload into PocketGuardian-SideStore.ipa
+        run: |
+          mkdir -p Payload
+          APP_PATH=$(find ios/build/Build/Products/Release-iphoneos -name "*.app" -maxdepth 1 | head -n 1)
+          cp -R "$APP_PATH" Payload/
+          zip -r9 PocketGuardian-SideStore.ipa Payload
+
+      - name: Upload SideStore Unsigned IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PocketGuardian-SideStore-IPA
+          path: PocketGuardian-SideStore.ipa
