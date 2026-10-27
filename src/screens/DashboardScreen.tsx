@@ -109,12 +109,16 @@ export function DashboardScreen({
   }, [data.transactions, safe.today]);
 
   const budgetProgressPercent = useMemo(() => {
-    if (settings.monthlyBudget <= 0) {
-      return safe.spentThisCycle > 0 ? 100 : 12;
-    }
+    if (safe.spentThisCycle <= 0) return 0;
+    if (settings.monthlyBudget <= 0) return 100;
     const raw = (safe.spentThisCycle / settings.monthlyBudget) * 100;
-    return Math.min(100, Math.max(8, raw));
+    return Math.min(100, Math.max(4, raw));
   }, [safe.spentThisCycle, settings.monthlyBudget]);
+
+  const remainingMonthlyBudget = Math.max(
+    0,
+    settings.monthlyBudget - safe.spentThisCycle,
+  );
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (!onScrollShrinkChange) return;
@@ -156,11 +160,14 @@ export function DashboardScreen({
         >
           <View style={styles.heroTopLabelRow}>
             <Text style={styles.heroOverline}>本月總支出 · DESERT TITANIUM</Text>
-            <View style={styles.cycleCapsule}>
+            <Pressable
+              style={styles.cycleCapsule}
+              onPress={() => onNavigateTab('settings')}
+            >
               <Text style={styles.cycleCapsuleText}>
-                週期剩 {safe.daysRemaining} 天 · 電量 {safe.batteryPercent}%
+                每月 {settings.cycleStartDay} 號結算 · 剩 {safe.daysRemaining} 天
               </Text>
-            </View>
+            </Pressable>
           </View>
 
           <View style={styles.heroNumberRow}>
@@ -178,19 +185,21 @@ export function DashboardScreen({
 
           {/* 琥珀香檳光管進度條 (Warm Amber -> Champagne Gold Light Tube) */}
           <View style={styles.lightTubeTrack}>
-            <View
-              style={[
-                styles.lightTubeGlowWrap,
-                { width: `${budgetProgressPercent}%` },
-              ]}
-            >
-              <LinearGradient
-                colors={['#D97706', '#FDE68A']}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                style={styles.lightTubeGradient}
-              />
-            </View>
+            {budgetProgressPercent > 0 && (
+              <View
+                style={[
+                  styles.lightTubeGlowWrap,
+                  { width: `${budgetProgressPercent}%` },
+                ]}
+              >
+                <LinearGradient
+                  colors={['#D97706', '#FDE68A']}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 1, y: 0.5 }}
+                  style={styles.lightTubeGradient}
+                />
+              </View>
+            )}
           </View>
 
           <View style={styles.tubeSubRow}>
@@ -201,9 +210,14 @@ export function DashboardScreen({
               </Text>{' '}
               / 日額 ${safe.dailyAllowance.toLocaleString()}
             </Text>
-            <Text style={styles.tubeSubText}>
-              月預算 ${settings.monthlyBudget.toLocaleString()}
-            </Text>
+            <Pressable onPress={() => onNavigateTab('settings')}>
+              <Text style={styles.tubeSubText}>
+                本月剩餘預算{' '}
+                <Text style={styles.amberHighlightText}>
+                  ${remainingMonthlyBudget.toLocaleString()}
+                </Text>
+              </Text>
+            </Pressable>
           </View>
 
           <View style={styles.horizontalHairline} />
