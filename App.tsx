@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { ActionSheetModals, type ActiveModal } from './src/components/ActionSheetModals';
 import { SafeConfirmButton } from './src/components/SafeConfirmButton';
@@ -17,7 +17,7 @@ function MainShell() {
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
   const [activeModal, setActiveModal] = useState<ActiveModal>('none');
 
-  return (
+  const content = (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
       <StatusBar style="light" />
 
@@ -106,6 +106,28 @@ function MainShell() {
       />
     </SafeAreaView>
   );
+
+  // On Windows PC Web Browser: Wrap inside an exact 1:1 iPhone 16 Plus (430x932 pt) Simulator Frame!
+  if (Platform.OS === 'web') {
+    return (
+      <View style={styles.webDesktopBackdrop}>
+        <View style={styles.webSimulatorHeader}>
+          <Text style={styles.webSimulatorTitle}>
+            📱 iPhone 16 Plus (6.7&quot; · 430×932 pt) 電腦即時模擬預覽器
+          </Text>
+        </View>
+        <View style={styles.iphone16PlusFrame}>
+          {/* Simulated Dynamic Island */}
+          <View style={styles.dynamicIslandRow}>
+            <View style={styles.dynamicIsland} />
+          </View>
+          <View style={styles.iphoneInnerScreen}>{content}</View>
+        </View>
+      </View>
+    );
+  }
+
+  return content;
 }
 
 export default function App() {
@@ -119,13 +141,54 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  webDesktopBackdrop: {
+    flex: 1,
+    backgroundColor: '#030712',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  webSimulatorHeader: {
+    marginBottom: 8,
+  },
+  webSimulatorTitle: {
+    color: '#94A3B8',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  iphone16PlusFrame: {
+    width: 430,
+    height: 900,
+    maxHeight: '94%',
+    backgroundColor: '#0B0F17',
+    borderRadius: 44,
+    borderWidth: 6,
+    borderColor: '#334155',
+    overflow: 'hidden',
+  },
+  dynamicIslandRow: {
+    height: 28,
+    backgroundColor: '#0B0F17',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dynamicIsland: {
+    width: 112,
+    height: 20,
+    borderRadius: 999,
+    backgroundColor: '#000000',
+  },
+  iphoneInnerScreen: {
+    flex: 1,
+    minHeight: 0,
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#0B0F17',
   },
   topHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     borderBottomWidth: 1,
     borderBottomColor: '#1E293B',
   },
@@ -136,7 +199,7 @@ const styles = StyleSheet.create({
   },
   brandTitle: {
     color: '#F8FAFC',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '900',
   },
   iosBadge: {
@@ -149,18 +212,18 @@ const styles = StyleSheet.create({
   },
   iosBadgeText: {
     color: '#38BDF8',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
   },
   toastBanner: {
-    marginHorizontal: 16,
+    marginHorizontal: 14,
     marginTop: 6,
     backgroundColor: '#065F46',
     borderColor: '#10B981',
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -178,14 +241,14 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   undoBanner: {
-    marginHorizontal: 16,
+    marginHorizontal: 14,
     marginTop: 6,
     backgroundColor: '#1E293B',
     borderColor: '#334155',
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 5,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -209,6 +272,7 @@ const styles = StyleSheet.create({
   },
   screenBody: {
     flex: 1,
+    minHeight: 0,
   },
   tabBar: {
     flexDirection: 'row',
@@ -216,25 +280,25 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#1E293B',
     paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingVertical: 5,
     gap: 6,
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
+    paddingVertical: 5,
     borderRadius: 12,
   },
   tabItemActive: {
     backgroundColor: '#1E293B',
   },
   tabIcon: {
-    fontSize: 18,
+    fontSize: 17,
   },
   tabLabel: {
     color: '#64748B',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     marginTop: 2,
   },
