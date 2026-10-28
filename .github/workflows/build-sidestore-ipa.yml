@@ -2,6 +2,11 @@ name: Build Unsigned SideStore IPA (iPhone 16 Plus / iOS 27)
 
 on:
   workflow_dispatch:
+    inputs:
+      runner:
+        description: "macOS Runner image (use macos-26-intel when arm64 pool is congested)"
+        required: false
+        default: "macos-26-intel"
   push:
     branches:
       - main
@@ -9,7 +14,7 @@ on:
 
 jobs:
   build-unsigned-ipa:
-    runs-on: macos-latest
+    runs-on: ${{ inputs.runner || 'macos-26-intel' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
