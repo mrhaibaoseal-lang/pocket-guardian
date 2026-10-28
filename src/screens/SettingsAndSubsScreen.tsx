@@ -286,11 +286,13 @@ export function SettingsAndSubsScreen() {
             />
           </View>
           <View style={styles.fieldItem}>
-            <Text style={styles.fieldLabel}>自己玉山末五碼</Text>
+            <Text style={styles.fieldLabel}>我的帳戶末碼 (多組用逗號分隔)</Text>
             <TextInput
               style={styles.input}
               value={ownSuffixStr}
               onChangeText={setOwnSuffixStr}
+              placeholder="83151, 99999"
+              placeholderTextColor="rgba(235, 225, 210, 0.35)"
             />
           </View>
         </View>

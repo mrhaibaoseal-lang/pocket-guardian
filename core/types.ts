@@ -75,6 +75,10 @@ export interface ParsedEvent {
   payeeBankCode: string | null;
   payeeSuffix: string | null;
   ownSuffix: string | null;
+  /** Parser confidence level ('high' for structured/label-anchored, 'low' for fallback). */
+  confidence?: 'high' | 'low';
+  /** Matched structural evidence for debugging in the inbox. */
+  evidence?: string | null;
   /** Human readable reason, useful in the shortcut test bench. */
   reason: string;
 }

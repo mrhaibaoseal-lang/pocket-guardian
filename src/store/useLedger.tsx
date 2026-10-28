@@ -68,6 +68,9 @@ interface LedgerContextValue {
   lastToast: string | null;
   clearToast: () => void;
   clearUndo: () => void;
+  setBannerPaused: (paused: boolean) => void;
+  deleteInboxEvent: (eventId: string) => void;
+  resolveInboxEvent: (eventId: string, amount: number, merchant?: string) => void;
   ingestShortcut: (source: EventSource | null, raw: RawInput, customTime?: string) => IngestResult;
   addQuickExpense: (
     amount: number,
@@ -109,23 +112,32 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
     sidestoreRefreshedAt: new Date().toISOString(),
   });
   const [lastUndoableId, setLastUndoableId] = useState<string | null>(null);
-  const [lastToast, setLastToast] = useState<string | null>(null);
+  const [lastToast, setLastToastState] = useState<string | null>(null);
+  const [toastSeq, setToastSeq] = useState<number>(0);
+  const [bannerPaused, setBannerPaused] = useState<boolean>(false);
+
+  const setLastToast = useCallback((msg: string | null) => {
+    setLastToastState(msg);
+    if (msg) setToastSeq((n) => n + 1);
+  }, []);
 
   useEffect(() => {
-    if (!lastToast) return;
+    if (!lastToast || bannerPaused) return;
+    const isErrorToast = lastToast.startsWith('⚠️');
+    const duration = isErrorToast ? 8000 : 4500;
     const timer = setTimeout(() => {
-      setLastToast(null);
-    }, 4500);
+      setLastToastState(null);
+    }, duration);
     return () => clearTimeout(timer);
-  }, [lastToast]);
+  }, [lastToast, toastSeq, bannerPaused]);
 
   useEffect(() => {
-    if (!lastUndoableId) return;
+    if (!lastUndoableId || bannerPaused) return;
     const timer = setTimeout(() => {
       setLastUndoableId(null);
     }, 4500);
     return () => clearTimeout(timer);
-  }, [lastUndoableId]);
+  }, [lastUndoableId, toastSeq, bannerPaused]);
 
   useEffect(() => {
     (async () => {
@@ -512,7 +524,61 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
     setLastUndoableId(null);
     setLastToast('🧹 已將所有帳目與設定歸零');
     triggerHaptic('warning');
-  }, [persist, triggerHaptic]);
+  }, [persist, setLastToast, triggerHaptic]);
+
+  const deleteInboxEvent = useCallback(
+    (eventId: string) => {
+      const next: LedgerData = {
+        ...data,
+        events: data.events.filter((e) => e.id !== eventId),
+      };
+      persist(next);
+      setLastToast('🗑️ 已從收件匣移除該筆紀錄');
+      triggerHaptic('light');
+    },
+    [data, persist, setLastToast, triggerHaptic],
+  );
+
+  const resolveInboxEvent = useCallback(
+    (eventId: string, amount: number, merchant?: string) => {
+      if (!Number.isFinite(amount) || amount <= 0) return;
+      const ev = data.events.find((e) => e.id === eventId);
+      const now = new Date().toISOString();
+      const occurredAt = ev?.parsed.occurredAt ?? ev?.receivedAt ?? now;
+      const method: Exclude<PayMethod, 'atm' | 'other'> =
+        ev?.source === 'transfer_page'
+          ? 'bank_transfer'
+          : ev?.source === 'wallet'
+          ? 'apple_pay'
+          : 'debit_card';
+      const defaultMerchant =
+        merchant?.trim() ||
+        ev?.parsed.merchant ||
+        (ev?.parsed.payeeSuffix ? `轉帳給 ****${ev.parsed.payeeSuffix}` : '收件匣補記');
+      const ledger = new MemoryLedger(data);
+      const tx = createManualExpense({
+        id: uuid(),
+        amount: Math.round(amount),
+        method,
+        category: method === 'bank_transfer' ? '轉帳' : '其他',
+        merchant: defaultMerchant,
+        note: '從收件匣手動補記',
+        occurredAt,
+        now,
+      });
+      ledger.upsert(tx);
+      ledger.data.events = ledger.data.events.map((e) =>
+        e.id === eventId
+          ? { ...e, status: 'new_tx', transactionId: tx.id, reason: `已手動補記 $${tx.amount}` }
+          : e,
+      );
+      persist(ledger.data);
+      setLastUndoableId(tx.id);
+      setLastToast(`✅ 已從收件匣補記 ${tx.merchant} $${tx.amount}`);
+      triggerHaptic('success');
+    },
+    [data, persist, setLastToast, triggerHaptic],
+  );
 
   const value = useMemo<LedgerContextValue>(
     () => ({
@@ -523,6 +589,9 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       lastToast,
       clearToast: () => setLastToast(null),
       clearUndo: () => setLastUndoableId(null),
+      setBannerPaused,
+      deleteInboxEvent,
+      resolveInboxEvent,
       ingestShortcut,
       addQuickExpense,
       addIncome,
@@ -556,6 +625,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       data,
       deletePayee,
       deleteSubscription,
+      deleteInboxEvent,
       ingestShortcut,
       lastToast,
       lastUndoableTx,
@@ -564,8 +634,10 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       reconcileAccount,
       recordResistedImpulse,
       resetDemoData,
+      resolveInboxEvent,
       restoreTx,
       runScold,
+      setLastToast,
       settleEveningPiggy,
       softDeleteTx,
       splitMergedTx,

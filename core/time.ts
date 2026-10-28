@@ -13,13 +13,69 @@ export function taipeiMonth(at: string | Date): string {
   return taipeiDate(at).slice(0, 7);
 }
 
-/** Parse "2026-10-26 02:07:37" (Taipei local time) to an ISO UTC string. */
-export function taipeiLocalToIso(local: string): string | null {
-  const m = local.match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
-  if (!m) return null;
-  const [, y, mo, d, h, mi, s] = m;
-  const utc = Date.UTC(+y, +mo - 1, +d, +h, +mi, s ? +s : 0) - TAIPEI_OFFSET_MS;
-  return new Date(utc).toISOString();
+/**
+ * Parse Taipei local date/time strings to an ISO UTC string.
+ * Supports:
+ * - "2026-10-26 02:07:37", "2026/10/26 02:07", "2026年10月26日 02:07"
+ * - ROC year: "115/10/26 02:07:37", "115-10-26 02:07", "115年10月26日 02:07"
+ * - Short MM/DD with time: "10/26 02:07", "10月26日 02:07" (uses year from referenceIso)
+ * - Date-only: "2026-10-26", "2026/10/26", "115/10/26", "115年10月26日" (defaults to 12:00 Taipei)
+ */
+export function taipeiLocalToIso(local: string, referenceIso?: string): string | null {
+  // 1. YYYY-MM-DD HH:mm(:ss) or YYYY年MM月DD日 HH:mm(:ss)
+  const fullWithTime = local.match(
+    /(?:^|[^\d])(20\d{2})\s*(?:[-/.]|年)\s*(\d{1,2})\s*(?:[-/.]|月)\s*(\d{1,2})\s*日?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/,
+  );
+  if (fullWithTime) {
+    const [, y, mo, d, h, mi, s] = fullWithTime;
+    const utc = Date.UTC(+y, +mo - 1, +d, +h, +mi, s ? +s : 0) - TAIPEI_OFFSET_MS;
+    return new Date(utc).toISOString();
+  }
+
+  // 2. ROC year (100-199) with time: 115/10/26 02:07(:37) or 115年10月26日 02:07
+  const rocWithTime = local.match(
+    /(?:^|[^\d])(?:民國\s*)?(1\d{2})\s*(?:[-/.]|年)\s*(\d{1,2})\s*(?:[-/.]|月)\s*(\d{1,2})\s*日?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/,
+  );
+  if (rocWithTime) {
+    const [, rocY, mo, d, h, mi, s] = rocWithTime;
+    const y = +rocY + 1911;
+    const utc = Date.UTC(y, +mo - 1, +d, +h, +mi, s ? +s : 0) - TAIPEI_OFFSET_MS;
+    return new Date(utc).toISOString();
+  }
+
+  // 3. Short MM/DD HH:mm(:ss) without year (e.g. "10/26 02:07" or "10月26日 02:07")
+  const shortWithTime = local.match(
+    /(?:^|[^\d/-])(\d{1,2})\s*(?:[/]|月)\s*(\d{1,2})\s*日?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/,
+  );
+  if (shortWithTime) {
+    const [, mo, d, h, mi, s] = shortWithTime;
+    const refYear = referenceIso ? Number(taipeiDate(referenceIso).slice(0, 4)) : new Date().getUTCFullYear();
+    const utc = Date.UTC(refYear, +mo - 1, +d, +h, +mi, s ? +s : 0) - TAIPEI_OFFSET_MS;
+    return new Date(utc).toISOString();
+  }
+
+  // 4. Date-only YYYY-MM-DD / YYYY/MM/DD / YYYY年MM月DD日
+  const fullDateOnly = local.match(
+    /(?:^|[^\d])(20\d{2})\s*(?:[-/.]|年)\s*(\d{1,2})\s*(?:[-/.]|月)\s*(\d{1,2})\s*日?(?=$|[^\d])/,
+  );
+  if (fullDateOnly) {
+    const [, y, mo, d] = fullDateOnly;
+    const utc = Date.UTC(+y, +mo - 1, +d, 12, 0, 0) - TAIPEI_OFFSET_MS;
+    return new Date(utc).toISOString();
+  }
+
+  // 5. Date-only ROC year 115/10/28 / 115-10-28 / 115年10月28日
+  const rocDateOnly = local.match(
+    /(?:^|[^\d])(?:民國\s*)?(1\d{2})\s*(?:[-/.]|年)\s*(\d{1,2})\s*(?:[-/.]|月)\s*(\d{1,2})\s*日?(?=$|[^\d])/,
+  );
+  if (rocDateOnly) {
+    const [, rocY, mo, d] = rocDateOnly;
+    const y = +rocY + 1911;
+    const utc = Date.UTC(y, +mo - 1, +d, 12, 0, 0) - TAIPEI_OFFSET_MS;
+    return new Date(utc).toISOString();
+  }
+
+  return null;
 }
 
 /** Add days to a YYYY-MM-DD string. */

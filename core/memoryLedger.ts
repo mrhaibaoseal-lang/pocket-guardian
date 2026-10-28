@@ -1,7 +1,7 @@
 import { createAdjustment, decideIngest, idempotencyKeyFor, PAIR_WINDOW_MIN, splitTransaction } from './dedupe';
 import type { IngestDecision, RecentEvent } from './dedupe';
 import { computeBalances, dueSubscriptions, matchSubscription } from './ledger';
-import { guessSource, normalizeText, parseEvent } from './parsers';
+import { guessSource, maskSensitiveText, normalizeText, parseEvent } from './parsers';
 import type { RawInput } from './parsers';
 import { buildSummary, confirmationText } from './summary';
 import type { DashboardSummary } from './summary';
@@ -140,17 +140,27 @@ export class MemoryLedger {
     }
 
     const status = statusOf(decision, parsed);
+    const maskedRaw =
+      parsed.kind === 'otp' ? null : maskSensitiveText((raw.text ?? fingerprint).slice(0, 2000));
     this.data.events.push({
       id: eventId,
       source: parsed.source,
-      rawText: parsed.kind === 'otp' ? null : (raw.text ?? fingerprint).slice(0, 2000),
-      fingerprint: parsed.kind === 'otp' ? '' : fingerprint,
+      rawText: maskedRaw,
+      fingerprint: parsed.kind === 'otp' ? '' : maskSensitiveText(fingerprint),
       receivedAt: now,
       parsed,
       transactionId: tx?.id ?? null,
       status,
       reason: decision.reason,
     });
+    // Prune events older than 30 days and cap at 300 entries
+    const cutoffMs = Date.parse(now) - 30 * 24 * 60 * 60 * 1000;
+    if (Number.isFinite(cutoffMs)) {
+      this.data.events = this.data.events.filter((e) => {
+        const ms = Date.parse(e.receivedAt);
+        return !Number.isFinite(ms) || ms >= cutoffMs;
+      });
+    }
     if (this.data.events.length > 300) this.data.events.splice(0, this.data.events.length - 300);
 
     const summary = this.summary(now);

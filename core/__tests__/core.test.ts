@@ -131,6 +131,188 @@ describe('parsers (real samples)', () => {
   it('handles full-width digits from OCR', () => {
     expect(parseEvent('efingo', { text: '簽帳金融卡消費 ８１元通知' }, T0, '83151').amount).toBe(81);
   });
+
+  it('covers transfer amounts 20 / 100 / 1,000 in both single-column and two-column OCR layouts with status bar noise', () => {
+    for (const rawAmt of ['20', '100', '1,000']) {
+      const expected = Number(rawAmt.replace(/,/g, ''));
+      const singleCol = [
+        '10:50',
+        '* 100•',
+        '交易成功',
+        '2026-10-26 02:07:37',
+        `轉帳金額 ${rawAmt}`,
+        '轉入對象 808 玉山商業銀行 ********24126',
+        '自己帳號 808 玉山商業銀行 ********83151',
+      ].join('\n');
+      const twoCol = [
+        '10:50 5G 100',
+        '轉帳金額',
+        '轉入對象',
+        '自己帳號',
+        rawAmt,
+        '808玉山商業銀行',
+        '********24126',
+        '808玉山商業銀行',
+        '********83151',
+      ].join('\n');
+
+      expect(parseEvent('transfer_page', { text: singleCol }, T0, '83151')).toMatchObject({
+        kind: 'transfer_out',
+        amount: expected,
+        payeeSuffix: '24126',
+      });
+      expect(parseEvent('transfer_page', { text: twoCol }, T0, '83151')).toMatchObject({
+        kind: 'transfer_out',
+        amount: expected,
+        payeeSuffix: '24126',
+      });
+    }
+  });
+
+  it('ignores promotional "滿 1,000 送 100" across all channels without falling back to wallet, while booking real spend with cashback wording', () => {
+    const promo = '雙11 刷卡滿 1,000 元送 100 元刷卡金，立即登錄';
+    expect(parseEvent('efingo', { text: promo }, T0, '83151').kind).toBe('ignored');
+    expect(parseEvent('wallet', { text: promo }, T0, '83151').kind).toBe('ignored');
+
+    const realWithCashback = '消費 NT$320，享 1% 回饋';
+    const parsedReal = parseEvent('efingo', { text: realWithCashback }, T0, '83151');
+    expect(parsedReal).toMatchObject({
+      kind: 'card_spend',
+      amount: 320,
+    });
+  });
+
+  it('extracts transfer amount 1,000 and ignores fee 15 in both single-column and two-column layouts', () => {
+    const singleWithFee = [
+      '轉帳成功',
+      '2026-10-28 14:20:00',
+      '轉帳金額 1,000 元',
+      '手續費 15 元',
+      '轉入帳號 013 國泰世華 ********55667',
+    ].join('\n');
+    const twoColWithFee = [
+      '轉帳結果',
+      '轉帳金額',
+      '手續費',
+      '轉入帳號',
+      '自己帳號',
+      '1,000',
+      '15',
+      '013 國泰世華銀行',
+      '********55667',
+      '808 玉山商業銀行',
+      '********83151',
+    ].join('\n');
+
+    expect(parseEvent('transfer_page', { text: singleWithFee }, T0, '83151')).toMatchObject({
+      kind: 'transfer_out',
+      amount: 1000,
+      payeeSuffix: '55667',
+    });
+    expect(parseEvent('transfer_page', { text: twoColWithFee }, T0, '83151')).toMatchObject({
+      kind: 'transfer_out',
+      amount: 1000,
+      payeeSuffix: '55667',
+    });
+  });
+
+  it('never mistakes dates (2026-10-28, 2026/10/28, 115/10/28, 115年10月28日, 10/26 02:07) for amounts and parses transaction dates', () => {
+    const dateBelowLabel = [
+      '轉帳成功',
+      '轉帳金額',
+      '2026-10-28',
+      '115/10/28',
+      '1,000',
+      '轉入對象 812 台新銀行 ********99887',
+    ].join('\n');
+    expect(parseEvent('transfer_page', { text: dateBelowLabel }, T0, '83151')).toMatchObject({
+      kind: 'transfer_out',
+      amount: 1000,
+      payeeSuffix: '99887',
+    });
+
+    const rocDateTransfer = [
+      '交易完成',
+      '115/10/26 02:07:37',
+      '轉帳金額 500',
+      '轉入帳號 700 中華郵政 ********11223',
+    ].join('\n');
+    const parsedRoc = parseEvent('transfer_page', { text: rocDateTransfer }, T0, '83151');
+    expect(parsedRoc.amount).toBe(500);
+    expect(parsedRoc.occurredAt.startsWith('2026-10-25T18:07')).toBe(true);
+
+    const shortDateTransfer = [
+      '轉帳成功',
+      '10/26 14:30',
+      '轉帳金額 250',
+      '轉入帳號 004 臺灣銀行 ********33445',
+    ].join('\n');
+    const parsedShort = parseEvent('transfer_page', { text: shortDateTransfer }, T0, '83151');
+    expect(parsedShort.amount).toBe(250);
+    expect(parsedShort.occurredAt.startsWith('2026-10-26T')).toBe(true);
+  });
+
+  it('ignores self-transfers when the destination account belongs to the user', () => {
+    const selfTransfer = [
+      '交易成功',
+      '2026-10-26 02:07:37',
+      '轉帳金額 1,000',
+      '轉入對象 013 國泰世華 ********99999',
+      '自己帳號 808 玉山商業銀行 ********83151',
+    ].join('\n');
+    const parsed = parseEvent('transfer_page', { text: selfTransfer }, T0, '83151, 99999');
+    expect(parsed.kind).toBe('ignored');
+
+    const l = ledger({ ownAccountSuffix: '83151, 99999' });
+    const res = l.ingest('transfer_page', { text: selfTransfer }, T0);
+    expect(res.status).toBe('ignored');
+    expect(l.data.transactions).toHaveLength(0);
+  });
+
+  it('handles Apple Pay (iOS 27 Wallet) currency formats, flags foreign currency for review, and sends empty inputs to inbox', () => {
+    expect(parseEvent('wallet', { merchant: '全家', amount: '$81.00' }, T0, '83151')).toMatchObject({
+      kind: 'card_spend',
+      amount: 81,
+      merchant: '全家',
+    });
+    expect(parseEvent('wallet', { merchant: '全聯', amount: 'NT$81' }, T0, '83151')).toMatchObject({
+      kind: 'card_spend',
+      amount: 81,
+      merchant: '全聯',
+    });
+    expect(parseEvent('wallet', { merchant: '好市多', amount: 'NT$1,234.00' }, T0, '83151')).toMatchObject({
+      kind: 'card_spend',
+      amount: 1234,
+      merchant: '好市多',
+    });
+
+    // Foreign currency must NOT be booked as TWD
+    const foreignUsd = parseEvent('wallet', { merchant: 'App Store', amount: 'US$10.00' }, T0, '83151');
+    expect(foreignUsd.kind).toBe('unknown');
+    expect(foreignUsd.amount).toBeNull();
+
+    const foreignJpy = parseEvent('wallet', { text: 'Lawson\n¥1,000' }, T0, '83151');
+    expect(foreignJpy.kind).toBe('unknown');
+    expect(foreignJpy.amount).toBeNull();
+
+    // Merchant without amount or empty string must go to inbox, never book $0
+    const l = ledger();
+    const onlyMerchant = l.ingest('wallet', { merchant: '星巴克', amount: '' }, T0);
+    expect(onlyMerchant.transaction).toBeNull();
+    expect(l.data.transactions).toHaveLength(0);
+    expect(l.data.events.length).toBeGreaterThan(0);
+
+    const bothEmpty = l.ingest('wallet', { text: '' }, T0);
+    expect(bothEmpty.transaction).toBeNull();
+    expect(l.data.transactions).toHaveLength(0);
+  });
+
+  it('masks full bank account numbers in stored inbox events', () => {
+    const l = ledger();
+    l.ingest('transfer_page', { text: '交易成功\n轉帳金額 200\n轉入帳號 808 0123456724126' }, T0);
+    expect(l.data.events[0].rawText).not.toContain('0123456724126');
+    expect(l.data.events[0].rawText).toContain('24126');
+  });
 });
 
 describe('dedupe: Apple Pay + e.Fingo never double charge', () => {
@@ -256,6 +438,14 @@ describe('transfers', () => {
     const l = ledger();
     l.upsert(createManualExpense({ id: 'm1', amount: 100, method: 'bank_transfer', occurredAt: '2026-10-25T18:05:00.000Z', now: T0 }));
     expect(l.ingest('transfer_page', { text: TRANSFER_100 }, T0).status).toBe('merged');
+    expect(l.data.transactions).toHaveLength(1);
+  });
+
+  it('dedupes a transfer without timestamp or across efingo + screenshot within ±3 minutes', () => {
+    const l = ledger();
+    const noTimeScreenshot = '交易成功\n轉帳金額 350\n轉入對象 808 玉山商業銀行 ********24126';
+    expect(l.ingest('transfer_page', { text: noTimeScreenshot }, T0).status).toBe('new_tx');
+    expect(l.ingest('transfer_page', { text: noTimeScreenshot }, plus(T0, 45)).status).toBe('duplicate');
     expect(l.data.transactions).toHaveLength(1);
   });
 });

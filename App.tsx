@@ -93,22 +93,28 @@ function AmbientLightCanvas() {
 
 function DismissibleBanner({
   onDismiss,
+  onPauseChange,
   style,
   children,
 }: {
   onDismiss: () => void;
+  onPauseChange?: (paused: boolean) => void;
   style?: ViewStyle;
   children: React.ReactNode;
 }) {
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  // Only allow upward swipe (dy < -10) and ✕ button to dismiss, avoiding iOS left-edge back gesture conflict.
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 8 || Math.abs(g.dx) > 12,
+      onMoveShouldSetPanResponder: (_, g) => g.dy < -8 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderGrant: () => onPauseChange?.(true),
       onPanResponderRelease: (_, g) => {
-        if (g.dy < -10 || Math.abs(g.dx) > 24) {
+        onPauseChange?.(false);
+        if (g.dy < -10) {
           onDismiss();
         }
       },
+      onPanResponderTerminate: () => onPauseChange?.(false),
     }),
   ).current;
 
@@ -117,17 +123,21 @@ function DismissibleBanner({
       style={style}
       {...panResponder.panHandlers}
       onTouchStart={(e) => {
-        const t = e.nativeEvent;
-        touchStartRef.current = { x: t.pageX, y: t.pageY };
+        onPauseChange?.(true);
+        touchStartYRef.current = e.nativeEvent.pageY;
       }}
       onTouchEnd={(e) => {
-        if (!touchStartRef.current) return;
-        const dx = e.nativeEvent.pageX - touchStartRef.current.x;
-        const dy = e.nativeEvent.pageY - touchStartRef.current.y;
-        touchStartRef.current = null;
-        if (dy < -10 || Math.abs(dx) > 24) {
+        onPauseChange?.(false);
+        if (touchStartYRef.current === null) return;
+        const dy = e.nativeEvent.pageY - touchStartYRef.current;
+        touchStartYRef.current = null;
+        if (dy < -10) {
           onDismiss();
         }
+      }}
+      onTouchCancel={() => {
+        onPauseChange?.(false);
+        touchStartYRef.current = null;
       }}
     >
       {children}
@@ -136,7 +146,7 @@ function DismissibleBanner({
 }
 
 function MainShell() {
-  const { lastUndoableTx, lastToast, clearToast, clearUndo, softDeleteTx } = useLedger();
+  const { lastUndoableTx, lastToast, clearToast, clearUndo, setBannerPaused, softDeleteTx } = useLedger();
   const safeInsets = useHardwareSafeInsets();
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
   const [activeModal, setActiveModal] = useState<ActiveModal>('none');
@@ -292,10 +302,11 @@ function MainShell() {
             </View>
           </View>
 
-          {/* Unified Liquid Glass Notification & Undo Banner (Auto-hides in 4.5s, or swipe / tap ✕ to dismiss) */}
+          {/* Unified Liquid Glass Notification & Undo Banner (Auto-hides in 4.5s/8s, pauses on hold, swipe up or tap ✕ to dismiss) */}
           {lastToast || lastUndoableTx ? (
             <DismissibleBanner
               style={styles.toastWrap}
+              onPauseChange={setBannerPaused}
               onDismiss={() => {
                 clearToast();
                 clearUndo();

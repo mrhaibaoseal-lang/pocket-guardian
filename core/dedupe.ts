@@ -159,9 +159,29 @@ export function decideIngest(input: DecideInput): IngestDecision {
     };
   }
 
-  // Rule 0b: same transfer screenshot captured twice.
+  // Rule 0b: same transfer screenshot captured twice (by exact idempotency key or ±3 min window).
   if (keyMatch) {
     return { action: 'duplicate', reason: '這張轉帳畫面已經記過了', transactionId: keyMatch.id };
+  }
+  if (p.kind === 'transfer_out') {
+    const incomingBankSlot = p.source === 'transfer_page' ? 'transfer_page' : 'efingo_push';
+    const dupTransfer = candidates.find(
+      (t) =>
+        !t.deletedAt &&
+        t.type === 'expense' &&
+        t.method === 'bank_transfer' &&
+        t.amount === p.amount &&
+        minutesBetween(t.occurredAt, p.occurredAt) <= 3 &&
+        (t.isLocked || t.bankSlot === incomingBankSlot) &&
+        (!p.payeeSuffix || !t.merchant || t.merchant.includes(p.payeeSuffix)),
+    );
+    if (dupTransfer) {
+      return {
+        action: 'duplicate',
+        reason: '3 分鐘內已有相同金額與對象的轉帳紀錄，已略過重複',
+        transactionId: dupTransfer.id,
+      };
+    }
   }
 
   const inWindow = candidates.filter(

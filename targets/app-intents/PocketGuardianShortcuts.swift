@@ -12,24 +12,34 @@ enum ShortcutSourceOption: String, AppEnum {
     static var caseDisplayRepresentations: [ShortcutSourceOption: DisplayRepresentation] = [
         .auto: "自動判斷（推薦）",
         .efingo: "玉山銀行通知 (e.Fingo)",
-        .wallet: "Apple Pay 錢包通知",
-        .transferPage: "玉山轉帳成功畫面 (OCR)"
+        .wallet: "iOS 27 錢包 (Wallet / Apple Pay)",
+        .transferPage: "轉帳成功畫面 (截圖 OCR)"
     ]
 }
 
 @available(iOS 17.0, *)
 struct IngestNotificationIntent: AppIntent {
-    static var title: LocalizedStringResource = "🛡️ 智慧入帳（接收通知或轉帳文字）"
-    static var description = IntentDescription("將 iOS 27 玉山銀行通知、Apple Pay 通知或轉帳成功畫面文字直接送入防打架引擎，背景執行不跳轉畫面。")
+    static var title: LocalizedStringResource = "🛡️ 智慧入帳（接收錢包、通知或轉帳文字）"
+    static var description = IntentDescription("支援 iOS 27「錢包 (Wallet)」自動化、玉山銀行通知與轉帳畫面 OCR。可直接用 AI 提示詞產生模塊或手動傳入商家與金額。")
     static var openAppWhenRun: Bool = false
 
-    @Parameter(title: "通知或畫面文字", default: "")
+    @Parameter(
+        title: "通知或畫面文字",
+        description: "可傳入銀行通知內容、螢幕截圖擷取文字，或 iOS 27 錢包交易資訊",
+        default: ""
+    )
     var rawText: String
 
-    @Parameter(title: "Apple Pay 金額（選填）")
+    @Parameter(
+        title: "錢包 / Apple Pay 金額（選填）",
+        description: "對應 iOS 27「錢包 (Wallet)」自動化輸入中的「金額 (Amount)」"
+    )
     var amount: String?
 
-    @Parameter(title: "Apple Pay 商家（選填）")
+    @Parameter(
+        title: "錢包 / Apple Pay 商家（選填）",
+        description: "對應 iOS 27「錢包 (Wallet)」自動化輸入中的「商家 (Merchant)」或「名稱 (Name)」"
+    )
     var merchant: String?
 
     @Parameter(title: "來源通道", default: .auto)

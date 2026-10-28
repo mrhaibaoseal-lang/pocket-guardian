@@ -1,16 +1,34 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { LiquidGlassCard } from '../components/LiquidGlassView';
 import { useLedger } from '../store/useLedger';
 
 export function ShortcutsTestBenchScreen() {
-  const { data, meta, syncFromCloud } = useLedger();
+  const { data, meta, syncFromCloud, deleteInboxEvent, resolveInboxEvent } = useLedger();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftAmount, setDraftAmount] = useState<string>('');
+  const [draftMerchant, setDraftMerchant] = useState<string>('');
+
+  const inboxEvents = useMemo(
+    () =>
+      data.events
+        .filter(
+          (ev) =>
+            ev.status === 'parse_failed' ||
+            ev.status === 'ignored' ||
+            ev.status === 'duplicate',
+        )
+        .slice(-20)
+        .reverse(),
+    [data.events],
+  );
 
   return (
     <ScrollView
@@ -20,9 +38,9 @@ export function ShortcutsTestBenchScreen() {
     >
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.screenTitle}>iOS 26/27 捷徑與雲端收訊紀錄</Text>
+          <Text style={styles.screenTitle}>iOS 27 捷徑與未入帳收件匣</Text>
           <Text style={styles.screenSub}>
-            檢視手機捷徑傳入的真實通知紀錄與設定步驟
+            支援 iOS 27 新版「錢包」自動化、AI 提示詞建模與漏記補救
           </Text>
         </View>
         <Pressable
@@ -43,18 +61,111 @@ export function ShortcutsTestBenchScreen() {
         </Text>
       </LiquidGlassCard>
 
-      {/* iOS Native AppIntents Setup Guide */}
+      {/* Unbooked / Skipped Inbox (30-day retention, masked account numbers) */}
+      <LiquidGlassCard shape="card" elevated contentStyle={styles.sectionCard}>
+        <Text style={styles.sectionTitle}>
+          📥 未入帳／已略過收件匣 ({inboxEvents.length})
+        </Text>
+        <Text style={styles.screenSub}>
+          外幣消費、缺金額或被判定為行銷／重複的事件會保留於此 30 天（帳號已遮罩），可一鍵補記或刪除。
+        </Text>
+        {inboxEvents.length === 0 ? (
+          <Text style={styles.emptyText}>目前沒有待確認或未入帳的事件 🎉</Text>
+        ) : (
+          inboxEvents.map((ev) => {
+            const isEditing = editingId === ev.id;
+            return (
+              <View key={ev.id} style={styles.eventRow}>
+                <View style={styles.inboxTopRow}>
+                  <Text style={styles.eventMeta}>
+                    [{ev.source}] {ev.status === 'duplicate' ? '重複略過' : ev.status === 'ignored' ? '已略過' : '待確認'}
+                    {ev.parsed.amount !== null ? ` · $${ev.parsed.amount}` : ''}
+                  </Text>
+                  <View style={styles.inboxBtnGroup}>
+                    <Pressable
+                      style={styles.inboxActionBtn}
+                      onPress={() => {
+                        if (isEditing) {
+                          setEditingId(null);
+                        } else {
+                          setEditingId(ev.id);
+                          setDraftAmount(ev.parsed.amount ? String(ev.parsed.amount) : '');
+                          setDraftMerchant(
+                            ev.parsed.merchant ??
+                              (ev.parsed.payeeSuffix ? `轉帳給 ****${ev.parsed.payeeSuffix}` : ''),
+                          );
+                        }
+                      }}
+                    >
+                      <Text style={styles.inboxActionText}>
+                        {isEditing ? '取消' : '✍️ 手動補記'}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.inboxDeleteBtn}
+                      onPress={() => deleteInboxEvent(ev.id)}
+                    >
+                      <Text style={styles.inboxDeleteText}>🗑️</Text>
+                    </Pressable>
+                  </View>
+                </View>
+                <Text style={styles.eventReason}>{ev.reason}</Text>
+                {ev.rawText ? (
+                  <Text style={styles.rawPreview} numberOfLines={2}>
+                    原文：{ev.rawText}
+                  </Text>
+                ) : null}
+                {isEditing ? (
+                  <View style={styles.inlineEditor}>
+                    <TextInput
+                      style={[styles.inlineInput, { width: 95 }]}
+                      placeholder="台幣金額"
+                      placeholderTextColor="rgba(235,225,210,0.4)"
+                      keyboardType="numeric"
+                      value={draftAmount}
+                      onChangeText={setDraftAmount}
+                    />
+                    <TextInput
+                      style={[styles.inlineInput, { flex: 1 }]}
+                      placeholder="商家或備註"
+                      placeholderTextColor="rgba(235,225,210,0.4)"
+                      value={draftMerchant}
+                      onChangeText={setDraftMerchant}
+                    />
+                    <Pressable
+                      style={styles.confirmBookBtn}
+                      onPress={() => {
+                        const amt = Number(draftAmount);
+                        if (Number.isFinite(amt) && amt > 0) {
+                          resolveInboxEvent(ev.id, amt, draftMerchant);
+                          setEditingId(null);
+                        }
+                      }}
+                    >
+                      <Text style={styles.confirmBookText}>入帳</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+              </View>
+            );
+          })
+        )}
+      </LiquidGlassCard>
+
+      {/* iOS 27 Native AppIntents + AI Prompt Setup Guide */}
       <LiquidGlassCard shape="card" contentStyle={styles.sectionCard}>
         <Text style={styles.sectionTitle}>
-          iPhone 16 Plus 捷徑自動化設定指南
+          iOS 27 捷徑設定指南（AI 提示詞 ＋ 手動雙模式）
         </Text>
 
         <View style={styles.guideStep}>
           <Text style={styles.guideStepTitle}>
-            捷徑一（全自動）：Apple Pay 錢包交易
+            捷徑一（全自動）：iOS 27「錢包 (Wallet)」感應入帳
           </Text>
           <Text style={styles.guideStepText}>
-            捷徑 App → 自動化 → 「交易 (Transaction)」→ 勾選玉山簽帳卡 → 立即執行 → 選「新增空白自動化操作」→ 加入【智慧入帳】積木 → 在「通知或畫面文字」點選兩次「捷徑輸入」，分別將屬性設為「商家」與「金額」（請勿直接套用截圖捷徑）。
+            1. 捷徑 App → 自動化 → 選「錢包 (Wallet)」（iOS 27 已由舊版「交易」改名）→ 勾選玉山簽帳卡 → 選「立即執行」→ 新增空白自動化。{'\n'}
+            2. 【AI 提示詞建置】：在頂部 AI 提示詞框輸入：「將錢包交易的金額與商家傳給錢呢的智慧入帳」。{'\n'}
+            3. 【手動拉模塊】：搜尋加入【🛡️ 智慧入帳】，在「錢包 / Apple Pay 金額」選取捷徑輸入的「金額 (Amount)」，在「錢包 / Apple Pay 商家」選取「商家 (Merchant)」。
           </Text>
         </View>
 
@@ -63,7 +174,7 @@ export function ShortcutsTestBenchScreen() {
             捷徑二（全自動）：收到玉山銀行通知時
           </Text>
           <Text style={styles.guideStepText}>
-            捷徑 App → 自動化 → 「當我收到來自 [玉山銀行] 的通知」→ 立即執行 → 選「新增空白自動化操作」→ 加入【智慧入帳】積木，將「捷徑輸入（通知內容）」傳入文字欄位，來源通道選「自動判斷」。
+            捷徑 App → 自動化 → 「當我收到來自 [玉山銀行] 的通知」→ 立即執行 → 加入【🛡️ 智慧入帳】（或用 AI 提示詞輸入：「把收到的通知文字傳給錢呢的智慧入帳」），將「捷徑輸入（通知內容）」傳入「通知或畫面文字」。
           </Text>
         </View>
 
@@ -72,7 +183,7 @@ export function ShortcutsTestBenchScreen() {
             捷徑三（動作按鈕 1 秒觸發）：轉帳成功頁截圖
           </Text>
           <Text style={styles.guideStepText}>
-            設定 → 「動作按鈕 (Action Button)」→ 綁定捷徑「擷取螢幕畫面 → 從影像擷取文字 → 傳給【智慧入帳】」（支援玉山與各家銀行雙欄／單欄轉帳結果頁）。
+            設定 → 「動作按鈕 (Action Button)」→ 綁定捷徑「擷取螢幕畫面 → 從影像擷取文字 → 傳給【🛡️ 智慧入帳】的『通知或畫面文字』」（AI 提示詞：「擷取螢幕畫面文字並傳給錢呢的智慧入帳」）。
           </Text>
         </View>
       </LiquidGlassCard>
@@ -208,5 +319,74 @@ const styles = StyleSheet.create({
   eventReason: {
     color: 'rgba(235, 225, 210, 0.5)',
     fontSize: 11,
+  },
+  inboxTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  inboxBtnGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  inboxActionBtn: {
+    backgroundColor: 'rgba(245, 158, 11, 0.16)',
+    borderColor: 'rgba(251, 191, 36, 0.35)',
+    borderWidth: 0.8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  inboxActionText: {
+    color: '#FBBF24',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  inboxDeleteBtn: {
+    backgroundColor: 'rgba(214, 195, 165, 0.1)',
+    borderColor: 'rgba(230, 213, 184, 0.2)',
+    borderWidth: 0.8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  inboxDeleteText: {
+    color: '#E6D5B8',
+    fontSize: 11,
+  },
+  rawPreview: {
+    color: 'rgba(230, 213, 184, 0.72)',
+    fontSize: 11,
+    marginTop: 2,
+    fontVariant: ['tabular-nums'],
+  },
+  inlineEditor: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+  },
+  inlineInput: {
+    backgroundColor: 'rgba(28, 24, 20, 0.75)',
+    borderColor: 'rgba(230, 213, 184, 0.28)',
+    borderWidth: 0.8,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    color: '#FAF6F0',
+    fontSize: 12,
+  },
+  confirmBookBtn: {
+    backgroundColor: '#FBBF24',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  confirmBookText: {
+    color: '#080705',
+    fontSize: 12,
+    fontWeight: '800',
   },
 });
