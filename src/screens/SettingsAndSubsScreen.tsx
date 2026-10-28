@@ -234,10 +234,14 @@ export function SettingsAndSubsScreen() {
       {/* 3. Budget, Safety Floor & Feelings Parameters */}
       <LiquidGlassCard shape="card" contentStyle={styles.card}>
         <Text style={styles.cardTitle}>雙軌安全額度與「罵醒我」體感參數</Text>
+        <Text style={styles.cardDesc}>
+          • 每月預算上限：設為 0 時，本月剩餘預算與每日預算會自動根據「目前帳戶餘額」計算；若有設定金額，則依設定金額計算。{'\n'}
+          • 安全水位底線：帳戶裡「絕對不能花掉的保命底線」，計算餘額日額時會先預留此金額，一旦跌破立即亮紅燈並觸發強烈勸退。
+        </Text>
 
         <View style={styles.fieldGrid}>
           <View style={styles.fieldItem}>
-            <Text style={styles.fieldLabel}>每月預算上限 ($)</Text>
+            <Text style={styles.fieldLabel}>每月預算上限 (0=依餘額)</Text>
             <TextInput
               style={styles.input}
               value={budgetStr}
@@ -246,7 +250,7 @@ export function SettingsAndSubsScreen() {
             />
           </View>
           <View style={styles.fieldItem}>
-            <Text style={styles.fieldLabel}>安全水位底線 ($)</Text>
+            <Text style={styles.fieldLabel}>安全水位底線 (保命底線)</Text>
             <TextInput
               style={styles.input}
               value={floorStr}

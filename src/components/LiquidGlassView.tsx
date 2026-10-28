@@ -58,6 +58,7 @@ export function LiquidGlassCard({
         tint={tint}
         intensity={intensity}
         style={StyleSheet.absoluteFill}
+        pointerEvents="none"
       />
 
       {/* Layer 2: 135° Champagne Surface Sheen (左上 0,0 -> 右下 1,1) */}

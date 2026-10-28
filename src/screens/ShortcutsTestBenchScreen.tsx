@@ -54,7 +54,7 @@ export function ShortcutsTestBenchScreen() {
             捷徑一（全自動）：Apple Pay 錢包交易
           </Text>
           <Text style={styles.guideStepText}>
-            捷徑 App → 自動化 → 「交易 (Transaction)」→ 勾選玉山簽帳卡 → 立即執行 → 加入【智慧入帳】積木。
+            捷徑 App → 自動化 → 「交易 (Transaction)」→ 勾選玉山簽帳卡 → 立即執行 → 選「新增空白自動化操作」→ 加入【智慧入帳】積木 → 在「通知或畫面文字」點選兩次「捷徑輸入」，分別將屬性設為「商家」與「金額」（請勿直接套用截圖捷徑）。
           </Text>
         </View>
 
@@ -63,16 +63,16 @@ export function ShortcutsTestBenchScreen() {
             捷徑二（全自動）：收到玉山銀行通知時
           </Text>
           <Text style={styles.guideStepText}>
-            捷徑 App → 自動化 → 「當我收到來自 [玉山銀行] 的通知」→ 立即執行 → 加入【智慧入帳】積木，將「通知內容」傳入文字欄位。
+            捷徑 App → 自動化 → 「當我收到來自 [玉山銀行] 的通知」→ 立即執行 → 選「新增空白自動化操作」→ 加入【智慧入帳】積木，將「捷徑輸入（通知內容）」傳入文字欄位，來源通道選「自動判斷」。
           </Text>
         </View>
 
         <View style={styles.guideStep}>
           <Text style={styles.guideStepTitle}>
-            捷徑三（動作按鈕 1 秒觸發）：玉山轉帳成功頁截圖
+            捷徑三（動作按鈕 1 秒觸發）：轉帳成功頁截圖
           </Text>
           <Text style={styles.guideStepText}>
-            設定 → 「動作按鈕 (Action Button)」→ 綁定捷徑「擷取螢幕畫面 → 從影像擷取文字 → 傳給【智慧入帳】」。
+            設定 → 「動作按鈕 (Action Button)」→ 綁定捷徑「擷取螢幕畫面 → 從影像擷取文字 → 傳給【智慧入帳】」（支援玉山與各家銀行雙欄／單欄轉帳結果頁）。
           </Text>
         </View>
       </LiquidGlassCard>

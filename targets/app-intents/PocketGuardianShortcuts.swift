@@ -23,8 +23,14 @@ struct IngestNotificationIntent: AppIntent {
     static var description = IntentDescription("將 iOS 27 玉山銀行通知、Apple Pay 通知或轉帳成功畫面文字直接送入防打架引擎，背景執行不跳轉畫面。")
     static var openAppWhenRun: Bool = false
 
-    @Parameter(title: "通知或畫面文字")
+    @Parameter(title: "通知或畫面文字", default: "")
     var rawText: String
+
+    @Parameter(title: "Apple Pay 金額（選填）")
+    var amount: String?
+
+    @Parameter(title: "Apple Pay 商家（選填）")
+    var merchant: String?
 
     @Parameter(title: "來源通道", default: .auto)
     var source: ShortcutSourceOption
@@ -42,6 +48,12 @@ struct IngestNotificationIntent: AppIntent {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         var payload: [String: Any] = ["text": rawText]
+        if let amount = amount, !amount.isEmpty {
+            payload["amount"] = amount
+        }
+        if let merchant = merchant, !merchant.isEmpty {
+            payload["merchant"] = merchant
+        }
         if source != .auto {
             payload["source"] = source.rawValue
         }

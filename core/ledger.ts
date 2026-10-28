@@ -76,6 +76,7 @@ export interface SafeToSpend {
   spentThisCycle: number;
   pendingSubscriptions: number;
   trueAvailable: number;
+  remainingMonthlyBudget: number;
   trackA: number;
   trackB: number;
   limitingTrack: 'budget' | 'balance';
@@ -109,14 +110,23 @@ export function computeSafeToSpend(
   const pendingSubs = pendingSubscriptions(subs, today, end).reduce((a, s) => a + s.amount, 0);
   const balances = computeBalances(settings, txs);
   const trueAvailable = balances.bank + balances.cash - pendingSubs;
+  const spentThisCycle = round(spentBeforeToday + spentToday);
 
   // Allowances are fixed at the start of the day; today's spending is then subtracted.
-  const trackA = (settings.monthlyBudget - spentBeforeToday - pendingSubs) / daysRemaining;
+  // - If monthlyBudget <= 0 (default 0): compute both remaining monthly budget and daily budget from current balance (trackB).
+  // - If monthlyBudget > 0 (custom budget set): compute both remaining monthly budget and daily budget from monthlyBudget (trackA).
   const startOfDayAvailable = trueAvailable + spentToday;
   const trackB = (startOfDayAvailable - settings.safetyFloor) / daysRemaining;
-  const limitingTrack = trackB < trackA ? 'balance' : 'budget';
-  const dailyAllowance = Math.max(0, Math.floor(Math.min(trackA, trackB)));
+  const hasCustomBudget = settings.monthlyBudget > 0;
+  const trackA = hasCustomBudget
+    ? (settings.monthlyBudget - spentBeforeToday - pendingSubs) / daysRemaining
+    : trackB;
+  const limitingTrack: 'budget' | 'balance' = hasCustomBudget ? 'budget' : 'balance';
+  const dailyAllowance = Math.max(0, Math.floor(hasCustomBudget ? trackA : trackB));
   const todayLeft = round(dailyAllowance - spentToday);
+  const remainingMonthlyBudget = hasCustomBudget
+    ? Math.max(0, round(settings.monthlyBudget - spentThisCycle - pendingSubs))
+    : Math.max(0, round(trueAvailable - settings.safetyFloor));
   const belowSafetyFloor = trueAvailable < settings.safetyFloor;
 
   const ratio = dailyAllowance > 0 ? spentToday / dailyAllowance : spentToday > 0 ? Infinity : 0;
@@ -130,9 +140,10 @@ export function computeSafeToSpend(
     cycleEnd: end,
     daysRemaining,
     spentToday: round(spentToday),
-    spentThisCycle: round(spentBeforeToday + spentToday),
+    spentThisCycle,
     pendingSubscriptions: pendingSubs,
     trueAvailable: round(trueAvailable),
+    remainingMonthlyBudget,
     trackA: Math.floor(trackA),
     trackB: Math.floor(trackB),
     limitingTrack,

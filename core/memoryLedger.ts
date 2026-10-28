@@ -142,7 +142,7 @@ export class MemoryLedger {
     const status = statusOf(decision, parsed);
     this.data.events.push({
       id: eventId,
-      source,
+      source: parsed.source,
       rawText: parsed.kind === 'otp' ? null : (raw.text ?? fingerprint).slice(0, 2000),
       fingerprint: parsed.kind === 'otp' ? '' : fingerprint,
       receivedAt: now,

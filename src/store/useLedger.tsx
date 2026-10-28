@@ -67,6 +67,7 @@ interface LedgerContextValue {
   lastUndoableTx: Transaction | null;
   lastToast: string | null;
   clearToast: () => void;
+  clearUndo: () => void;
   ingestShortcut: (source: EventSource | null, raw: RawInput, customTime?: string) => IngestResult;
   addQuickExpense: (
     amount: number,
@@ -109,6 +110,22 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
   });
   const [lastUndoableId, setLastUndoableId] = useState<string | null>(null);
   const [lastToast, setLastToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!lastToast) return;
+    const timer = setTimeout(() => {
+      setLastToast(null);
+    }, 4500);
+    return () => clearTimeout(timer);
+  }, [lastToast]);
+
+  useEffect(() => {
+    if (!lastUndoableId) return;
+    const timer = setTimeout(() => {
+      setLastUndoableId(null);
+    }, 4500);
+    return () => clearTimeout(timer);
+  }, [lastUndoableId]);
 
   useEffect(() => {
     (async () => {
@@ -505,6 +522,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       lastUndoableTx,
       lastToast,
       clearToast: () => setLastToast(null),
+      clearUndo: () => setLastUndoableId(null),
       ingestShortcut,
       addQuickExpense,
       addIncome,

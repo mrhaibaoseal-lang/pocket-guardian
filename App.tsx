@@ -1,7 +1,7 @@
 import { BlurView } from 'expo-blur';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { PanResponder, Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -91,8 +91,52 @@ function AmbientLightCanvas() {
   );
 }
 
+function DismissibleBanner({
+  onDismiss,
+  style,
+  children,
+}: {
+  onDismiss: () => void;
+  style?: ViewStyle;
+  children: React.ReactNode;
+}) {
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 8 || Math.abs(g.dx) > 12,
+      onPanResponderRelease: (_, g) => {
+        if (g.dy < -10 || Math.abs(g.dx) > 24) {
+          onDismiss();
+        }
+      },
+    }),
+  ).current;
+
+  return (
+    <View
+      style={style}
+      {...panResponder.panHandlers}
+      onTouchStart={(e) => {
+        const t = e.nativeEvent;
+        touchStartRef.current = { x: t.pageX, y: t.pageY };
+      }}
+      onTouchEnd={(e) => {
+        if (!touchStartRef.current) return;
+        const dx = e.nativeEvent.pageX - touchStartRef.current.x;
+        const dy = e.nativeEvent.pageY - touchStartRef.current.y;
+        touchStartRef.current = null;
+        if (dy < -10 || Math.abs(dx) > 24) {
+          onDismiss();
+        }
+      }}
+    >
+      {children}
+    </View>
+  );
+}
+
 function MainShell() {
-  const { lastUndoableTx, lastToast, clearToast, softDeleteTx } = useLedger();
+  const { lastUndoableTx, lastToast, clearToast, clearUndo, softDeleteTx } = useLedger();
   const safeInsets = useHardwareSafeInsets();
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
   const [activeModal, setActiveModal] = useState<ActiveModal>('none');
@@ -238,6 +282,7 @@ function MainShell() {
               tint="systemChromeMaterialDark"
               intensity={75}
               style={StyleSheet.absoluteFill}
+              pointerEvents="none"
             />
             <View style={styles.brandRow}>
               <Text style={styles.brandTitle}>錢呢[BROKE AF]</Text>
@@ -247,47 +292,55 @@ function MainShell() {
             </View>
           </View>
 
-          {/* Liquid Glass Toast Banner */}
-          {lastToast ? (
-            <Pressable style={styles.toastWrap} onPress={clearToast}>
+          {/* Unified Liquid Glass Notification & Undo Banner (Auto-hides in 4.5s, or swipe / tap ✕ to dismiss) */}
+          {lastToast || lastUndoableTx ? (
+            <DismissibleBanner
+              style={styles.toastWrap}
+              onDismiss={() => {
+                clearToast();
+                clearUndo();
+              }}
+            >
               <LiquidGlassCard
                 shape="pill"
                 elevated
                 intensity={65}
                 contentStyle={styles.toastInner}
               >
-                <Text style={styles.toastText} numberOfLines={2}>
-                  {lastToast}
-                </Text>
-                <Text style={styles.toastDismiss}>✕</Text>
-              </LiquidGlassCard>
-            </Pressable>
-          ) : null}
-
-          {/* Safe 2-Tap Undo Banner */}
-          {lastUndoableTx ? (
-            <View style={styles.undoWrap}>
-              <LiquidGlassCard
-                shape="pill"
-                elevated
-                intensity={65}
-                contentStyle={styles.undoInner}
-              >
-                <View style={styles.undoTextWrap}>
-                  <Text style={styles.undoLabel}>剛剛新增</Text>
-                  <Text style={styles.undoTitle} numberOfLines={1}>
-                    {lastUndoableTx.merchant || lastUndoableTx.category || '交易'}{' '}
-                    ${Math.abs(lastUndoableTx.amount)}
+                <Pressable
+                  style={styles.undoTextWrap}
+                  onPress={() => {
+                    clearToast();
+                    clearUndo();
+                  }}
+                >
+                  <Text style={styles.toastText} numberOfLines={2}>
+                    {lastToast ??
+                      `剛剛新增 ${lastUndoableTx?.merchant || lastUndoableTx?.category || '交易'} $${Math.abs(
+                        lastUndoableTx?.amount ?? 0,
+                      )}`}
                   </Text>
-                </View>
-                <SafeConfirmButton
-                  label="撤銷上筆"
-                  confirmLabel="再點確認"
-                  onConfirm={() => softDeleteTx(lastUndoableTx.id)}
-                  compact
-                />
+                </Pressable>
+                {lastUndoableTx ? (
+                  <SafeConfirmButton
+                    label="撤銷上筆"
+                    confirmLabel="再點確認"
+                    onConfirm={() => softDeleteTx(lastUndoableTx.id)}
+                    compact
+                  />
+                ) : null}
+                <Pressable
+                  onPress={() => {
+                    clearToast();
+                    clearUndo();
+                  }}
+                  hitSlop={12}
+                  style={styles.undoDismissBtn}
+                >
+                  <Text style={styles.toastDismiss}>✕</Text>
+                </Pressable>
               </LiquidGlassCard>
-            </View>
+            </DismissibleBanner>
           ) : null}
         </View>
 
@@ -690,6 +743,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
     flex: 1,
+  },
+  undoDismissBtn: {
+    paddingHorizontal: 4,
+    paddingVertical: 4,
   },
   floatingBarOuter: {
     position: 'absolute',

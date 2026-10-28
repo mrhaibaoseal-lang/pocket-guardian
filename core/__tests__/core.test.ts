@@ -76,6 +76,50 @@ describe('parsers (real samples)', () => {
     expect(parseEvent('transfer_page', { text }, T0, '83151')).toMatchObject({ amount: 1500, payeeSuffix: '24126' });
   });
 
+  it('parses iOS Vision two-column OCR where labels are grouped before the 3-digit amount 100 and status bar has 100', () => {
+    const realIphoneOcr = [
+      '10:50 ₩',
+      '* 100•',
+      '生期一',
+      'PSE_L 10:29',
+      '交易成功',
+      '2026-10-26 02:07:37',
+      '轉帳金額',
+      '轉入對象',
+      '自己帳號',
+      '100',
+      '808玉山商業銀行',
+      '********24126',
+      '808玉山商業銀行',
+      '********83151',
+      'พิ',
+    ].join('\n');
+    expect(parseEvent('transfer_page', { text: realIphoneOcr }, T0, '83151')).toMatchObject({
+      kind: 'transfer_out',
+      source: 'transfer_page',
+      amount: 100,
+      payeeSuffix: '24126',
+      payeeBankCode: '808',
+      ownSuffix: '83151',
+      timeSource: 'absolute',
+      occurredAt: '2026-10-25T18:07:37.000Z',
+    });
+  });
+
+  it('self-heals when Apple Pay or e.Fingo text is sent with source="transfer_page"', () => {
+    expect(parseEvent('transfer_page', { text: WALLET_81 }, T0, '83151')).toMatchObject({
+      kind: 'card_spend',
+      source: 'wallet',
+      amount: 81,
+      merchant: '樂家康',
+    });
+    expect(parseEvent('transfer_page', { text: EFINGO_81 }, T0, '83151')).toMatchObject({
+      kind: 'card_spend',
+      source: 'efingo',
+      amount: 81,
+    });
+  });
+
   it('drops OTP and ignores marketing', () => {
     expect(looksLikeOtp('您的驗證碼為 123456，請勿告知他人')).toBe(true);
     expect(looksLikeOtp('登入碼 482913')).toBe(true);
@@ -248,15 +292,21 @@ describe('safe to spend', () => {
     expect(budgetCycle('2026-12-20', 10)).toEqual({ start: '2026-12-10', end: '2027-01-10' });
   });
 
-  it('uses the smaller of budget track and balance track', () => {
-    const l = ledger({ monthlyBudget: 15000, openingBank: 2000, openingCash: 0, safetyFloor: 500 });
-    // 2026-10-27 -> 5 days left (27..31)
-    const s = computeSafeToSpend(l.data.settings, [], [], T0);
-    expect(s.daysRemaining).toBe(5);
-    expect(s.trackA).toBe(3000);
-    expect(s.trackB).toBe(300);
-    expect(s.limitingTrack).toBe('balance');
-    expect(s.dailyAllowance).toBe(300);
+  it('uses current balance when monthlyBudget is 0, and configured budget when monthlyBudget > 0', () => {
+    // 1. monthlyBudget = 0 -> computed from current balance (2000 - 500 safetyFloor = 1500, / 5 days = 300/day)
+    const lBalance = ledger({ monthlyBudget: 0, openingBank: 2000, openingCash: 0, safetyFloor: 500 });
+    const sBal = computeSafeToSpend(lBalance.data.settings, [], [], T0);
+    expect(sBal.daysRemaining).toBe(5);
+    expect(sBal.limitingTrack).toBe('balance');
+    expect(sBal.remainingMonthlyBudget).toBe(1500);
+    expect(sBal.dailyAllowance).toBe(300);
+
+    // 2. monthlyBudget > 0 -> computed from configured monthlyBudget (15000 / 5 days = 3000/day)
+    const lBudget = ledger({ monthlyBudget: 15000, openingBank: 2000, openingCash: 0, safetyFloor: 500 });
+    const sBud = computeSafeToSpend(lBudget.data.settings, [], [], T0);
+    expect(sBud.limitingTrack).toBe('budget');
+    expect(sBud.remainingMonthlyBudget).toBe(15000);
+    expect(sBud.dailyAllowance).toBe(3000);
   });
 
   it("today's spending reduces todayLeft but not the allowance", () => {

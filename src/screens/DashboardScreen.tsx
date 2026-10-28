@@ -108,17 +108,18 @@ export function DashboardScreen({
     return groups;
   }, [data.transactions, safe.today]);
 
+  const remainingMonthlyBudget = safe.remainingMonthlyBudget;
+
   const budgetProgressPercent = useMemo(() => {
     if (safe.spentThisCycle <= 0) return 0;
-    if (settings.monthlyBudget <= 0) return 100;
-    const raw = (safe.spentThisCycle / settings.monthlyBudget) * 100;
+    const totalPool =
+      settings.monthlyBudget > 0
+        ? settings.monthlyBudget
+        : safe.spentThisCycle + remainingMonthlyBudget;
+    if (totalPool <= 0) return 100;
+    const raw = (safe.spentThisCycle / totalPool) * 100;
     return Math.min(100, Math.max(4, raw));
-  }, [safe.spentThisCycle, settings.monthlyBudget]);
-
-  const remainingMonthlyBudget = Math.max(
-    0,
-    settings.monthlyBudget - safe.spentThisCycle,
-  );
+  }, [safe.spentThisCycle, settings.monthlyBudget, remainingMonthlyBudget]);
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (!onScrollShrinkChange) return;
