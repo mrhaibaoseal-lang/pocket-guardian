@@ -1,13 +1,14 @@
 # HANDOFF.md — 跨工具／跨模型交接紀錄
 
-> **最後更新時間**：2026-10-30 21:30 (UTC+8)
-> **最後更新 Agent**：Cline (新增「🤝 欠款」獨立功能欄與 5 大進階借貸／代墊拆帳引擎)
+> **最後更新時間**：2026-10-30 21:58 (UTC+8)
+> **最後更新 Agent**：Cline (新增「🤝 欠款」獨立功能欄、AA 拆帳引擎與成功打包 v3.3.0 SideStore IPA)
 > **專案路徑**：`C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger`
-> **Git 分支與最新 Commit**：`main` @ `36ff71b` + 新增「🤝 欠款 (`DebtsScreen.tsx`)」完整功能
+> **Git 分支與最新 Commit**：`main` @ `2c8bdbf`（同步 GitHub Actions 打包通過）
 > **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `4deb2077-229b-4aba-b53d-114b6dafd222`，前版可 Rollback ID: `0cd6b1db-4365-4113-b071-5cbe8731efff`)
-> **最新無簽名 IPA 位置**：
+> **最新無簽名 IPA 位置（v3.3.0，GitHub Actions Run ID: 41064228785）**：
 > - `C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger\PocketGuardian-SideStore.ipa`
 > - `C:\Users\mrhai\Downloads\PocketGuardian-SideStore.ipa`
+> - `C:\Users\mrhai\.cline\worktrees\37c16\smart-ledger\PocketGuardian-SideStore.ipa`
 
 ---
 

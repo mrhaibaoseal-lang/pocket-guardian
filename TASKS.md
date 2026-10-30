@@ -48,7 +48,7 @@
   - **關聯檔案**：`targets/widget/PocketGuardianWidget.swift`, `targets/app-intents/PocketGuardianShortcuts.swift`, `.github/workflows/build-sidestore-ipa.yml`
   - **驗收條件**：
     1. `IngestNotificationIntent` 支援「通知或畫面文字」以及選填「Apple Pay 金額 (`String?`)」、「Apple Pay 商家 (`String?`)」。
-    2. GitHub Actions 自動產出免簽名 `PocketGuardian-SideStore.ipa`（`v3.2.3`，Run ID `40649819982` 已編譯通過並下載至專案根目錄與 `C:\Users\mrhai\Downloads\PocketGuardian-SideStore.ipa`）。
+    2. GitHub Actions 自動產出免簽名 `PocketGuardian-SideStore.ipa`（`v3.3.0`，Run ID `41064228785` 已編譯通過並下載至專案根目錄與 `C:\Users\mrhai\Downloads\PocketGuardian-SideStore.ipa`）。
 
 ---
 
