@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { Transaction } from '../../core';
 import { LiquidGlassCard } from '../components/LiquidGlassView';
 import { SafeConfirmButton } from '../components/SafeConfirmButton';
@@ -44,11 +44,39 @@ export function TransactionsScreen() {
     data,
     splitMergedTx,
     toggleAdvanceTx,
+    convertTxToDebtSplit,
     softDeleteTx,
     restoreTx,
   } = useLedger();
 
   const [viewMode, setViewMode] = useState<'active' | 'trash'>('active');
+  const [debtSplitTxId, setDebtSplitTxId] = useState<string | null>(null);
+  const [debtPeopleInput, setDebtPeopleInput] = useState('');
+  const [debtAmountInput, setDebtAmountInput] = useState('');
+
+  const handleOpenDebtSplit = (tx: Transaction) => {
+    if (debtSplitTxId === tx.id) {
+      setDebtSplitTxId(null);
+      return;
+    }
+    setDebtSplitTxId(tx.id);
+    setDebtPeopleInput('');
+    setDebtAmountInput(String(Math.max(1, Math.round(tx.amount / 2))));
+  };
+
+  const handleConfirmDebtSplit = (tx: Transaction) => {
+    const names = debtPeopleInput
+      .split(/[,，、\s]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const personList = names.length > 0 ? names : ['朋友'];
+    const perPersonAmt = Math.max(1, Math.round(Number(debtAmountInput) || 0));
+    convertTxToDebtSplit(
+      tx.id,
+      personList.map((name) => ({ personName: name, amount: perPersonAmt })),
+    );
+    setDebtSplitTxId(null);
+  };
 
   const activeTxs = useMemo(
     () =>
@@ -239,17 +267,31 @@ export function TransactionsScreen() {
                       )}
 
                       {tx.type === 'expense' && (
-                        <Pressable
-                          style={[
-                            styles.advanceBtn,
-                            tx.isAdvance && styles.advanceBtnActive,
-                          ]}
-                          onPress={() => toggleAdvanceTx(tx.id)}
-                        >
-                          <Text style={styles.advanceBtnText}>
-                            {tx.isAdvance ? '改回個人花費' : '標記幫朋友代墊'}
-                          </Text>
-                        </Pressable>
+                        <>
+                          <Pressable
+                            style={[
+                              styles.advanceBtn,
+                              tx.isAdvance && styles.advanceBtnActive,
+                            ]}
+                            onPress={() => toggleAdvanceTx(tx.id)}
+                          >
+                            <Text style={styles.advanceBtnText}>
+                              {tx.isAdvance ? '改回個人花費' : '標記幫朋友代墊'}
+                            </Text>
+                          </Pressable>
+
+                          <Pressable
+                            style={[
+                              styles.advanceBtn,
+                              debtSplitTxId === tx.id && styles.advanceBtnActive,
+                            ]}
+                            onPress={() => handleOpenDebtSplit(tx)}
+                          >
+                            <Text style={styles.advanceBtnText}>
+                              {debtSplitTxId === tx.id ? '✕ 收起拆帳' : '🤝 轉欠款／AA拆帳'}
+                            </Text>
+                          </Pressable>
+                        </>
                       )}
                     </View>
 
@@ -270,6 +312,61 @@ export function TransactionsScreen() {
                       onPress={() => restoreTx(tx.id)}
                     >
                       <Text style={styles.restoreBtnText}>一鍵無損還原</Text>
+                    </Pressable>
+                  </View>
+                )}
+
+                {/* Idea 2: Inline Convert/AA-Split to Debt Drawer */}
+                {viewMode === 'active' && debtSplitTxId === tx.id && (
+                  <View style={styles.debtSplitDrawer}>
+                    <Text style={styles.debtSplitTitle}>
+                      🧮 從這筆消費 (${tx.amount}) 轉出朋友欠款（代墊部分不吃個人預算）
+                    </Text>
+
+                    <View style={styles.debtSplitQuickRow}>
+                      {[
+                        { label: '2人平分', amt: Math.round(tx.amount / 2) },
+                        { label: '3人平分', amt: Math.round(tx.amount / 3) },
+                        { label: '4人平分', amt: Math.round(tx.amount / 4) },
+                        { label: '全額代墊', amt: tx.amount },
+                      ].map((q) => (
+                        <Pressable
+                          key={q.label}
+                          style={styles.debtQuickChip}
+                          onPress={() => setDebtAmountInput(String(Math.max(1, q.amt)))}
+                        >
+                          <Text style={styles.debtQuickChipText}>
+                            {q.label} (${q.amt})
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+
+                    <View style={styles.debtSplitInputRow}>
+                      <TextInput
+                        style={[styles.debtSplitInput, { flex: 1.4 }]}
+                        value={debtPeopleInput}
+                        onChangeText={setDebtPeopleInput}
+                        placeholder="朋友稱呼（多人用逗號，如：阿明, 小華）"
+                        placeholderTextColor="rgba(235, 225, 210, 0.35)"
+                      />
+                      <TextInput
+                        style={[styles.debtSplitInput, { flex: 0.8 }]}
+                        keyboardType="numeric"
+                        value={debtAmountInput}
+                        onChangeText={setDebtAmountInput}
+                        placeholder="每人金額"
+                        placeholderTextColor="rgba(235, 225, 210, 0.35)"
+                      />
+                    </View>
+
+                    <Pressable
+                      style={styles.debtSplitConfirmBtn}
+                      onPress={() => handleConfirmDebtSplit(tx)}
+                    >
+                      <Text style={styles.debtSplitConfirmText}>
+                        ✅ 建立欠款並保護個人預算
+                      </Text>
                     </Pressable>
                   </View>
                 )}
@@ -488,6 +585,63 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   restoreBtnText: {
+    color: '#080705',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  debtSplitDrawer: {
+    backgroundColor: 'rgba(18, 15, 12, 0.84)',
+    borderWidth: 0.8,
+    borderColor: 'rgba(251, 191, 36, 0.35)',
+    borderRadius: 12,
+    padding: 11,
+    gap: 8,
+    marginTop: 4,
+  },
+  debtSplitTitle: {
+    color: '#FBBF24',
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  debtSplitQuickRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  debtQuickChip: {
+    backgroundColor: 'rgba(214, 195, 165, 0.14)',
+    borderWidth: 0.8,
+    borderColor: 'rgba(230, 213, 184, 0.28)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  debtQuickChipText: {
+    color: '#E6D5B8',
+    fontSize: 10.5,
+    fontWeight: '600',
+  },
+  debtSplitInputRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  debtSplitInput: {
+    backgroundColor: 'rgba(8, 7, 5, 0.8)',
+    borderWidth: 0.8,
+    borderColor: 'rgba(230, 213, 184, 0.28)',
+    borderRadius: 9,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    color: '#FAF6F0',
+    fontSize: 12,
+  },
+  debtSplitConfirmBtn: {
+    backgroundColor: '#F59E0B',
+    paddingVertical: 8,
+    borderRadius: 9,
+    alignItems: 'center',
+  },
+  debtSplitConfirmText: {
     color: '#080705',
     fontSize: 12,
     fontWeight: '800',

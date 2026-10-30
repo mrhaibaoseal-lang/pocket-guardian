@@ -15,6 +15,7 @@ import {
 import type {
   AccountId,
   DashboardSummary,
+  DebtDirection,
   EventSource,
   IngestResult,
   LedgerData,
@@ -57,6 +58,7 @@ function createInitialDemoLedger(): LedgerData {
     events: [],
     payees: [],
     subscriptions: [],
+    debts: [],
   };
 }
 
@@ -95,6 +97,23 @@ interface LedgerContextValue {
   deleteSubscription: (id: string) => void;
   addPayee: (bankCode: string, accountSuffix: string, displayName: string, defaultCategory: string) => void;
   deletePayee: (id: string) => void;
+  addDebt: (input: {
+    personName: string;
+    direction: DebtDirection;
+    amount: number;
+    title: string;
+    note?: string | null;
+    accountSuffix?: string | null;
+    dueDate?: string | null;
+    syncAccountId?: AccountId | null;
+  }) => void;
+  settleDebt: (debtId: string, amount: number, accountId: AccountId | null, note?: string | null) => void;
+  netPersonDebts: (personName: string) => void;
+  convertTxToDebtSplit: (
+    txId: string,
+    splits: Array<{ personName: string; amount: number; accountSuffix?: string | null }>,
+  ) => void;
+  deleteDebt: (debtId: string) => void;
   updateSettings: (patch: Partial<Settings>) => void;
   updateMeta: (patch: Partial<AppMeta>) => void;
   syncFromCloud: () => Promise<void>;
@@ -146,7 +165,13 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(STORAGE_KEY),
           AsyncStorage.getItem(META_KEY),
         ]);
-        if (savedData) setData(JSON.parse(savedData) as LedgerData);
+        if (savedData) {
+          const parsed = JSON.parse(savedData) as LedgerData;
+          setData({
+            ...parsed,
+            debts: Array.isArray(parsed.debts) ? parsed.debts : [],
+          });
+        }
         if (savedMeta) setMeta((prev) => ({ ...prev, ...(JSON.parse(savedMeta) as Partial<AppMeta>) }));
       } catch {
         // Keep initial state on storage read failure
@@ -161,6 +186,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       events: [...next.events],
       payees: [...next.payees],
       subscriptions: [...next.subscriptions],
+      debts: [...(next.debts ?? [])],
     };
     setData(clone);
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(clone)).catch(() => undefined);
@@ -471,6 +497,116 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
     [data, persist, triggerHaptic],
   );
 
+  const addDebt = useCallback(
+    (input: {
+      personName: string;
+      direction: DebtDirection;
+      amount: number;
+      title: string;
+      note?: string | null;
+      accountSuffix?: string | null;
+      dueDate?: string | null;
+      syncAccountId?: AccountId | null;
+    }) => {
+      if (!Number.isFinite(input.amount) || input.amount <= 0) return;
+      const now = new Date().toISOString();
+      const ledger = new MemoryLedger(data);
+      const rec = ledger.addDebt(input, now);
+      if (rec.accountSuffix) {
+        const exists = ledger.data.payees.some((p) => p.accountSuffix === rec.accountSuffix);
+        if (!exists) {
+          ledger.data.payees.push({
+            id: uuid(),
+            bankCode: '808',
+            accountSuffix: rec.accountSuffix,
+            displayName: rec.personName,
+            defaultCategory: '欠款歸還',
+          });
+        }
+      }
+      persist(ledger.data);
+      const dirLabel = rec.direction === 'owed_to_me' ? `${rec.personName} 欠我` : `我欠 ${rec.personName}`;
+      const acctLabel =
+        input.syncAccountId === 'bank'
+          ? '（已同步玉山銀行餘額，不計入個人預算）'
+          : input.syncAccountId === 'cash'
+          ? '（已同步現金餘額，不計入個人預算）'
+          : '';
+      setLastToast(`🤝 已紀錄「${dirLabel} $${rec.originalAmount}」· ${rec.title}${acctLabel}`);
+      triggerHaptic('success');
+    },
+    [data, persist, setLastToast, triggerHaptic],
+  );
+
+  const settleDebt = useCallback(
+    (debtId: string, amount: number, accountId: AccountId | null, note?: string | null) => {
+      if (!Number.isFinite(amount) || amount <= 0) return;
+      const now = new Date().toISOString();
+      const ledger = new MemoryLedger(data);
+      const res = ledger.settleDebt(debtId, amount, accountId, note ?? null, now);
+      if (!res) return;
+      persist(ledger.data);
+      if (res.transaction) setLastUndoableId(res.transaction.id);
+      const fullOrPart =
+        res.debt.status === 'settled'
+          ? '🎉 已全額結清'
+          : `⏳ 已部分${res.debt.direction === 'owed_to_me' ? '收回' : '歸還'} $${res.paidAmount}（剩 $${res.debt.remainingAmount}）`;
+      const acctTag =
+        accountId === 'bank'
+          ? '｜玉山銀行已同步'
+          : accountId === 'cash'
+          ? '｜現金錢包已同步'
+          : '｜僅更新欠款狀態';
+      setLastToast(`${fullOrPart}：${res.debt.personName} · ${res.debt.title}${acctTag}`);
+      triggerHaptic('success');
+    },
+    [data, persist, setLastToast, triggerHaptic],
+  );
+
+  const netPersonDebts = useCallback(
+    (personName: string) => {
+      const now = new Date().toISOString();
+      const ledger = new MemoryLedger(data);
+      const res = ledger.netPersonDebts(personName, now);
+      if (res.offsetAmount <= 0) {
+        setLastToast('⚠️ 目前該對象沒有雙向可互抵的欠款');
+        return;
+      }
+      persist(ledger.data);
+      setLastToast(`⚡ 已將「${personName}」雙向欠款自動互抵 $${res.offsetAmount}（共沖銷 ${res.affectedCount} 筆）！`);
+      triggerHaptic('success');
+    },
+    [data, persist, setLastToast, triggerHaptic],
+  );
+
+  const convertTxToDebtSplit = useCallback(
+    (txId: string, splits: Array<{ personName: string; amount: number; accountSuffix?: string | null }>) => {
+      const now = new Date().toISOString();
+      const ledger = new MemoryLedger(data);
+      const created = ledger.convertTxToDebtSplit(txId, splits, now);
+      if (created.length === 0) return;
+      persist(ledger.data);
+      const totalAmt = created.reduce((sum, d) => sum + d.originalAmount, 0);
+      setLastToast(
+        `🧮 已轉出 ${created.length} 筆代墊欠款（共 $${totalAmt}），代墊部分已排除不吃個人預算！`,
+      );
+      triggerHaptic('success');
+    },
+    [data, persist, setLastToast, triggerHaptic],
+  );
+
+  const deleteDebt = useCallback(
+    (debtId: string) => {
+      const ledger = new MemoryLedger(data);
+      if (ledger.deleteDebt(debtId)) {
+        persist(ledger.data);
+        setLastToast('🗑️ 已刪除該筆欠款紀錄');
+        triggerHaptic('warning');
+      }
+    },
+    [data, persist, setLastToast, triggerHaptic],
+  );
+
   const updateSettings = useCallback(
     (patch: Partial<Settings>) => {
       persist({ ...data, settings: { ...data.settings, ...patch } });
@@ -610,6 +746,11 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       deleteSubscription,
       addPayee,
       deletePayee,
+      addDebt,
+      settleDebt,
+      netPersonDebts,
+      convertTxToDebtSplit,
+      deleteDebt,
       updateSettings,
       updateMeta,
       syncFromCloud,
@@ -618,11 +759,14 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       addAtmTransfer,
+      addDebt,
       addIncome,
       addPayee,
       addQuickExpense,
       addSubscription,
+      convertTxToDebtSplit,
       data,
+      deleteDebt,
       deletePayee,
       deleteSubscription,
       deleteInboxEvent,
@@ -630,6 +774,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       lastToast,
       lastUndoableTx,
       meta,
+      netPersonDebts,
       pushToCloud,
       reconcileAccount,
       recordResistedImpulse,
@@ -638,6 +783,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       restoreTx,
       runScold,
       setLastToast,
+      settleDebt,
       settleEveningPiggy,
       softDeleteTx,
       splitMergedTx,

@@ -205,10 +205,40 @@ export function computeMicroRadar(txs: Transaction[], now: string): MicroRadar {
 
 /** ⏳ "That's X hours of work / Y bentos". */
 export function convertToFeelings(amount: number, settings: Settings): { hours: number; bentos: number } {
+  const wage = settings.hourlyWage > 0 ? settings.hourlyWage : 200;
+  const bento = settings.bentoPrice > 0 ? settings.bentoPrice : 120;
   return {
-    hours: settings.hourlyWage > 0 ? Math.round((amount / settings.hourlyWage) * 10) / 10 : 0,
-    bentos: settings.bentoPrice > 0 ? Math.round((amount / settings.bentoPrice) * 10) / 10 : 0,
+    hours: Math.round((amount / wage) * 10) / 10,
+    bentos: Math.round((amount / bento) * 10) / 10,
   };
+}
+
+export interface DebtAgingInfo {
+  days: number;
+  level: 'fresh' | 'warm' | 'frozen' | 'urgent';
+  badge: string;
+}
+
+/** 🌡️ BROKE AF aging thermometer for open debt records. */
+export function computeDebtAging(
+  direction: 'owed_to_me' | 'i_owe',
+  occurredAt: string,
+  now: string,
+): DebtAgingInfo {
+  const days = Math.max(0, diffDays(taipeiDate(occurredAt), taipeiDate(now)));
+  if (direction === 'owed_to_me') {
+    if (days <= 7) {
+      return { days, level: 'fresh', badge: days === 0 ? '🌱 今天發生' : `🌱 剛發生 (${days}天)` };
+    }
+    if (days <= 29) {
+      return { days, level: 'warm', badge: `⏳ 有點涼了 (${days}天)` };
+    }
+    return { days, level: 'frozen', badge: `🧊 呆帳警報 (${days}天)` };
+  }
+  if (days <= 7) {
+    return { days, level: 'fresh', badge: days === 0 ? '📝 今天發生' : `📝 待歸還 (${days}天)` };
+  }
+  return { days, level: 'urgent', badge: `🔥 快還錢！已欠 ${days} 天` };
 }
 
 /**

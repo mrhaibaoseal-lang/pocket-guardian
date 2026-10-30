@@ -1,9 +1,9 @@
 # HANDOFF.md — 跨工具／跨模型交接紀錄
 
-> **最後更新時間**：2026-10-28 22:25 (UTC+8)
-> **最後更新 Agent**：Cline (Gemini 備援加固)
+> **最後更新時間**：2026-10-30 21:30 (UTC+8)
+> **最後更新 Agent**：Cline (新增「🤝 欠款」獨立功能欄與 5 大進階借貸／代墊拆帳引擎)
 > **專案路徑**：`C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger`
-> **Git 分支與最新 Commit**：`main` @ `36ff71b` + 本地打包前完整加固（待使用者確認後部署／打包）
+> **Git 分支與最新 Commit**：`main` @ `36ff71b` + 新增「🤝 欠款 (`DebtsScreen.tsx`)」完整功能
 > **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `4deb2077-229b-4aba-b53d-114b6dafd222`，前版可 Rollback ID: `0cd6b1db-4365-4113-b071-5cbe8731efff`)
 > **最新無簽名 IPA 位置**：
 > - `C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger\PocketGuardian-SideStore.ipa`
@@ -11,9 +11,16 @@
 
 ---
 
-## 1. 已完成工作摘要（截至 `v3.2.3` 打包前完整加固）
+## 1. 已完成工作摘要（截至 `v3.2.3` + 「🤝 欠款」新功能欄）
 
-1. **標籤錨定轉帳解析器與多格式日期／自己轉自己排除（`core/parsers.ts`, `core/time.ts`, `core/dedupe.ts`）**：
+1. **全新「🤝 欠款」獨立功能欄與五大進階點子（`core/types.ts`, `core/ledger.ts`, `core/memoryLedger.ts`, `src/store/useLedger.tsx`, `src/screens/DebtsScreen.tsx`, `src/screens/TransactionsScreen.tsx`, `App.tsx`）**：
+   - **底部導覽列第 5 分頁「🤝 欠款」**：頂部顯示「🟢 別人欠我」與「🔴 我欠別人」雙生液態玻璃卡、雙向相抵淨額、便當數 🍱 與白打工時數 ⏱️ 換算。
+   - **點子 ① 按「人」自動互抵淨額（Auto-Netting）**：在「👤 依對象歸戶」視角下，若同一對象同時有「他欠我」與「我欠他」，自動算出重疊金額並提供「⚡ 一鍵互抵」按鈕對沖銷帳。
+   - **點子 ② 聚餐 AA 拆帳計算機 ＋ 明細一鍵轉欠款（保護個人預算）**：支援在欠款頁直接用「🧮 聚餐 AA 拆帳」建立多位朋友代墊，或在「☰ 明細」任一筆消費點選「🤝 轉欠款／AA拆帳」（支援 2/3/4 人平分或全額代墊），代墊部分自動拆分並標記 `isAdvance = true`，真實扣除銀行／現金餘額但**不吃掉個人月預算與每日可用額度**。
+   - **點子 ③ BROKE AF 帳齡溫度計（`computeDebtAging`）**：依天數自動標記 `🌱 剛發生`、`⏳ 有點涼了`、`🧊 呆帳警報 (30天+)` 與 `🔥 快還錢！`。
+   - **點子 ⑤ 部分還款分期進度條 ＋ 玉山銀行／現金錢包連動**：支援分次收回／歸還（附「先還一半」、「全額」快捷鍵）、視覺化進度條與歷次還款明細，並可選擇同步更新玉山銀行、現金錢包或僅勾銷狀態。
+   - **點子 ⑥ 轉帳截圖末 5 碼自動沖銷連動**：當欠款綁定對方帳號末 5 碼（或對應常用轉帳對象 `Payee`），使用 iPhone 轉帳成功頁截圖捷徑入帳時，自動沖銷「我欠別人」欠款並標記 `isAdvance = true` 避免重複扣減個人預算。
+2. **標籤錨定轉帳解析器與多格式日期／自己轉自己排除（`core/parsers.ts`, `core/time.ts`, `core/dedupe.ts`）**：
    - `parseTransferPage` 改為標籤錨定結構（同時支援單欄逐行與 iOS Vision 雙欄分開讀排版），精準取得 `轉帳金額`（支援 `20`、`100`、`1,000`），排除狀態列 `10:50` / 電量 `100`、手續費 `15`、三碼銀行通用結構 `^\d{3}[ \t]*[\u4e00-\u9fa5A-Za-z]{2,}` 與日期。
    - `taipeiLocalToIso` 擴充支援西元年（`2026-10-28`、`2026/10/28`）、民國年（`115/10/28`、`115年10月28日` 自動 `+1911`）與短日期時間（`10/26 02:07`）。
    - 支援多組「我的帳戶末碼」（如 `83151, 99999`），當轉入對象屬於使用者自己的帳戶時自動判定為內部移轉（`ignored`），不計入支出。

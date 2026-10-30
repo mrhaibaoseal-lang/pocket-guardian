@@ -91,6 +91,40 @@ export interface Payee {
   defaultCategory: string;
 }
 
+export type DebtDirection = 'owed_to_me' | 'i_owe'; // 別人欠我 | 我欠別人
+export type DebtStatus = 'open' | 'settled';
+
+export interface DebtSettlement {
+  id: string;
+  amount: number;
+  /** 'bank' | 'cash' when synced with an account balance, or null when status-only / auto-netted. */
+  accountId: AccountId | null;
+  linkedTxId: string | null;
+  note: string | null;
+  settledAt: string; // ISO 8601
+}
+
+export interface DebtRecord {
+  id: string;
+  personName: string;
+  direction: DebtDirection;
+  originalAmount: number;
+  remainingAmount: number;
+  title: string;
+  note: string | null;
+  /** Optional 5-digit bank account suffix for automatic transfer screenshot matching. */
+  accountSuffix: string | null;
+  /** Optional source transaction ID when converted/split from an existing expense. */
+  sourceTxId: string | null;
+  dueDate: string | null; // YYYY-MM-DD
+  status: DebtStatus;
+  settlements: DebtSettlement[];
+  occurredAt: string; // ISO 8601
+  createdAt: string;
+  settledAt: string | null;
+}
+
+
 export interface Subscription {
   id: string;
   name: string;

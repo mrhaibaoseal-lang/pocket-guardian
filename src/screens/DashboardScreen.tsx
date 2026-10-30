@@ -23,7 +23,7 @@ interface DashboardScreenProps {
   topInsetPadding?: number;
   bottomInsetPadding?: number;
   onOpenModal: (modal: ActiveModal, presetCategory?: string) => void;
-  onNavigateTab: (tab: 'dashboard' | 'transactions' | 'testbench' | 'settings') => void;
+  onNavigateTab: (tab: 'dashboard' | 'transactions' | 'debts' | 'testbench' | 'settings') => void;
   onScrollShrinkChange?: (shrunk: boolean) => void;
 }
 

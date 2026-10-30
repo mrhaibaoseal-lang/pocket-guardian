@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   computeBalances,
+  computeDebtAging,
   computeMicroRadar,
   computeSafeToSpend,
   createAtm,
@@ -541,5 +542,101 @@ describe('micro spend radar', () => {
     const r = computeMicroRadar(l.data.transactions, T0);
     expect(r.streakDays).toBe(3);
     expect(r.alerts.length).toBeGreaterThan(0);
+  });
+});
+
+describe('debts (who owes whom, auto-netting, AA split, partial repayment & transfer auto-match)', () => {
+  it('Idea 1: auto-nets mutual open debts for the same person', () => {
+    const l = ledger();
+    const d1 = l.addDebt({ personName: '阿明', direction: 'owed_to_me', amount: 350, title: '代墊晚餐' }, T0);
+    const d2 = l.addDebt({ personName: '阿明', direction: 'i_owe', amount: 150, title: '阿明幫買飲料' }, T0);
+
+    const res = l.netPersonDebts('阿明', plus(T0, 60));
+    expect(res).toEqual({ offsetAmount: 150, affectedCount: 2 });
+    expect(d1.remainingAmount).toBe(200);
+    expect(d1.status).toBe('open');
+    expect(d2.remainingAmount).toBe(0);
+    expect(d2.status).toBe('settled');
+  });
+
+  it('Idea 2: splits an expense into AA friend debts while protecting personal spending budget', () => {
+    const l = ledger({ monthlyBudget: 15000, openingBank: 20000 });
+    const hotpotTx = createManualExpense({
+      id: 'tx-hotpot',
+      amount: 2000,
+      method: 'apple_pay',
+      category: '餐飲',
+      merchant: '海底撈',
+      occurredAt: T0,
+      now: T0,
+    });
+    l.upsert(hotpotTx);
+
+    const created = l.convertTxToDebtSplit(
+      'tx-hotpot',
+      [
+        { personName: '阿明', amount: 500 },
+        { personName: '小華', amount: 500 },
+        { personName: '阿哲', amount: 500 },
+      ],
+      plus(T0, 30),
+    );
+
+    expect(created).toHaveLength(3);
+    // Bank balance still reflects the full $2,000 paid out of pocket
+    expect(computeBalances(l.data.settings, l.data.transactions).bank).toBe(18000);
+    // Personal budget only counts our own $500 share, NOT the $1,500 advanced for friends!
+    expect(computeSafeToSpend(l.data.settings, l.data.transactions, [], T0).spentToday).toBe(500);
+  });
+
+  it('Idea 3: computes BROKE AF debt aging thermometer levels', () => {
+    expect(computeDebtAging('owed_to_me', '2026-10-25T04:00:00.000Z', T0).level).toBe('fresh');
+    expect(computeDebtAging('owed_to_me', '2026-10-10T04:00:00.000Z', T0).level).toBe('warm');
+    expect(computeDebtAging('owed_to_me', '2026-09-15T04:00:00.000Z', T0).level).toBe('frozen');
+    expect(computeDebtAging('i_owe', '2026-10-15T04:00:00.000Z', T0).level).toBe('urgent');
+  });
+
+  it('Idea 5: supports partial repayment progress and syncs bank/cash balances', () => {
+    const l = ledger({ openingBank: 10000, openingCash: 500 });
+    const debt = l.addDebt(
+      { personName: '小華', direction: 'owed_to_me', amount: 1000, title: '演唱會門票', syncAccountId: 'bank' },
+      T0,
+    );
+    expect(computeBalances(l.data.settings, l.data.transactions).bank).toBe(9000);
+
+    // Partial repayment $400 to bank
+    l.settleDebt(debt.id, 400, 'bank', '先轉還一部分', plus(T0, 120));
+    expect(debt.remainingAmount).toBe(600);
+    expect(debt.status).toBe('open');
+    expect(computeBalances(l.data.settings, l.data.transactions).bank).toBe(9400);
+
+    // Remaining $600 paid in cash
+    l.settleDebt(debt.id, 600, 'cash', '尾款給現金', plus(T0, 240));
+    expect(debt.remainingAmount).toBe(0);
+    expect(debt.status).toBe('settled');
+    expect(computeBalances(l.data.settings, l.data.transactions).cash).toBe(1100);
+  });
+
+  it('Idea 6: transfer screenshot automatically offsets matching i_owe debt by 5-digit suffix without eating personal budget', () => {
+    const l = ledger({ openingBank: 20000, monthlyBudget: 15000 });
+    const d = l.addDebt(
+      {
+        personName: '小明',
+        direction: 'i_owe',
+        amount: 100,
+        title: '小明先幫付午餐',
+        accountSuffix: '24126',
+      },
+      T0,
+    );
+
+    const res = l.ingest('transfer_page', { text: TRANSFER_100 }, plus(T0, 60));
+    expect(d.status).toBe('settled');
+    expect(d.remainingAmount).toBe(0);
+    expect(res.transaction?.isAdvance).toBe(true);
+    expect(res.message).toContain('已自動沖銷');
+    // Bank balance decreases by $100, but today's personal spending budget is NOT double-penalized
+    expect(computeBalances(l.data.settings, l.data.transactions).bank).toBe(19900);
+    expect(computeSafeToSpend(l.data.settings, l.data.transactions, [], T0).spentToday).toBe(0);
   });
 });

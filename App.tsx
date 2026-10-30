@@ -15,16 +15,18 @@ import { ActionSheetModals, type ActiveModal } from './src/components/ActionShee
 import { LiquidGlassCard } from './src/components/LiquidGlassView';
 import { SafeConfirmButton } from './src/components/SafeConfirmButton';
 import { DashboardScreen } from './src/screens/DashboardScreen';
+import { DebtsScreen } from './src/screens/DebtsScreen';
 import { SettingsAndSubsScreen } from './src/screens/SettingsAndSubsScreen';
 import { ShortcutsTestBenchScreen } from './src/screens/ShortcutsTestBenchScreen';
 import { TransactionsScreen } from './src/screens/TransactionsScreen';
 import { LedgerProvider, useLedger } from './src/store/useLedger';
 
-type TabKey = 'dashboard' | 'transactions' | 'testbench' | 'settings';
+type TabKey = 'dashboard' | 'transactions' | 'debts' | 'testbench' | 'settings';
 
 const TABS: ReadonlyArray<{ key: TabKey; glyph: string; label: string }> = [
   { key: 'dashboard', glyph: '◈', label: '總覽' },
   { key: 'transactions', glyph: '☰', label: '明細' },
+  { key: 'debts', glyph: '🤝', label: '欠款' },
   { key: 'testbench', glyph: '⚡', label: '捷徑' },
   { key: 'settings', glyph: '⚙', label: '設定' },
 ];
@@ -247,6 +249,19 @@ function MainShell() {
               ]}
             >
               <TransactionsScreen />
+            </View>
+          )}
+          {activeTab === 'debts' && (
+            <View
+              style={[
+                styles.subScreenPad,
+                {
+                  paddingTop: headerTotalHeight + 6,
+                  paddingBottom: bottomTotalPad,
+                },
+              ]}
+            >
+              <DebtsScreen />
             </View>
           )}
           {activeTab === 'testbench' && (
@@ -772,23 +787,23 @@ const styles = StyleSheet.create({
   floatingBarInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 6,
-    gap: 6,
+    gap: 4,
   },
   floatingBarInnerShrunk: {
-    paddingHorizontal: 6,
+    paddingHorizontal: 5,
     paddingVertical: 4,
-    gap: 4,
+    gap: 3,
   },
   tabPillItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 11,
     paddingVertical: 8,
     borderRadius: 999,
-    gap: 5,
+    gap: 4,
   },
   tabPillItemShrunk: {
     paddingHorizontal: 11,

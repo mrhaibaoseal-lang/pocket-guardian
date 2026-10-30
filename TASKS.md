@@ -1,6 +1,6 @@
 # TASKS.md — 專案任務清單與驗收條件
 
-> **專案名稱**：錢呢[BROKE AF]（原 PocketGuardian 守財靈）`smart-ledger` (`v3.2.3`)
+> **專案名稱**：錢呢[BROKE AF]（原 PocketGuardian 守財靈）`smart-ledger` (`v3.3.0`)
 > **需求與架構基準**：請見 [`PLAN.md`](./PLAN.md)（已涵蓋完整 PRD 與系統架構，無須另建 `PRD.md` 或 `ARCHITECTURE.md`）
 > **開發規範**：請見 [`AGENTS.md`](./AGENTS.md)
 > **交接紀錄**：請見 [`HANDOFF.md`](./HANDOFF.md)
@@ -65,6 +65,14 @@
 
 ## P2 / P3：後續擴充待辦（Backlog — 未經使用者指示請勿提前實作）
 
-- [ ] **T2.1：代墊款項（幫朋友先付／拆帳）沖銷標記**
+- [x] **T2.1：人情欠款與代墊拆帳獨立功能欄（「🤝 欠款」`DebtsScreen.tsx`）**
+  - **關聯檔案**：`core/types.ts`, `core/ledger.ts`, `core/memoryLedger.ts`, `src/store/useLedger.tsx`, `src/screens/DebtsScreen.tsx`, `src/screens/TransactionsScreen.tsx`, `App.tsx`, `core/__tests__/core.test.ts`
+  - **驗收條件**：
+    1. 底部浮動毛玻璃導覽列新增第 5 欄「🤝 欠款」，頂部提供「🟢 別人欠我（待收回）」與「🔴 我欠別人（待歸還）」雙生總覽卡與相抵淨額。
+    2. 支援「👤 依對象歸戶」同人雙向欠款一鍵自動互抵（Auto-Netting）。
+    3. 支援「🧮 聚餐 AA 拆帳計算機」與從「☰ 明細」一鍵轉欠款／AA 拆帳，代墊部分自動標記 `isAdvance = true` 不吃掉個人月預算。
+    4. 支援 BROKE AF 帳齡溫度計（`🌱 剛發生` / `⏳ 有點涼了` / `🧊 呆帳警報` / `🔥 快還錢！`）與便當／白打工時數換算。
+    5. 支援部分還款（分期進度條與歷次還款紀錄）及三選一連動（玉山銀行／現金錢包／僅勾銷狀態）。
+    6. 支援綁定對方銀行帳號末 5 碼，當 iOS 轉帳截圖捷徑入帳時自動比對沖銷「我欠別人」欠款且不重複扣除個人預算。
 - [ ] **T2.2：更多行動支付（LINE Pay / 街口支付 / 全支付）專用通知模板細化**
 - [ ] **T3.1：財政部電子發票載具明細補完（選配）**
