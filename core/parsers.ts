@@ -6,6 +6,15 @@ export interface RawInput {
   /** Structured fields, e.g. from the iOS 27 Wallet ("錢包") automation. */
   merchant?: string | null;
   amount?: number | string | null;
+  /** Optional base64-encoded screenshot image for Cloudflare Workers AI Vision recognition. */
+  imageBase64?: string | null;
+}
+
+const BASE64_IMAGE_RE = /^(?:data:image\/[a-zA-Z0-9.+-]+;base64,)?(?:iVBORw0KGgo|\/9j\/)[A-Za-z0-9+/=\s]{100,}$/;
+
+export function isBase64ImageString(s: string | null | undefined): boolean {
+  if (!s) return false;
+  return BASE64_IMAGE_RE.test(s.trim());
 }
 
 const FULLWIDTH_DIGITS = /[０-９]/g;
@@ -85,7 +94,10 @@ function looksLikeFullTextPayload(s: string): boolean {
  * the parser routes the full text accurately without concatenating OCR digits.
  */
 export function normalizeRawInput(raw: RawInput): RawInput {
-  const t = normalizeText(raw.text ?? '');
+  const rawTextTrim = (raw.text ?? '').trim();
+  const textIsImage = isBase64ImageString(rawTextTrim);
+  const t = textIsImage ? '' : normalizeText(rawTextTrim);
+  const imageBase64 = raw.imageBase64 ?? (textIsImage ? rawTextTrim : null);
   const amtStr =
     raw.amount !== null && raw.amount !== undefined ? normalizeText(String(raw.amount)) : '';
   const merchStr = normalizeText(raw.merchant ?? '');
@@ -93,17 +105,17 @@ export function normalizeRawInput(raw: RawInput): RawInput {
   if (!t) {
     // 1. User selected the exact same variable (e.g. 已擷取的文字 / 通知 / 文字) in both amount & merchant
     if (amtStr && merchStr && amtStr === merchStr) {
-      return { text: amtStr, amount: null, merchant: null };
+      return { text: amtStr, amount: null, merchant: null, imageBase64 };
     }
     // 2. User passed full text / "商家 數量" into `amount` (not a standalone number)
     if (amtStr && toNumber(raw.amount) === null && !detectForeignCurrency(amtStr)) {
       const keepMerchant =
         merchStr && merchStr !== amtStr && !looksLikeFullTextPayload(merchStr) ? merchStr : null;
-      return { text: amtStr, amount: null, merchant: keepMerchant };
+      return { text: amtStr, amount: null, merchant: keepMerchant, imageBase64 };
     }
     // 3. User passed full OCR / notification / "商家 數量" into `merchant` while `amount` is empty
     if (!amtStr && merchStr && looksLikeFullTextPayload(merchStr)) {
-      return { text: merchStr, amount: null, merchant: null };
+      return { text: merchStr, amount: null, merchant: null, imageBase64 };
     }
   }
 
@@ -111,6 +123,7 @@ export function normalizeRawInput(raw: RawInput): RawInput {
     text: t || null,
     amount: raw.amount ?? null,
     merchant: merchStr || null,
+    imageBase64,
   };
 }
 
@@ -595,7 +608,8 @@ function parseTransferPage(p: ParsedEvent, text: string, ownSuffix: string): Par
       // Do not pick the number immediately following "手續費" / "銀行代號"
       if (i > 0 && BALANCE_OR_FEE_LABEL_ONLY.test(lines[i - 1])) continue;
       if (/^\d{3}\s*\/$/.test(lines[i])) continue;
-      const signedLine = lines[i].replace(/^[+-]\s*/, '');
+      // Strip leading +/- or OCR-captured circle badge "存" / "提" before the amount
+      const signedLine = lines[i].replace(/^(?:[+-]|[（(【\[]?\s*[存提支]\s*[）)】\]]?)\s*/, '');
       const val = parseStandaloneAmountLine(signedLine, lines[i + 1]);
       if (val !== null) {
         amount = val;
@@ -612,18 +626,34 @@ function parseTransferPage(p: ParsedEvent, text: string, ownSuffix: string): Par
     const candidate = lines[noteIdx + 1].trim();
     if (
       candidate &&
-      !/^(?:轉帳留言|存摺備註|銀行代號|帳號|帳戶餘額|轉帳給此帳號)/.test(candidate) &&
+      !/^(?:轉帳留言|存摺備註|銀行代號|帳號|帳戶餘額|轉帳給此帳號|無|-+)$/.test(candidate) &&
       !isMaskedAccountLine(candidate)
     ) {
       counterpartyName = candidate;
     }
   }
 
-  // Determine whether this screen is an incoming transfer (轉入) vs outgoing transfer (轉出)
+  // Determine whether this screen is an incoming transfer (轉入/存) vs outgoing transfer (轉出/提):
+  // NOTE: "轉帳給此帳號" appears at the bottom of BOTH incoming (存) and outgoing (提) passbook detail
+  // screens in E.SUN Bank, so we MUST NOT use "轉帳給此帳號" alone to assume incoming transfer!
+  const hasExplicitDepositBadge =
+    lines.some((l) => /^[（(【\[]?\s*存\s*[）)】\]]?(?:\s+\d[\d,]*)?$/.test(l)) ||
+    /(?:^|\n)[ \t]*存[ \t]+(?=\d)/.test(bodyText);
+  const hasExplicitWithdrawBadge =
+    lines.some((l) => /^[（(【\[]?\s*(?:提|支)\s*[）)】\]]?(?:\s+\d[\d,]*)?$/.test(l)) ||
+    /(?:^|\n)[ \t]*(?:提|支)[ \t]+(?=\d)/.test(bodyText);
+  const hasMaskedSenderName =
+    counterpartyName !== null && /^[\u4e00-\u9fa5A-Za-z][*＊•·●○][\u4e00-\u9fa5A-Za-z]{1,3}$/.test(counterpartyName);
+
   const hasIncomingMarkers =
-    /(轉帳給此帳號|轉入金額|存入金額|收款金額|收到轉帳|轉帳存入)/.test(bodyText) ||
-    lines.some((l) => /^\+\s*(?:NT\$|\$)?\s*\d/.test(l));
-  const hasOutgoingTargetMarkers = /(轉入對象|轉入帳號|收款帳號|扣款金額|轉出金額)/.test(bodyText);
+    hasExplicitDepositBadge ||
+    /(轉入金額|存入金額|收款金額|收到轉帳|轉帳存入|跨行轉入|匯入金額)/.test(bodyText) ||
+    lines.some((l) => /^\+\s*(?:NT\$|\$)?\s*\d/.test(l)) ||
+    (/(轉帳給此帳號|帳戶餘額)/.test(bodyText) && hasMaskedSenderName && !hasExplicitWithdrawBadge);
+  const hasOutgoingTargetMarkers =
+    hasExplicitWithdrawBadge ||
+    /(轉入對象|轉入帳號|收款帳號|扣款金額|轉出金額|跨行轉出|轉帳支出)/.test(bodyText) ||
+    lines.some((l) => /^-\s*(?:NT\$|\$)?\s*\d/.test(l));
   const isIncomingTransfer = hasIncomingMarkers && !hasOutgoingTargetMarkers;
 
   if (isSelfTransfer) {

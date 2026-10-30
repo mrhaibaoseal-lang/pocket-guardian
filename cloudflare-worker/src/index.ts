@@ -155,12 +155,18 @@ async function extractRawInput(req: Request, url: URL): Promise<{ source: EventS
       (parsed.notification as string | undefined) ??
       (parsed.input as string | undefined) ??
       queryText;
+    const imageCandidate =
+      (parsed.imageBase64 as string | undefined) ??
+      (parsed.image as string | undefined) ??
+      (parsed.screenshot as string | undefined) ??
+      null;
     return {
       source: src ?? null,
       raw: {
         text: textCandidate ?? null,
         amount: (parsed.amount as number | string | undefined) ?? queryAmount,
         merchant: (parsed.merchant as string | undefined) ?? queryMerchant,
+        imageBase64: imageCandidate,
       },
     };
   } catch {
@@ -185,9 +191,24 @@ async function extractRawInput(req: Request, url: URL): Promise<{ source: EventS
   }
 }
 
+function decodeBase64ToBytes(b64: string): number[] | null {
+  try {
+    const clean = b64.replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, '').replace(/\s+/g, '');
+    const bin = atob(clean);
+    const bytes = new Array<number>(bin.length);
+    for (let i = 0; i < bin.length; i++) {
+      bytes[i] = bin.charCodeAt(i);
+    }
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Use Cloudflare Workers AI (@cf/meta/llama-3.1-8b-instruct) when deterministic rules
- * encounter a novel bank/payment layout, low-confidence parse, or unrecognized screenshot.
+ * Use Cloudflare Workers AI (Vision @cf/llava-hf/llava-1.5-7b-hf / @cf/meta/llama-3.2-11b-vision-instruct
+ * + Text @cf/meta/llama-3.1-8b-instruct) when an image is provided or when deterministic rules
+ * encounter a novel bank/payment layout, passbook detail ("存" vs "提" circle badge), or low-confidence parse.
  */
 async function enhanceWithWorkersAiIfNeeded(
   env: Env,
@@ -199,13 +220,20 @@ async function enhanceWithWorkersAiIfNeeded(
   if (!env.AI) return rawInput;
   const norm = normalizeRawInput(rawInput);
   const text = normalizeText(norm.text ?? '');
-  if (!text || text.length < 4) return rawInput;
+  const hasImage = Boolean(norm.imageBase64);
+  if (!text && !hasImage) return rawInput;
+
+  const isPassbookAmbiguous =
+    /(轉帳給此帳號|網路非約轉帳|約定轉帳|存摺備註)/.test(text) &&
+    !/(?:^|\n)[ \t]*[（(【\[]?(?:存|提|支)[）)】\]]?[ \t]*(?=\d|\n|$)/.test(text);
 
   const guessed = sourceHint ?? guessSource(text) ?? (norm.amount || norm.merchant ? 'wallet' : 'efingo');
   const prelim = parseEvent(guessed, norm, now, ownSuffix);
 
-  // If deterministic rules already succeeded with high confidence on a known pattern, skip AI latency
+  // If deterministic rules already succeeded with high confidence and no ambiguous passbook badge, skip AI latency
   if (
+    !hasImage &&
+    !isPassbookAmbiguous &&
     prelim.confidence === 'high' &&
     (prelim.kind === 'card_spend' ||
       prelim.kind === 'transfer_out' ||
@@ -216,19 +244,53 @@ async function enhanceWithWorkersAiIfNeeded(
   }
 
   const systemPrompt = `你是台灣「錢呢 BROKE AF」記帳 App 的 AI 帳務解析引擎。
-請根據使用者傳入的手機截圖 OCR 文字或推播通知，判斷這是不是一筆真實的金融交易，並只輸出單行 JSON（不要 Markdown、不要任何解釋）：
+請根據使用者傳入的手機截圖與 OCR 文字，判斷這是不是一筆真實的金融交易，並只輸出單行 JSON（不要 Markdown、不要任何解釋）：
 {"kind":"transfer_out"|"transfer_in"|"card_spend"|"internal_transfer"|"non_transaction","amount":整數金額或null,"merchant":"店家或對象名稱或null","payeeBankCode":"3碼銀行代碼或null","payeeSuffix":"末4~5碼帳號或null","occurredAt":"YYYY-MM-DD HH:mm:ss或null","reason":"簡短說明"}
 
 嚴格規則：
 1. 絕對不可把「西元年份(如2026)」、「時間(如10:29、11:39)」、「電量(如84)」、「銀行代碼(如808、013、812)」、「帳戶餘額/可用餘額(如2,040)」、「手續費(如15)」誤判為交易金額 amount！
-2. 區分「轉出(transfer_out)」與「轉入(transfer_in)」：
-   - 若畫面有「轉帳給此帳號」按鈕、或顯示「轉入/存入/入帳/+金額」，且沒有「轉入對象」，代表別人轉錢給我，kind 必為 "transfer_in"，merchant 填「轉入：對方姓名或末碼」。
-   - 若畫面有「轉入對象 + 自己帳號」或「轉出/扣款」，代表我轉錢給別人，kind 必為 "transfer_out"。
+2. 玉山銀行等存摺交易明細（底部有「轉帳給此帳號」按鈕時，轉出與轉入都有該按鈕，不可單憑按鈕判斷！）：
+   - 必須看金額旁邊的圓形圖示：若是【青色/綠色圓圈「存」】或有匯款人遮罩姓名（如「阮*豫」），代表別人轉錢給我，kind 必為 "transfer_in"，merchant 填「轉入：對方姓名或末碼」。
+   - 若金額旁邊是【橘色/紅色圓圈「提」】或顯示「轉入對象 + 自己帳號」或「轉出/扣款」，代表我轉錢給別人，kind 必為 "transfer_out"。
    - 若轉入對象的帳號末碼屬於使用者自己的帳號 (${ownSuffix})，kind 必為 "internal_transfer"。
 3. 若是一般刷卡、Apple Pay、LINE Pay、街口、全支付或超商消費，kind 為 "card_spend"，merchant 填商店名稱。
 4. 若畫面只是手機鎖定畫面、主畫面、捷徑設定頁、聊天對話或找不到明確交易金額，kind 必為 "non_transaction"，amount 為 null。`;
 
   try {
+    // 1. If screenshot image bytes are available, run Vision AI to read visual badges ("存" vs "提" circle) & layout
+    if (norm.imageBase64) {
+      const imageBytes = decodeBase64ToBytes(norm.imageBase64);
+      if (imageBytes && imageBytes.length > 100) {
+        const visionPrompt = `${systemPrompt}\n\n畫面 OCR 輔助文字：\n${text.slice(0, 1000)}\n請特別注意圖片中金額左側圓圈內的字是青色「存」(transfer_in) 還是橘色「提」(transfer_out)，只輸出 JSON：`;
+        const visionCall = env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
+          image: imageBytes,
+          prompt: visionPrompt,
+          max_tokens: 220,
+        }).catch(() =>
+          env.AI!.run('@cf/llava-hf/llava-1.5-7b-hf', {
+            image: imageBytes,
+            prompt: visionPrompt,
+            max_tokens: 220,
+          }),
+        );
+        const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5500));
+        const visionRes = await Promise.race([visionCall, timeout]);
+        if (visionRes) {
+          const rawVision =
+            typeof visionRes === 'string'
+              ? visionRes
+              : (visionRes as { response?: string; description?: string }).response ??
+                (visionRes as { description?: string }).description ??
+                '';
+          const jsonMatch = rawVision.match(/\{[\s\S]*?"kind"\s*:[\s\S]*?\}/);
+          if (jsonMatch) {
+            return { text: jsonMatch[0], amount: null, merchant: null };
+          }
+        }
+      }
+    }
+
+    // 2. Text LLM semantic analysis
     const aiCall = env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
       messages: [
         { role: 'system', content: systemPrompt },

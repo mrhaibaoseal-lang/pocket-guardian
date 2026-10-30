@@ -1,5 +1,6 @@
 import AppIntents
 import Foundation
+import UIKit
 
 @available(iOS 17.0, *)
 enum ShortcutSourceOption: String, AppEnum {
@@ -42,6 +43,12 @@ struct IngestNotificationIntent: AppIntent {
     )
     var merchant: String?
 
+    @Parameter(
+        title: "畫面截圖影像（選填，AI 視覺辨識存/提圓圈）",
+        description: "選填：可直接選取「螢幕快照」，由雲端 AI 視覺模型直接看圖辨識青色「存」字或橘色「提」字圓圈"
+    )
+    var screenshot: IntentFile?
+
     @Parameter(title: "來源通道", default: .auto)
     var source: ShortcutSourceOption
 
@@ -63,6 +70,19 @@ struct IngestNotificationIntent: AppIntent {
         }
         if let merchant = merchant, !merchant.isEmpty {
             payload["merchant"] = merchant
+        }
+        if let screenshot = screenshot,
+           let uiImage = UIImage(data: screenshot.data) {
+            let maxDim: CGFloat = 900
+            let scale = min(1.0, maxDim / max(uiImage.size.width, uiImage.size.height))
+            let targetSize = CGSize(width: uiImage.size.width * scale, height: uiImage.size.height * scale)
+            UIGraphicsBeginImageContextWithOptions(targetSize, true, 1.0)
+            uiImage.draw(in: CGRect(origin: .zero, size: targetSize))
+            let resized = UIGraphicsGetImageFromCurrentImageContext()
+            UIGraphicsEndImageContext()
+            if let jpegData = (resized ?? uiImage).jpegData(compressionQuality: 0.6) {
+                payload["imageBase64"] = jpegData.base64EncodedString()
+            }
         }
         if source != .auto {
             payload["source"] = source.rawValue

@@ -883,4 +883,29 @@ describe('real-device iOS 27 Shortcut screenshot & variable wiring regressions (
     expect(res.transaction?.amount).toBe(1200);
     expect(res.transaction?.merchant).toBe('轉入：王小明 ****12345');
   });
+
+  it('does NOT falsely treat outgoing passbook detail ("提" or no masked sender) as transfer_in just because "轉帳給此帳號" is present', () => {
+    const l = ledger({ openingBank: 5000 });
+    const outgoingPassbookOcr = [
+      '網路非約轉帳',
+      '2026/10/25 14:10:00',
+      '提 300',
+      '轉帳留言',
+      '存摺備註',
+      '午餐錢',
+      '銀行代號/',
+      '帳號',
+      '808/',
+      '****99887',
+      '帳戶餘額',
+      '4,700',
+      '轉帳給此帳號',
+    ].join('\n');
+
+    const res = l.ingest(null, { text: outgoingPassbookOcr }, T0);
+    expect(res.status).toBe('new_tx');
+    expect(res.transaction?.type).toBe('expense');
+    expect(res.transaction?.amount).toBe(300);
+    expect(computeBalances(l.data.settings, l.data.transactions).bank).toBe(4700);
+  });
 });
