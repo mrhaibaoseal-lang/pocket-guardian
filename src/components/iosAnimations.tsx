@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   Platform,
   Pressable,
   StyleSheet,
@@ -18,12 +18,10 @@ import Animated, {
   LinearTransition,
   useAnimatedStyle,
   useSharedValue,
-  withDelay,
-  withRepeat,
-  withSequence,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
+import { theme } from '../theme/tokens';
 
 export type HapticKind = 'selection' | 'light' | 'medium' | 'success' | 'warning' | 'none';
 
@@ -40,7 +38,22 @@ export function triggerHaptic(kind: HapticKind = 'light'): void {
   }
 }
 
-export const iosLayoutSpring = LinearTransition.springify().damping(19).stiffness(240).mass(0.8);
+let cachedReduceMotion = false;
+if (Platform.OS !== 'web') {
+  AccessibilityInfo.isReduceMotionEnabled()
+    .then((v) => {
+      cachedReduceMotion = Boolean(v);
+    })
+    .catch(() => undefined);
+  AccessibilityInfo.addEventListener('reduceMotionChanged', (v) => {
+    cachedReduceMotion = Boolean(v);
+  });
+}
+
+export const iosLayoutSpring = LinearTransition.springify()
+  .damping(theme.motion.springRestrained.damping)
+  .stiffness(theme.motion.springRestrained.stiffness)
+  .mass(theme.motion.springRestrained.mass);
 
 export interface TactilePressableProps {
   children: React.ReactNode;
@@ -58,7 +71,7 @@ export function TactilePressable({
   onPress,
   style,
   contentStyle,
-  activeScale = 0.94,
+  activeScale = theme.motion.pressScale,
   haptic = 'light',
   disabled = false,
   hitSlop,
@@ -71,7 +84,7 @@ export function TactilePressable({
   }));
 
   const highlightStyle = useAnimatedStyle(() => ({
-    opacity: glow.value * 0.14,
+    opacity: glow.value * theme.motion.pressHighlightOpacity,
   }));
 
   return (
@@ -80,13 +93,15 @@ export function TactilePressable({
       hitSlop={hitSlop}
       style={style}
       onPressIn={() => {
-        scale.value = withSpring(activeScale, { damping: 18, stiffness: 420, mass: 0.65 });
-        glow.value = withTiming(1, { duration: 80 });
+        if (!cachedReduceMotion) {
+          scale.value = withSpring(activeScale, theme.motion.springRestrained);
+        }
+        glow.value = withTiming(1, { duration: 70 });
         triggerHaptic(haptic);
       }}
       onPressOut={() => {
-        scale.value = withSpring(1, { damping: 12, stiffness: 300, mass: 0.7 });
-        glow.value = withTiming(0, { duration: 200 });
+        scale.value = withSpring(1, theme.motion.springRestrained);
+        glow.value = withTiming(0, { duration: 160 });
       }}
       onPress={onPress}
     >
@@ -104,6 +119,7 @@ export interface AnimatedRollingNumberProps {
   suffix?: string;
   style?: StyleProp<TextStyle>;
   duration?: number;
+  maxFontSizeMultiplier?: number;
 }
 
 export function AnimatedRollingNumber({
@@ -111,38 +127,33 @@ export function AnimatedRollingNumber({
   prefix = '$',
   suffix = '',
   style,
-  duration = 460,
+  duration = 360,
+  maxFontSizeMultiplier = theme.typography.maxAmountFontScale,
 }: AnimatedRollingNumberProps) {
   const targetVal = Math.round(Number.isFinite(value) ? value : 0);
   const [displayVal, setDisplayVal] = useState(targetVal);
   const prevValRef = useRef(targetVal);
   const rafRef = useRef<number | null>(null);
   const mountedRef = useRef(false);
-  const pulseScale = useSharedValue(1);
 
   useEffect(() => {
     const startVal = prevValRef.current;
     const endVal = targetVal;
     prevValRef.current = endVal;
 
-    if (!mountedRef.current) {
+    if (!mountedRef.current || cachedReduceMotion) {
       mountedRef.current = true;
       setDisplayVal(endVal);
       return;
     }
     if (startVal === endVal) return;
 
-    pulseScale.value = withSequence(
-      withTiming(1.045, { duration: 110, easing: Easing.out(Easing.quad) }),
-      withSpring(1, { damping: 12, stiffness: 260, mass: 0.7 }),
-    );
-
     const startTime = Date.now();
     const diff = endVal - startVal;
     const step = () => {
       const elapsed = Date.now() - startTime;
       const t = Math.min(1, elapsed / duration);
-      const eased = 1 - Math.pow(1 - t, 3.6);
+      const eased = 1 - Math.pow(1 - t, 3.2);
       setDisplayVal(Math.round(startVal + diff * eased));
       if (t < 1) rafRef.current = requestAnimationFrame(step);
       else setDisplayVal(endVal);
@@ -153,76 +164,56 @@ export function AnimatedRollingNumber({
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
-  }, [targetVal, duration, pulseScale]);
-
-  const pulseStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulseScale.value }],
-  }));
+  }, [targetVal, duration]);
 
   return (
-    <Animated.View style={pulseStyle}>
-      <Text style={style}>
-        {displayVal < 0 ? '-' : ''}
-        {prefix}
-        {Math.abs(displayVal).toLocaleString()}
-        {suffix}
-      </Text>
-    </Animated.View>
+    <Text style={style} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+      {displayVal < 0 ? '-' : ''}
+      {prefix}
+      {Math.abs(displayVal).toLocaleString()}
+      {suffix}
+    </Text>
   );
 }
 
 export interface LiquidLightTubeProps {
   percent: number;
   height?: number;
+  tone?: 'normal' | 'warning' | 'danger';
   colors?: readonly [string, string, ...string[]];
 }
 
 export function LiquidLightTube({
   percent,
-  height = 8,
-  colors = ['#D97706', '#F59E0B', '#FDE68A'],
+  height = 4,
+  tone = 'normal',
 }: LiquidLightTubeProps) {
   const clamped = Math.max(0, Math.min(100, percent));
-  const widthPct = useSharedValue(0);
-  const shimmerProgress = useSharedValue(0);
+  const widthPct = useSharedValue(clamped);
 
   useEffect(() => {
-    widthPct.value = withSpring(clamped, { damping: 18, stiffness: 130, mass: 0.85 });
+    if (cachedReduceMotion) {
+      widthPct.value = clamped;
+    } else {
+      widthPct.value = withSpring(clamped, theme.motion.springSmooth);
+    }
   }, [clamped, widthPct]);
 
-  useEffect(() => {
-    shimmerProgress.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 1900, easing: Easing.inOut(Easing.cubic) }),
-        withDelay(1400, withTiming(0, { duration: 0 })),
-      ),
-      -1,
-      false,
-    );
-  }, [shimmerProgress]);
+  const fillColor =
+    tone === 'danger'
+      ? theme.colors.semantic.danger
+      : tone === 'warning'
+      ? theme.colors.semantic.warning
+      : theme.colors.accent.primary;
 
   const fillAnimStyle = useAnimatedStyle(() => ({
     width: `${Math.max(0, Math.min(100, widthPct.value))}%`,
-  }));
-
-  const shimmerAnimStyle = useAnimatedStyle(() => ({
-    left: `${-30 + shimmerProgress.value * 135}%`,
-    opacity: widthPct.value > 3 ? 0.75 : 0,
+    backgroundColor: fillColor,
   }));
 
   return (
-    <View style={[styles.lightTubeTrack, { height }]}>
-      <Animated.View style={[styles.lightTubeGlowWrap, fillAnimStyle]}>
-        <LinearGradient colors={colors} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.lightTubeGradient} />
-        <Animated.View pointerEvents="none" style={[styles.shimmerBlade, shimmerAnimStyle]}>
-          <LinearGradient
-            colors={['transparent', 'rgba(255, 252, 240, 0.65)', 'transparent']}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={StyleSheet.absoluteFill}
-          />
-        </Animated.View>
-      </Animated.View>
+    <View style={[styles.meterTrack, { height }]}>
+      <Animated.View style={[styles.meterFill, fillAnimStyle]} />
     </View>
   );
 }
@@ -238,23 +229,21 @@ export function ScreenTransitionView({
 }) {
   const opacity = useSharedValue(1);
   const translateY = useSharedValue(0);
-  const scale = useSharedValue(1);
   const prevTabRef = useRef(tabKey);
 
   useEffect(() => {
     if (prevTabRef.current === tabKey) return;
     prevTabRef.current = tabKey;
-    opacity.value = 0.25;
-    translateY.value = 10;
-    scale.value = 0.985;
-    opacity.value = withTiming(1, { duration: 180, easing: Easing.out(Easing.cubic) });
-    translateY.value = withSpring(0, { damping: 20, stiffness: 290, mass: 0.7 });
-    scale.value = withSpring(1, { damping: 20, stiffness: 290, mass: 0.7 });
-  }, [tabKey, opacity, translateY, scale]);
+    if (cachedReduceMotion) return;
+    opacity.value = 0.65;
+    translateY.value = 4;
+    opacity.value = withTiming(1, { duration: 150, easing: Easing.out(Easing.cubic) });
+    translateY.value = withSpring(0, theme.motion.springRestrained);
+  }, [tabKey, opacity, translateY]);
 
   const animStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
-    transform: [{ translateY: translateY.value }, { scale: scale.value }],
+    transform: [{ translateY: translateY.value }],
   }));
 
   return <Animated.View style={[{ flex: 1 }, style, animStyle]}>{children}</Animated.View>;
@@ -269,10 +258,13 @@ export function StaggeredItem({
   style?: StyleProp<ViewStyle>;
   children: React.ReactNode;
 }) {
-  const delayMs = Math.min(index * 38, 260);
+  if (cachedReduceMotion) {
+    return <View style={style}>{children}</View>;
+  }
+  const delayMs = Math.min(index * theme.motion.staggerDelayMs, theme.motion.maxStaggerDelayMs);
   return (
     <Animated.View
-      entering={FadeInDown.delay(delayMs).springify().damping(18).stiffness(230).mass(0.75)}
+      entering={FadeInDown.delay(delayMs).duration(170)}
       layout={iosLayoutSpring}
       style={style}
     >
@@ -288,34 +280,16 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    borderRadius: 28,
-    backgroundColor: '#FFF8EB',
+    borderRadius: theme.radii.control,
+    backgroundColor: '#FFFFFF',
   },
-  lightTubeTrack: {
-    borderRadius: 999,
-    backgroundColor: 'rgba(255, 235, 200, 0.08)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(255, 230, 190, 0.16)',
+  meterTrack: {
+    borderRadius: theme.radii.pill,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     overflow: 'hidden',
   },
-  lightTubeGlowWrap: {
+  meterFill: {
     height: '100%',
-    borderRadius: 999,
-    overflow: 'hidden',
-    position: 'relative',
-    shadowColor: '#F59E0B',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45,
-    shadowRadius: 8,
-  },
-  lightTubeGradient: {
-    flex: 1,
-    borderRadius: 999,
-  },
-  shimmerBlade: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    width: '28%',
+    borderRadius: theme.radii.pill,
   },
 });

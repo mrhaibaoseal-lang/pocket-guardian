@@ -1,4 +1,3 @@
-import { BlurView } from 'expo-blur';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
 import { PanResponder, Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
@@ -6,8 +5,6 @@ import Animated, {
   Easing,
   useAnimatedStyle,
   useSharedValue,
-  withRepeat,
-  withSequence,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
@@ -15,9 +12,11 @@ import {
   SafeAreaProvider,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { ActionSheetModals, type ActiveModal } from './src/components/ActionSheetModals';
+import { AppSymbol, type AppIconName } from './src/components/AppSymbol';
 import { ScreenTransitionView, triggerHaptic } from './src/components/iosAnimations';
-import { LiquidGlassCard } from './src/components/LiquidGlassView';
+import { LiquidGlassCard, LiquidGlassGroup } from './src/components/LiquidGlassView';
 import { SafeConfirmButton } from './src/components/SafeConfirmButton';
 import { DashboardScreen } from './src/screens/DashboardScreen';
 import { DebtsScreen } from './src/screens/DebtsScreen';
@@ -25,19 +24,18 @@ import { SettingsAndSubsScreen } from './src/screens/SettingsAndSubsScreen';
 import { ShortcutsTestBenchScreen } from './src/screens/ShortcutsTestBenchScreen';
 import { TransactionsScreen } from './src/screens/TransactionsScreen';
 import { LedgerProvider, useLedger } from './src/store/useLedger';
+import { theme } from './src/theme/tokens';
 
 type TabKey = 'dashboard' | 'transactions' | 'debts' | 'testbench' | 'settings';
 
-const TABS: ReadonlyArray<{ key: TabKey; glyph: string; label: string }> = [
-  { key: 'dashboard', glyph: '◈', label: '總覽' },
-  { key: 'transactions', glyph: '☰', label: '明細' },
-  { key: 'debts', glyph: '🤝', label: '欠款' },
-  { key: 'testbench', glyph: '⚡', label: '捷徑' },
-  { key: 'settings', glyph: '⚙', label: '設定' },
+const TABS: ReadonlyArray<{ key: TabKey; icon: AppIconName; label: string }> = [
+  { key: 'dashboard', icon: 'chart.bar', label: '總覽' },
+  { key: 'transactions', icon: 'list.bullet', label: '明細' },
+  { key: 'debts', icon: 'arrow.left.arrow.right', label: '欠款' },
+  { key: 'testbench', icon: 'bolt', label: '捷徑' },
+  { key: 'settings', icon: 'slider.horizontal.3', label: '設定' },
 ];
 
-// Hardware-accurate iPhone 16 Plus (6.7") Safe Area Insets:
-// Top (Dynamic Island + Status Bar): 59pt | Bottom (Home Indicator): 34pt
 const IPHONE_16_PLUS_TOP_INSET = 59;
 const IPHONE_16_PLUS_BOTTOM_INSET = 34;
 
@@ -56,78 +54,42 @@ function useHardwareSafeInsets() {
 }
 
 /**
- * 【一、底層暖調環境光畫布 (Ambient Canvas)】
- * - 主背景色：極深曜石暖黑 #080705
- * - 左上角：古銅琥珀色 #422B18 (380x380px, borderRadius: 999, opacity: 0.5)
- * - 右下角：深邃大漠金 #2E2318 (380x380px, borderRadius: 999, opacity: 0.55)
- * - 上方覆蓋全螢幕 BlurView (intensity={95}, tint="dark")，呈現溫潤暗金微光
+ * Cold Charcoal (#0B0C0F) Ambient Canvas with 3 large, low-saturation,
+ * low-opacity (0.11~0.16) radial light fields rendered via `react-native-svg`
+ * RadialGradient for 60fps refraction behind native Liquid Glass.
  */
 function AmbientLightCanvas() {
-  const orb1Progress = useSharedValue(0);
-  const orb2Progress = useSharedValue(0);
-
-  useEffect(() => {
-    orb1Progress.value = withRepeat(
-      withTiming(1, { duration: 7800, easing: Easing.inOut(Easing.sin) }),
-      -1,
-      true,
-    );
-    orb2Progress.value = withRepeat(
-      withTiming(1, { duration: 9600, easing: Easing.inOut(Easing.sin) }),
-      -1,
-      true,
-    );
-  }, [orb1Progress, orb2Progress]);
-
-  const orb1AnimStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: orb1Progress.value * 28 },
-      { translateY: orb1Progress.value * 20 },
-      { scale: 1 + orb1Progress.value * 0.16 },
-    ],
-  }));
-
-  const orb2AnimStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: -orb2Progress.value * 30 },
-      { translateY: -orb2Progress.value * 24 },
-      { scale: 1 + orb2Progress.value * 0.18 },
-    ],
-  }));
-
   return (
     <View style={styles.ambientCanvas} pointerEvents="none">
-      {/* Top-Left: Bronze Warm Amber (#422B18) 380x380 Breathing Orb */}
-      <Animated.View
-        style={[
-          styles.orbBronzeAmber,
-          Platform.OS === 'web' ? styles.webOrbBlur : null,
-          orb1AnimStyle,
-        ]}
+      <Svg
+        width="100%"
+        height="100%"
+        viewBox="0 0 430 932"
+        preserveAspectRatio="none"
+        style={StyleSheet.absoluteFill}
       >
-        <View style={styles.orbBronzeAmberCore} />
-      </Animated.View>
-
-      {/* Bottom-Right: Deep Desert Titanium Gold (#2E2318) 380x380 Breathing Orb */}
-      <Animated.View
-        style={[
-          styles.orbDesertGold,
-          Platform.OS === 'web' ? styles.webOrbBlur : null,
-          orb2AnimStyle,
-        ]}
-      >
-        <View style={styles.orbDesertGoldCore} />
-      </Animated.View>
-
-      {/* Full-Screen Frosted Diffusion Layer (intensity={95}, tint="dark") */}
-      <BlurView
-        intensity={95}
-        tint="dark"
-        style={[
-          StyleSheet.absoluteFill,
-          Platform.OS === 'web' ? styles.webCanvasBlur : null,
-        ]}
-      />
+        <Defs>
+          <RadialGradient id="orb1" cx="22%" cy="16%" rx="62%" ry="38%">
+            <Stop offset="0%" stopColor={theme.colors.ambientOrbs.orbPrimary} stopOpacity="0.16" />
+            <Stop offset="55%" stopColor={theme.colors.ambientOrbs.orbPrimary} stopOpacity="0.06" />
+            <Stop offset="100%" stopColor={theme.colors.background.base} stopOpacity="0" />
+          </RadialGradient>
+          <RadialGradient id="orb2" cx="82%" cy="48%" rx="58%" ry="36%">
+            <Stop offset="0%" stopColor={theme.colors.ambientOrbs.orbSecondary} stopOpacity="0.14" />
+            <Stop offset="60%" stopColor={theme.colors.ambientOrbs.orbSecondary} stopOpacity="0.05" />
+            <Stop offset="100%" stopColor={theme.colors.background.base} stopOpacity="0" />
+          </RadialGradient>
+          <RadialGradient id="orb3" cx="35%" cy="86%" rx="64%" ry="36%">
+            <Stop offset="0%" stopColor={theme.colors.ambientOrbs.orbTertiary} stopOpacity="0.12" />
+            <Stop offset="60%" stopColor={theme.colors.ambientOrbs.orbTertiary} stopOpacity="0.04" />
+            <Stop offset="100%" stopColor={theme.colors.background.base} stopOpacity="0" />
+          </RadialGradient>
+        </Defs>
+        <Rect x="0" y="0" width="430" height="932" fill={theme.colors.background.base} />
+        <Rect x="0" y="0" width="430" height="932" fill="url(#orb1)" />
+        <Rect x="0" y="0" width="430" height="932" fill="url(#orb2)" />
+        <Rect x="0" y="0" width="430" height="932" fill="url(#orb3)" />
+      </Svg>
     </View>
   );
 }
@@ -243,39 +205,22 @@ function MainShell() {
   const shrinkProgress = useSharedValue(0);
   const pillX = useSharedValue(6);
   const pillW = useSharedValue(68);
-  const activeIconBounce = useSharedValue(1);
 
   useEffect(() => {
-    shrinkProgress.value = withSpring(navShrunk ? 1 : 0, {
-      damping: 20,
-      stiffness: 220,
-    });
+    shrinkProgress.value = withSpring(navShrunk ? 1 : 0, theme.motion.springRestrained);
   }, [navShrunk, shrinkProgress]);
 
   useEffect(() => {
     const layout = tabLayouts[activeTab];
     if (layout && layout.width > 0) {
-      pillX.value = withSpring(layout.x, {
-        damping: 18,
-        stiffness: 250,
-        mass: 0.72,
-      });
-      pillW.value = withSpring(layout.width, {
-        damping: 18,
-        stiffness: 250,
-        mass: 0.72,
-      });
+      pillX.value = withSpring(layout.x, theme.motion.springRestrained);
+      pillW.value = withSpring(layout.width, theme.motion.springRestrained);
     }
   }, [activeTab, tabLayouts, pillX, pillW]);
 
   const handleSelectTab = (tab: TabKey) => {
     if (tab !== activeTab) {
       triggerHaptic('selection');
-      activeIconBounce.value = withSequence(
-        withTiming(0.82, { duration: 65 }),
-        withSpring(1.16, { damping: 10, stiffness: 320 }),
-        withSpring(1, { damping: 14, stiffness: 260 }),
-      );
     }
     setNavShrunk(false);
     setActiveTab(tab);
@@ -283,8 +228,8 @@ function MainShell() {
 
   const floatingBarAnimStyle = useAnimatedStyle(() => {
     return {
-      transform: [{ scale: 1 - shrinkProgress.value * 0.14 }],
-      opacity: 1 - shrinkProgress.value * 0.1,
+      transform: [{ scale: 1 - shrinkProgress.value * 0.06 }],
+      opacity: 1 - shrinkProgress.value * 0.08,
     };
   });
 
@@ -293,11 +238,6 @@ function MainShell() {
     width: pillW.value,
   }));
 
-  const activeGlyphBounceStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: activeIconBounce.value }],
-  }));
-
-  // Inject iOS-accurate CSS resets when running inside the PC Web Simulator
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
     const styleEl = document.createElement('style');
@@ -307,7 +247,7 @@ function MainShell() {
         margin: 0;
         padding: 0;
         height: 100%;
-        background-color: #040302;
+        background-color: #050608;
         overflow: hidden;
         user-select: none;
         -webkit-font-smoothing: antialiased;
@@ -334,25 +274,21 @@ function MainShell() {
     };
   }, []);
 
-  // Total height of Sticky Header (59pt safe top + 46pt brand bar = 105pt)
-  const headerTotalHeight = safeInsets.top + 46;
-  // Space reserved at bottom for Floating Bar + Home Indicator (34pt + 66pt = 100pt)
+  const topSafePad = safeInsets.top + 16;
   const bottomTotalPad = safeInsets.bottom + 68;
 
   const content = (
     <View style={styles.rootViewport}>
-      {/* Layer 1: Desert Titanium & Warm Amber Ambient Canvas */}
       <AmbientLightCanvas />
 
       <View style={styles.safeArea}>
         <StatusBar style="light" />
 
-        {/* Main Screen Content (Scrolls over the Ambient Light Canvas) */}
         <ScreenTransitionView tabKey={activeTab} style={styles.screenBody}>
           {activeTab === 'dashboard' && (
             <DashboardScreen
-              topInsetPadding={headerTotalHeight + 10}
-              bottomInsetPadding={bottomTotalPad + 16}
+              topInsetPadding={topSafePad + 8}
+              bottomInsetPadding={bottomTotalPad + 20}
               onOpenModal={(m, cat) => {
                 if (cat) setPresetCategory(cat);
                 setActiveModal(m);
@@ -366,7 +302,7 @@ function MainShell() {
               style={[
                 styles.subScreenPad,
                 {
-                  paddingTop: headerTotalHeight + 6,
+                  paddingTop: topSafePad,
                   paddingBottom: bottomTotalPad,
                 },
               ]}
@@ -379,7 +315,7 @@ function MainShell() {
               style={[
                 styles.subScreenPad,
                 {
-                  paddingTop: headerTotalHeight + 6,
+                  paddingTop: topSafePad,
                   paddingBottom: bottomTotalPad,
                 },
               ]}
@@ -392,7 +328,7 @@ function MainShell() {
               style={[
                 styles.subScreenPad,
                 {
-                  paddingTop: headerTotalHeight + 6,
+                  paddingTop: topSafePad,
                   paddingBottom: bottomTotalPad,
                 },
               ]}
@@ -405,7 +341,7 @@ function MainShell() {
               style={[
                 styles.subScreenPad,
                 {
-                  paddingTop: headerTotalHeight + 6,
+                  paddingTop: topSafePad,
                   paddingBottom: bottomTotalPad,
                 },
               ]}
@@ -415,33 +351,8 @@ function MainShell() {
           )}
         </ScreenTransitionView>
 
-        {/* ====================================================================
-            STICKY FROSTED BLUR HEADER (浮動毛玻璃頂部列 — 自動避開動態島 59pt)
-           ==================================================================== */}
-        <View style={styles.stickyHeaderContainer} pointerEvents="box-none">
-          <View
-            style={[
-              styles.stickyHeaderBlurWrap,
-              { paddingTop: safeInsets.top + 6 },
-              Platform.OS === 'web' ? styles.webStickyBackdrop : null,
-            ]}
-          >
-            <BlurView
-              tint="systemChromeMaterialDark"
-              intensity={75}
-              style={StyleSheet.absoluteFill}
-              pointerEvents="none"
-            />
-            <View style={styles.brandRow}>
-              <Text style={styles.brandTitle}>錢呢[BROKE AF]</Text>
-              <View style={styles.iosBadge}>
-                <Text style={styles.iosBadgeText}>Desert Titanium · iOS 26</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Unified Liquid Glass Notification & Undo Banner (Auto-hides in 4.5s/8s, pauses on hold, swipe up or tap ✕ to dismiss) */}
-          {lastToast || lastUndoableTx ? (
+        {lastToast || lastUndoableTx ? (
+          <View style={[styles.stickyHeaderContainer, { top: safeInsets.top + 4 }]} pointerEvents="box-none">
             <DismissibleBanner
               bannerKey={`${lastToast ?? ''}_${lastUndoableTx?.id ?? ''}`}
               style={styles.toastWrap}
@@ -453,8 +364,8 @@ function MainShell() {
             >
               <LiquidGlassCard
                 shape="pill"
-                elevated
-                intensity={65}
+                glassStyle="regular"
+                interactive
                 contentStyle={styles.toastInner}
               >
                 <Pressable
@@ -464,17 +375,22 @@ function MainShell() {
                     clearUndo();
                   }}
                 >
+                  <AppSymbol name="bolt" size={13} color={theme.colors.accent.primary} />
                   <Text style={styles.toastText} numberOfLines={2}>
-                    {lastToast ??
-                      `剛剛新增 ${lastUndoableTx?.merchant || lastUndoableTx?.category || '交易'} $${Math.abs(
+                    {(
+                      lastToast ??
+                      `新增 ${lastUndoableTx?.merchant || lastUndoableTx?.category || '交易'} $${Math.abs(
                         lastUndoableTx?.amount ?? 0,
-                      )}`}
+                      )}`
+                    )
+                      .replace(/^[^\u4e00-\u9fa5A-Za-z0-9$+-]+/, '')
+                      .trim()}
                   </Text>
                 </Pressable>
                 {lastUndoableTx ? (
                   <SafeConfirmButton
-                    label="撤銷上筆"
-                    confirmLabel="再點確認"
+                    label="撤銷"
+                    confirmLabel="確認"
                     onConfirm={() => softDeleteTx(lastUndoableTx.id)}
                     compact
                   />
@@ -487,89 +403,84 @@ function MainShell() {
                   hitSlop={12}
                   style={styles.undoDismissBtn}
                 >
-                  <Text style={styles.toastDismiss}>✕</Text>
+                  <AppSymbol name="xmark" size={12} color={theme.colors.text.secondary} />
                 </Pressable>
               </LiquidGlassCard>
             </DismissibleBanner>
-          ) : null}
-        </View>
+          </View>
+        ) : null}
 
-        {/* ====================================================================
-            SHRINKING FLOATING LIQUID GLASS BAR (自動避開底部 Home 條 34pt)
-           ==================================================================== */}
         <View
           style={[
             styles.floatingBarOuter,
-            { bottom: safeInsets.bottom - 6 },
+            { bottom: safeInsets.bottom - 4 },
           ]}
           pointerEvents="box-none"
         >
           <Animated.View style={[styles.floatingBarAnimWrap, floatingBarAnimStyle]}>
-            <LiquidGlassCard
-              shape="pill"
-              elevated
-              intensity={65}
-              contentStyle={[
-                styles.floatingBarInner,
-                navShrunk && styles.floatingBarInnerShrunk,
-              ]}
-            >
-              {/* Fluid Sliding Amber Indicator Pill */}
-              <Animated.View
-                pointerEvents="none"
-                style={[
-                  styles.fluidSlidingPill,
-                  navShrunk && styles.fluidSlidingPillShrunk,
-                  slidingPillStyle,
+            <LiquidGlassGroup spacing={6}>
+              <LiquidGlassCard
+                shape="pill"
+                glassStyle="regular"
+                interactive
+                contentStyle={[
+                  styles.floatingBarInner,
+                  navShrunk && styles.floatingBarInnerShrunk,
                 ]}
-              />
+              >
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.fluidSlidingPill,
+                    navShrunk && styles.fluidSlidingPillShrunk,
+                    slidingPillStyle,
+                  ]}
+                />
 
-              {TABS.map((tab) => {
-                const isFocused = activeTab === tab.key;
-                return (
-                  <Pressable
-                    key={tab.key}
-                    onLayout={(e) => {
-                      const { x, width } = e.nativeEvent.layout;
-                      setTabLayouts((prev) => {
-                        const cur = prev[tab.key];
-                        if (cur && Math.abs(cur.x - x) < 0.5 && Math.abs(cur.width - width) < 0.5) {
-                          return prev;
-                        }
-                        return { ...prev, [tab.key]: { x, width } };
-                      });
-                    }}
-                    style={[
-                      styles.tabPillItem,
-                      navShrunk && styles.tabPillItemShrunk,
-                      !tabLayouts[activeTab] && isFocused && styles.tabPillItemActive,
-                    ]}
-                    onPress={() => handleSelectTab(tab.key)}
-                  >
-                    <Animated.View style={isFocused ? activeGlyphBounceStyle : undefined}>
-                      <Text
-                        style={[
-                          styles.tabGlyph,
-                          isFocused && styles.tabGlyphActive,
-                        ]}
-                      >
-                        {tab.glyph}
-                      </Text>
-                    </Animated.View>
-                    {!navShrunk && (
-                      <Text
-                        style={[
-                          styles.tabLabel,
-                          isFocused && styles.tabLabelActive,
-                        ]}
-                      >
-                        {tab.label}
-                      </Text>
-                    )}
-                  </Pressable>
-                );
-              })}
-            </LiquidGlassCard>
+                {TABS.map((tab) => {
+                  const isFocused = activeTab === tab.key;
+                  const iconColor = isFocused ? theme.colors.text.primary : theme.colors.text.tertiary;
+                  return (
+                    <Pressable
+                      key={tab.key}
+                      onLayout={(e) => {
+                        const { x, width } = e.nativeEvent.layout;
+                        setTabLayouts((prev) => {
+                          const cur = prev[tab.key];
+                          if (cur && Math.abs(cur.x - x) < 0.5 && Math.abs(cur.width - width) < 0.5) {
+                            return prev;
+                          }
+                          return { ...prev, [tab.key]: { x, width } };
+                        });
+                      }}
+                      style={[
+                        styles.tabPillItem,
+                        navShrunk && styles.tabPillItemShrunk,
+                        !tabLayouts[activeTab] && isFocused && styles.tabPillItemActive,
+                      ]}
+                      onPress={() => handleSelectTab(tab.key)}
+                    >
+                      <AppSymbol
+                        name={tab.icon}
+                        size={15}
+                        color={iconColor}
+                        weight={isFocused ? 'semibold' : 'regular'}
+                      />
+                      {!navShrunk && (
+                        <Text
+                          style={[
+                            styles.tabLabel,
+                            isFocused && styles.tabLabelActive,
+                          ]}
+                        >
+                          {tab.label}
+                        </Text>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </LiquidGlassCard>
+            </LiquidGlassGroup>
           </Animated.View>
         </View>
 
@@ -636,8 +547,12 @@ export default function App() {
 const styles = StyleSheet.create({
   rootViewport: {
     flex: 1,
-    backgroundColor: '#080705',
+    width: '100%',
+    maxWidth: '100%',
+    minWidth: 0,
+    backgroundColor: theme.colors.background.base,
     position: 'relative',
+    overflow: 'hidden',
   },
   ambientCanvas: {
     position: 'absolute',
@@ -645,81 +560,31 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: '#080705',
+    backgroundColor: theme.colors.background.base,
     overflow: 'hidden',
-  },
-  orbBronzeAmber: {
-    position: 'absolute',
-    top: -50,
-    left: -75,
-    width: 380,
-    height: 380,
-    borderRadius: 999,
-    backgroundColor: '#422B18',
-    opacity: 0.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  orbBronzeAmberCore: {
-    width: 220,
-    height: 220,
-    borderRadius: 999,
-    backgroundColor: '#694322',
-    opacity: 0.55,
-  },
-  orbDesertGold: {
-    position: 'absolute',
-    bottom: -40,
-    right: -80,
-    width: 380,
-    height: 380,
-    borderRadius: 999,
-    backgroundColor: '#2E2318',
-    opacity: 0.55,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  orbDesertGoldCore: {
-    width: 220,
-    height: 220,
-    borderRadius: 999,
-    backgroundColor: '#4D3924',
-    opacity: 0.55,
-  },
-  webOrbBlur: {
-    filter: 'blur(64px)',
-    // @ts-expect-error web CSS filter for ambient light orbs
-    WebkitFilter: 'blur(64px)',
-  },
-  webCanvasBlur: {
-    // @ts-expect-error web CSS backdropFilter for full-screen BlurView(intensity=95)
-    backdropFilter: 'blur(76px)',
-    WebkitBackdropFilter: 'blur(76px)',
   },
   webDesktopBackdrop: {
     flex: 1,
-    backgroundColor: '#040302',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 6,
+    width: '100%',
+    backgroundColor: theme.colors.background.base,
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
   },
   iphone16PlusFrame: {
-    width: 430,
-    height: 932,
-    maxHeight: '98%',
-    backgroundColor: '#080705',
-    borderRadius: 52,
-    borderWidth: 8,
-    borderColor: 'rgba(230, 213, 184, 0.22)',
+    flex: 1,
+    width: 393,
+    maxWidth: '100%',
+    maxHeight: 852,
+    backgroundColor: theme.colors.background.base,
     overflow: 'hidden',
   },
   iphoneInnerScreen: {
     flex: 1,
+    width: '100%',
     minHeight: 0,
     position: 'relative',
     overflow: 'hidden',
   },
-  // Overlaid inside the top 59pt of the viewport — 1:1 with real iPhone 16 Plus!
   statusBarOverlay: {
     position: 'absolute',
     top: 0,
@@ -740,14 +605,15 @@ const styles = StyleSheet.create({
     width: 82,
   },
   statusBarTime: {
-    color: '#FFFFFF',
+    color: theme.colors.text.primary,
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.3,
   },
   statusBarMuteIcon: {
     fontSize: 12,
+    opacity: 0,
   },
   dynamicIsland: {
     width: 122,
@@ -755,7 +621,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: '#000000',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255, 230, 190, 0.16)',
+    borderColor: 'rgba(255, 255, 255, 0.10)',
   },
   statusBarRight: {
     flexDirection: 'row',
@@ -765,31 +631,30 @@ const styles = StyleSheet.create({
     width: 82,
   },
   statusBarSignal: {
-    color: '#FFFFFF',
+    color: theme.colors.text.primary,
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: '700',
     letterSpacing: 0.5,
   },
   statusBarWifi: {
-    color: '#FFFFFF',
+    color: theme.colors.text.primary,
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   batteryPill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.28)',
+    backgroundColor: 'rgba(255, 255, 255, 0.24)',
     borderRadius: 6,
     paddingHorizontal: 5,
     paddingVertical: 1.5,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
+    borderColor: 'rgba(255, 255, 255, 0.42)',
   },
   batteryText: {
     color: '#FFFFFF',
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
-  // Overlaid inside the bottom 34pt of the viewport — 1:1 with real iPhone 16 Plus!
   homeIndicatorOverlay: {
     position: 'absolute',
     bottom: 8,
@@ -804,7 +669,7 @@ const styles = StyleSheet.create({
     width: 138,
     height: 5,
     borderRadius: 999,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
   },
   safeArea: {
     flex: 1,
@@ -819,99 +684,32 @@ const styles = StyleSheet.create({
   },
   stickyHeaderContainer: {
     position: 'absolute',
-    top: 0,
     left: 0,
     right: 0,
     zIndex: 20,
   },
-  stickyHeaderBlurWrap: {
-    paddingHorizontal: 16,
-    paddingBottom: 11,
-    backgroundColor: 'rgba(18, 15, 12, 0.58)',
-    borderBottomWidth: 0.8,
-    borderBottomColor: 'rgba(255, 230, 190, 0.16)',
-    overflow: 'hidden',
-  },
-  webStickyBackdrop: {
-    // @ts-expect-error web CSS backdrop filter
-    backdropFilter: 'blur(28px) saturate(165%)',
-    WebkitBackdropFilter: 'blur(28px) saturate(165%)',
-  },
-  brandRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  brandTitle: {
-    color: '#FAF6F0',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: -0.4,
-  },
-  iosBadge: {
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: 999,
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
-  },
-  iosBadgeText: {
-    color: '#E6D5B8',
-    fontSize: 10,
-    fontWeight: '700',
-  },
   toastWrap: {
     marginHorizontal: 16,
-    marginTop: 8,
   },
   toastInner: {
     paddingHorizontal: 14,
-    paddingVertical: 9,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
   },
   toastText: {
-    color: '#FAF6F0',
-    fontSize: 12,
-    fontWeight: '600',
+    color: theme.colors.text.primary,
+    fontSize: 13,
+    fontWeight: '500',
     flex: 1,
-  },
-  toastDismiss: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  undoWrap: {
-    marginHorizontal: 16,
-    marginTop: 6,
-  },
-  undoInner: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
   },
   undoTextWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
     gap: 6,
-  },
-  undoLabel: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 11,
-  },
-  undoTitle: {
-    color: '#FAF6F0',
-    fontSize: 12,
-    fontWeight: '600',
-    fontVariant: ['tabular-nums'],
-    flex: 1,
   },
   undoDismissBtn: {
     paddingHorizontal: 4,
@@ -931,24 +729,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 6,
-    paddingVertical: 6,
-    gap: 4,
+    paddingVertical: 5,
+    gap: 2,
     position: 'relative',
   },
   floatingBarInnerShrunk: {
     paddingHorizontal: 5,
     paddingVertical: 4,
-    gap: 3,
+    gap: 2,
   },
   fluidSlidingPill: {
     position: 'absolute',
     left: 0,
-    top: 6,
-    bottom: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(245, 158, 11, 0.18)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(251, 191, 36, 0.38)',
+    top: 5,
+    bottom: 5,
+    borderRadius: theme.radii.pill,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.accent.subtleBg,
+    borderWidth: 1,
+    borderColor: theme.colors.accent.subtleBorder,
   },
   fluidSlidingPillShrunk: {
     top: 4,
@@ -958,10 +757,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 11,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 999,
-    gap: 4,
+    borderRadius: theme.radii.pill,
+    gap: 5,
     zIndex: 2,
   },
   tabPillItemShrunk: {
@@ -969,26 +768,18 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   tabPillItemActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.16)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(251, 191, 36, 0.35)',
-  },
-  tabGlyph: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  tabGlyphActive: {
-    color: '#FBBF24',
+    backgroundColor: theme.colors.accent.subtleBg,
+    borderWidth: 1,
+    borderColor: theme.colors.accent.subtleBorder,
   },
   tabLabel: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: theme.colors.text.tertiary,
     fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: -0.2,
+    fontWeight: '500',
+    letterSpacing: -0.1,
   },
   tabLabelActive: {
-    color: '#FAF6F0',
-    fontWeight: '700',
+    color: theme.colors.text.primary,
+    fontWeight: '600',
   },
 });

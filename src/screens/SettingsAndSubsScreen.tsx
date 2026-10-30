@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -11,6 +11,16 @@ import {
 import { LiquidGlassCard } from '../components/LiquidGlassView';
 import { SafeConfirmButton } from '../components/SafeConfirmButton';
 import { useLedger } from '../store/useLedger';
+import { theme } from '../theme/tokens';
+
+type CoreFieldKey = 'budget' | 'floor' | 'wage' | 'bento' | 'cycleDay' | 'ownSuffix';
+
+function cleanNumericInput(raw: string): string {
+  const digits = raw.replace(/[^\d]/g, '');
+  if (!digits) return '';
+  // Strip leading zeros when typing a multi-digit number (e.g. "0200" -> "200"), keep single "0"
+  return digits.replace(/^0+(?=\d)/, '');
+}
 
 export function SettingsAndSubsScreen() {
   const {
@@ -48,14 +58,60 @@ export function SettingsAndSubsScreen() {
   const [cycleDayStr, setCycleDayStr] = useState(String(data.settings.cycleStartDay));
   const [ownSuffixStr, setOwnSuffixStr] = useState(data.settings.ownAccountSuffix);
 
+  const focusedFieldRef = useRef<CoreFieldKey | null>(null);
+  const draftRef = useRef({
+    budgetStr,
+    floorStr,
+    wageStr,
+    bentoStr,
+    cycleDayStr,
+    ownSuffixStr,
+  });
+  draftRef.current = {
+    budgetStr,
+    floorStr,
+    wageStr,
+    bentoStr,
+    cycleDayStr,
+    ownSuffixStr,
+  };
+
+  // Only sync individual fields when their specific primitive value in store changes AND field is not focused
   useEffect(() => {
-    setBudgetStr(String(data.settings.monthlyBudget));
-    setFloorStr(String(data.settings.safetyFloor));
-    setWageStr(String(data.settings.hourlyWage));
-    setBentoStr(String(data.settings.bentoPrice));
-    setCycleDayStr(String(data.settings.cycleStartDay));
-    setOwnSuffixStr(data.settings.ownAccountSuffix);
-  }, [data.settings]);
+    if (focusedFieldRef.current !== 'budget') {
+      setBudgetStr(String(data.settings.monthlyBudget));
+    }
+  }, [data.settings.monthlyBudget]);
+
+  useEffect(() => {
+    if (focusedFieldRef.current !== 'floor') {
+      setFloorStr(String(data.settings.safetyFloor));
+    }
+  }, [data.settings.safetyFloor]);
+
+  useEffect(() => {
+    if (focusedFieldRef.current !== 'wage') {
+      setWageStr(String(data.settings.hourlyWage));
+    }
+  }, [data.settings.hourlyWage]);
+
+  useEffect(() => {
+    if (focusedFieldRef.current !== 'bento') {
+      setBentoStr(String(data.settings.bentoPrice));
+    }
+  }, [data.settings.bentoPrice]);
+
+  useEffect(() => {
+    if (focusedFieldRef.current !== 'cycleDay') {
+      setCycleDayStr(String(data.settings.cycleStartDay));
+    }
+  }, [data.settings.cycleStartDay]);
+
+  useEffect(() => {
+    if (focusedFieldRef.current !== 'ownSuffix') {
+      setOwnSuffixStr(data.settings.ownAccountSuffix);
+    }
+  }, [data.settings.ownAccountSuffix]);
 
   // --- Cloud Worker Meta ---
   const [workerUrlStr, setWorkerUrlStr] = useState(meta.workerUrl);
@@ -66,15 +122,38 @@ export function SettingsAndSubsScreen() {
   const elapsedDays = Math.floor((Date.now() - refreshedMs) / 86400000);
   const sidestoreDaysLeft = Math.max(0, 7 - elapsedDays);
 
+  const commitCoreSettings = (silent: boolean) => {
+    const d = draftRef.current;
+    const nextBudget = Math.max(0, Number(d.budgetStr) || 0);
+    const nextFloor = Math.max(0, Number(d.floorStr) || 0);
+    const nextWage = Math.max(0, Number(d.wageStr) || 0);
+    const nextBento = Math.max(0, Number(d.bentoStr) || 0);
+    const nextCycleDay = Math.min(28, Math.max(1, Number(d.cycleDayStr) || 1));
+    const nextOwnSuffix = d.ownSuffixStr.trim() || '83151';
+
+    setBudgetStr(String(nextBudget));
+    setFloorStr(String(nextFloor));
+    setWageStr(String(nextWage));
+    setBentoStr(String(nextBento));
+    setCycleDayStr(String(nextCycleDay));
+    setOwnSuffixStr(nextOwnSuffix);
+
+    updateSettings(
+      {
+        monthlyBudget: nextBudget,
+        safetyFloor: nextFloor,
+        hourlyWage: nextWage,
+        bentoPrice: nextBento,
+        cycleStartDay: nextCycleDay,
+        ownAccountSuffix: nextOwnSuffix,
+      },
+      { silent },
+    );
+  };
+
   const handleSaveCoreSettings = () => {
-    updateSettings({
-      monthlyBudget: Math.max(0, Number(budgetStr) || 0),
-      safetyFloor: Math.max(0, Number(floorStr) || 0),
-      hourlyWage: Math.max(0, Number(wageStr) || 0),
-      bentoPrice: Math.max(0, Number(bentoStr) || 0),
-      cycleStartDay: Math.min(28, Math.max(1, Number(cycleDayStr) || 1)),
-      ownAccountSuffix: ownSuffixStr.trim() || '83151',
-    });
+    focusedFieldRef.current = null;
+    commitCoreSettings(false);
   };
 
   const handleAddSub = () => {
@@ -99,10 +178,10 @@ export function SettingsAndSubsScreen() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={styles.screenTitle}>訂閱預留、轉帳字典與雲端設定</Text>
+      <Text style={styles.screenTitle}>參數與自動化設定</Text>
 
-      {/* 1. Subscriptions (Fixed Recurring Charges) */}
-      <LiquidGlassCard shape="card" contentStyle={styles.card}>
+      {/* 1. Subscriptions (Non-Glass Matte Surface) */}
+      <View style={styles.surfaceCard}>
         <Text style={styles.cardTitle}>固定扣款預留</Text>
         <Text style={styles.cardDesc}>
           月初預先從安全額度扣除，收到銀行扣款推播時自動配對不重複扣款。
@@ -112,7 +191,7 @@ export function SettingsAndSubsScreen() {
           <View key={sub.id} style={styles.listItem}>
             <View style={styles.listItemLeft}>
               <Text style={styles.listItemTitle}>
-                {sub.isActive ? '◈' : '◇'} {sub.name} · ${sub.amount}
+                {sub.name} · ${sub.amount}
               </Text>
               <Text style={styles.listItemSub}>
                 每月 {sub.billingDay} 號扣款 ·{' '}
@@ -132,7 +211,7 @@ export function SettingsAndSubsScreen() {
                 style={[styles.smallBtn, styles.smallBtnAmber]}
                 onPress={() => deleteSubscription(sub.id)}
               >
-                <Text style={[styles.smallBtnText, { color: '#FBBF24' }]}>刪除</Text>
+                <Text style={[styles.smallBtnText, { color: theme.colors.semantic.danger }]}>刪除</Text>
               </Pressable>
             </View>
           </View>
@@ -144,7 +223,7 @@ export function SettingsAndSubsScreen() {
             value={subName}
             onChangeText={setSubName}
             placeholder="項目 (如 Spotify)"
-            placeholderTextColor="rgba(235, 225, 210, 0.4)"
+            placeholderTextColor={theme.colors.text.tertiary}
           />
           <TextInput
             style={[styles.input, { flex: 1 }]}
@@ -152,7 +231,7 @@ export function SettingsAndSubsScreen() {
             onChangeText={setSubAmount}
             keyboardType="numeric"
             placeholder="金額"
-            placeholderTextColor="rgba(235, 225, 210, 0.4)"
+            placeholderTextColor={theme.colors.text.tertiary}
           />
           <TextInput
             style={[styles.input, { flex: 1 }]}
@@ -160,7 +239,7 @@ export function SettingsAndSubsScreen() {
             onChangeText={setSubDay}
             keyboardType="numeric"
             placeholder="幾號"
-            placeholderTextColor="rgba(235, 225, 210, 0.4)"
+            placeholderTextColor={theme.colors.text.tertiary}
           />
         </View>
 
@@ -172,12 +251,12 @@ export function SettingsAndSubsScreen() {
         </View>
 
         <Pressable style={styles.primaryBtn} onPress={handleAddSub}>
-          <Text style={styles.primaryBtnText}>＋ 新增固定扣款預留</Text>
+          <Text style={styles.primaryBtnText}>新增固定扣款預留</Text>
         </Pressable>
-      </LiquidGlassCard>
+      </View>
 
-      {/* 2. Payee Dictionary */}
-      <LiquidGlassCard shape="card" contentStyle={styles.card}>
+      {/* 2. Payee Dictionary (Non-Glass Matte Surface) */}
+      <View style={styles.surfaceCard}>
         <Text style={styles.cardTitle}>常用轉帳對象字典</Text>
         <Text style={styles.cardDesc}>
           轉帳截圖入帳時，自動比對帳號末五碼並帶入對象名稱。
@@ -197,7 +276,7 @@ export function SettingsAndSubsScreen() {
               style={[styles.smallBtn, styles.smallBtnAmber]}
               onPress={() => deletePayee(p.id)}
             >
-              <Text style={[styles.smallBtnText, { color: '#FBBF24' }]}>刪除</Text>
+              <Text style={[styles.smallBtnText, { color: theme.colors.semantic.danger }]}>刪除</Text>
             </Pressable>
           </View>
         ))}
@@ -208,28 +287,28 @@ export function SettingsAndSubsScreen() {
             value={payeeBankCode}
             onChangeText={setPayeeBankCode}
             placeholder="銀行808"
-            placeholderTextColor="rgba(235, 225, 210, 0.4)"
+            placeholderTextColor={theme.colors.text.tertiary}
           />
           <TextInput
             style={[styles.input, { flex: 1.4 }]}
             value={payeeSuffix}
             onChangeText={setPayeeSuffix}
             placeholder="末五碼 (如 24126)"
-            placeholderTextColor="rgba(235, 225, 210, 0.4)"
+            placeholderTextColor={theme.colors.text.tertiary}
           />
           <TextInput
             style={[styles.input, { flex: 1.8 }]}
             value={payeeName}
             onChangeText={setPayeeName}
             placeholder="暱稱 (如 室友房租)"
-            placeholderTextColor="rgba(235, 225, 210, 0.4)"
+            placeholderTextColor={theme.colors.text.tertiary}
           />
         </View>
 
         <Pressable style={styles.primaryBtn} onPress={handleAddPayee}>
-          <Text style={styles.primaryBtnText}>＋ 記住此轉帳帳號</Text>
+          <Text style={styles.primaryBtnText}>記住此轉帳帳號</Text>
         </Pressable>
-      </LiquidGlassCard>
+      </View>
 
       {/* 3. Budget, Safety Floor & Feelings Parameters */}
       <LiquidGlassCard shape="card" contentStyle={styles.card}>
@@ -244,7 +323,21 @@ export function SettingsAndSubsScreen() {
             <TextInput
               style={styles.input}
               value={budgetStr}
-              onChangeText={setBudgetStr}
+              onFocus={() => {
+                focusedFieldRef.current = 'budget';
+              }}
+              onChangeText={(v) => {
+                const cleaned = cleanNumericInput(v);
+                setBudgetStr(cleaned);
+                draftRef.current.budgetStr = cleaned;
+                if (cleaned !== '') {
+                  updateSettings({ monthlyBudget: Math.max(0, Number(cleaned) || 0) }, { silent: true });
+                }
+              }}
+              onBlur={() => {
+                if (focusedFieldRef.current === 'budget') focusedFieldRef.current = null;
+                commitCoreSettings(true);
+              }}
               keyboardType="numeric"
             />
           </View>
@@ -253,7 +346,21 @@ export function SettingsAndSubsScreen() {
             <TextInput
               style={styles.input}
               value={floorStr}
-              onChangeText={setFloorStr}
+              onFocus={() => {
+                focusedFieldRef.current = 'floor';
+              }}
+              onChangeText={(v) => {
+                const cleaned = cleanNumericInput(v);
+                setFloorStr(cleaned);
+                draftRef.current.floorStr = cleaned;
+                if (cleaned !== '') {
+                  updateSettings({ safetyFloor: Math.max(0, Number(cleaned) || 0) }, { silent: true });
+                }
+              }}
+              onBlur={() => {
+                if (focusedFieldRef.current === 'floor') focusedFieldRef.current = null;
+                commitCoreSettings(true);
+              }}
               keyboardType="numeric"
             />
           </View>
@@ -262,7 +369,21 @@ export function SettingsAndSubsScreen() {
             <TextInput
               style={styles.input}
               value={wageStr}
-              onChangeText={setWageStr}
+              onFocus={() => {
+                focusedFieldRef.current = 'wage';
+              }}
+              onChangeText={(v) => {
+                const cleaned = cleanNumericInput(v);
+                setWageStr(cleaned);
+                draftRef.current.wageStr = cleaned;
+                if (cleaned !== '') {
+                  updateSettings({ hourlyWage: Math.max(0, Number(cleaned) || 0) }, { silent: true });
+                }
+              }}
+              onBlur={() => {
+                if (focusedFieldRef.current === 'wage') focusedFieldRef.current = null;
+                commitCoreSettings(true);
+              }}
               keyboardType="numeric"
             />
           </View>
@@ -271,7 +392,21 @@ export function SettingsAndSubsScreen() {
             <TextInput
               style={styles.input}
               value={bentoStr}
-              onChangeText={setBentoStr}
+              onFocus={() => {
+                focusedFieldRef.current = 'bento';
+              }}
+              onChangeText={(v) => {
+                const cleaned = cleanNumericInput(v);
+                setBentoStr(cleaned);
+                draftRef.current.bentoStr = cleaned;
+                if (cleaned !== '') {
+                  updateSettings({ bentoPrice: Math.max(0, Number(cleaned) || 0) }, { silent: true });
+                }
+              }}
+              onBlur={() => {
+                if (focusedFieldRef.current === 'bento') focusedFieldRef.current = null;
+                commitCoreSettings(true);
+              }}
               keyboardType="numeric"
             />
           </View>
@@ -280,7 +415,24 @@ export function SettingsAndSubsScreen() {
             <TextInput
               style={styles.input}
               value={cycleDayStr}
-              onChangeText={setCycleDayStr}
+              onFocus={() => {
+                focusedFieldRef.current = 'cycleDay';
+              }}
+              onChangeText={(v) => {
+                const cleaned = cleanNumericInput(v);
+                setCycleDayStr(cleaned);
+                draftRef.current.cycleDayStr = cleaned;
+                if (cleaned !== '') {
+                  updateSettings(
+                    { cycleStartDay: Math.min(28, Math.max(1, Number(cleaned) || 1)) },
+                    { silent: true },
+                  );
+                }
+              }}
+              onBlur={() => {
+                if (focusedFieldRef.current === 'cycleDay') focusedFieldRef.current = null;
+                commitCoreSettings(true);
+              }}
               keyboardType="numeric"
             />
           </View>
@@ -289,7 +441,20 @@ export function SettingsAndSubsScreen() {
             <TextInput
               style={styles.input}
               value={ownSuffixStr}
-              onChangeText={setOwnSuffixStr}
+              onFocus={() => {
+                focusedFieldRef.current = 'ownSuffix';
+              }}
+              onChangeText={(v) => {
+                setOwnSuffixStr(v);
+                draftRef.current.ownSuffixStr = v;
+                if (v.trim() !== '') {
+                  updateSettings({ ownAccountSuffix: v.trim() }, { silent: true });
+                }
+              }}
+              onBlur={() => {
+                if (focusedFieldRef.current === 'ownSuffix') focusedFieldRef.current = null;
+                commitCoreSettings(true);
+              }}
               placeholder="83151, 99999"
               placeholderTextColor="rgba(235, 225, 210, 0.35)"
             />
@@ -301,8 +466,8 @@ export function SettingsAndSubsScreen() {
         </Pressable>
       </LiquidGlassCard>
 
-      {/* 4. Cloudflare Workers + D1 & SideStore Status */}
-      <LiquidGlassCard shape="card" contentStyle={styles.card}>
+      {/* 4. Cloudflare Workers + D1 & SideStore Status (Non-Glass Matte Surface) */}
+      <View style={styles.surfaceCard}>
         <Text style={styles.cardTitle}>Cloudflare Workers + D1 雲端與 SideStore</Text>
 
         <Text style={styles.fieldLabel}>Cloudflare Worker 網址</Text>
@@ -315,7 +480,7 @@ export function SettingsAndSubsScreen() {
           }}
           autoCapitalize="none"
           placeholder="https://pocket-guardian-api.your-name.workers.dev"
-          placeholderTextColor="rgba(235, 225, 210, 0.4)"
+          placeholderTextColor={theme.colors.text.tertiary}
         />
 
         <Text style={styles.fieldLabel}>X-Ingest-Token 金鑰（選填）</Text>
@@ -328,7 +493,7 @@ export function SettingsAndSubsScreen() {
           }}
           autoCapitalize="none"
           placeholder="留空代表免驗證快速測試"
-          placeholderTextColor="rgba(235, 225, 210, 0.4)"
+          placeholderTextColor={theme.colors.text.tertiary}
         />
 
         <View style={styles.cloudBtnRow}>
@@ -350,14 +515,13 @@ export function SettingsAndSubsScreen() {
           </Pressable>
         </View>
 
-        {/* SideStore 7-day reminder */}
         <View style={styles.sidestoreBox}>
           <View style={{ flex: 1 }}>
             <Text style={styles.sidestoreTitle}>
               SideStore 免費憑證倒數：剩餘 {sidestoreDaysLeft} 天
             </Text>
             <Text style={styles.sidestoreSub}>
-              即使過期，Cloudflare 雲端捷徑仍會 100% 正常記帳，重簽後一秒無縫接軌
+              即使過期，Cloudflare 雲端捷徑仍會 100% 正常記帳，重簽後無縫接軌
             </Text>
           </View>
           <Pressable
@@ -369,17 +533,17 @@ export function SettingsAndSubsScreen() {
             <Text style={styles.smallBtnText}>已重簽</Text>
           </Pressable>
         </View>
-      </LiquidGlassCard>
+      </View>
 
       {/* 5. Reset All Data to Zero */}
-      <LiquidGlassCard shape="card" contentStyle={styles.card}>
+      <View style={styles.surfaceCard}>
         <Text style={styles.cardTitle}>帳本歸零重置</Text>
         <SafeConfirmButton
           label="清空所有帳目並歸零"
           confirmLabel="確定全部歸零？再點一次執行"
           onConfirm={resetDemoData}
         />
-      </LiquidGlassCard>
+      </View>
     </ScrollView>
   );
 }
@@ -390,36 +554,46 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   content: {
-    paddingHorizontal: 16,
+    paddingHorizontal: theme.spacing.md,
     paddingTop: 10,
     paddingBottom: 36,
-    gap: 14,
+    gap: theme.spacing.md,
   },
   screenTitle: {
-    color: '#FAF6F0',
+    color: theme.colors.text.primary,
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: '600',
     letterSpacing: -0.4,
   },
   card: {
-    padding: 15,
+    padding: theme.spacing.md,
     gap: 10,
   },
+  surfaceCard: {
+    padding: theme.spacing.md,
+    gap: 10,
+    borderRadius: theme.radii.listGroup,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.listSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
+  },
   cardTitle: {
-    color: '#FAF6F0',
-    fontSize: 15,
-    fontWeight: '700',
+    color: theme.colors.text.primary,
+    fontSize: theme.typography.bodyMedium.fontSize,
+    fontWeight: '600',
   },
   cardDesc: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 12,
+    color: theme.colors.text.tertiary,
+    fontSize: theme.typography.caption.fontSize,
     lineHeight: 17,
   },
   listItem: {
-    backgroundColor: 'rgba(214, 195, 165, 0.08)',
-    borderColor: 'rgba(230, 213, 184, 0.18)',
-    borderWidth: 0.8,
-    borderRadius: 16,
+    backgroundColor: theme.colors.background.subtleSurface,
+    borderColor: theme.colors.glass.subtleBorder,
+    borderWidth: 1,
+    borderRadius: theme.radii.innerCard,
+    borderCurve: 'continuous',
     padding: 11,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -430,14 +604,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listItemTitle: {
-    color: '#FAF6F0',
-    fontSize: 14,
-    fontWeight: '700',
+    color: theme.colors.text.primary,
+    fontSize: theme.typography.bodyMedium.fontSize,
+    fontWeight: '500',
     fontVariant: ['tabular-nums'],
   },
   listItemSub: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 11,
+    color: theme.colors.text.tertiary,
+    fontSize: theme.typography.micro.fontSize,
     marginTop: 2,
   },
   listItemActions: {
@@ -445,21 +619,21 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   smallBtn: {
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    backgroundColor: theme.colors.background.subtleSurface,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderRadius: theme.radii.pill,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
   },
   smallBtnAmber: {
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
-    borderColor: 'rgba(251, 191, 36, 0.3)',
+    backgroundColor: theme.colors.semantic.dangerSubtle,
+    borderColor: 'rgba(181, 90, 82, 0.28)',
   },
   smallBtnText: {
-    color: '#E6D5B8',
-    fontSize: 11,
-    fontWeight: '700',
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.micro.fontSize,
+    fontWeight: '500',
   },
   formRow: {
     flexDirection: 'row',
@@ -468,13 +642,14 @@ const styles = StyleSheet.create({
   },
   input: {
     minWidth: 0,
-    backgroundColor: 'rgba(28, 24, 20, 0.65)',
-    borderColor: 'rgba(230, 213, 184, 0.25)',
-    borderWidth: 0.8,
-    borderRadius: 12,
+    backgroundColor: theme.colors.background.base,
+    borderColor: theme.colors.glass.fallbackBorder,
+    borderWidth: 1,
+    borderRadius: theme.radii.innerCard,
+    borderCurve: 'continuous',
     paddingHorizontal: 10,
     paddingVertical: 9,
-    color: '#FAF6F0',
+    color: theme.colors.text.primary,
     fontSize: 13,
     fontVariant: ['tabular-nums'],
   },
@@ -484,20 +659,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   switchLabel: {
-    color: '#E6D5B8',
-    fontSize: 12,
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.caption.fontSize,
     flex: 1,
   },
   primaryBtn: {
-    backgroundColor: '#FBBF24',
-    borderRadius: 999,
+    backgroundColor: theme.colors.accent.primary,
+    borderRadius: theme.radii.control,
+    borderCurve: 'continuous',
     paddingVertical: 11,
     alignItems: 'center',
   },
   primaryBtnText: {
-    color: '#080705',
+    color: theme.colors.text.inverse,
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '600',
   },
   fieldGrid: {
     flexDirection: 'row',
@@ -511,9 +687,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   fieldLabel: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 12,
-    fontWeight: '600',
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.caption.fontSize,
+    fontWeight: '500',
   },
   cloudBtnRow: {
     flexDirection: 'row',
@@ -523,36 +699,39 @@ const styles = StyleSheet.create({
   cloudBtnTitanium: {
     flex: 1,
     paddingVertical: 11,
-    borderRadius: 999,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderRadius: theme.radii.control,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.subtleSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
     alignItems: 'center',
   },
   cloudBtnTitaniumText: {
-    color: '#E6D5B8',
+    color: theme.colors.text.primary,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '500',
   },
   cloudBtnAmber: {
     flex: 1,
     paddingVertical: 11,
-    borderRadius: 999,
-    backgroundColor: 'rgba(245, 158, 11, 0.18)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(251, 191, 36, 0.35)',
+    borderRadius: theme.radii.control,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.accent.subtleBg,
+    borderWidth: 1,
+    borderColor: theme.colors.accent.subtleBorder,
     alignItems: 'center',
   },
   cloudBtnAmberText: {
-    color: '#FBBF24',
+    color: theme.colors.text.primary,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   sidestoreBox: {
-    backgroundColor: 'rgba(214, 195, 165, 0.08)',
-    borderColor: 'rgba(230, 213, 184, 0.18)',
-    borderWidth: 0.8,
-    borderRadius: 16,
+    backgroundColor: theme.colors.background.subtleSurface,
+    borderColor: theme.colors.glass.subtleBorder,
+    borderWidth: 1,
+    borderRadius: theme.radii.innerCard,
+    borderCurve: 'continuous',
     padding: 11,
     flexDirection: 'row',
     alignItems: 'center',
@@ -560,12 +739,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   sidestoreTitle: {
-    color: '#FBBF24',
+    color: theme.colors.text.primary,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   sidestoreSub: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: theme.colors.text.tertiary,
     fontSize: 11,
     marginTop: 2,
   },

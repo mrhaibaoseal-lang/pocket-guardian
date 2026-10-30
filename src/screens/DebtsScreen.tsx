@@ -14,6 +14,7 @@ import {
   type DebtDirection,
   type DebtRecord,
 } from '../../core';
+import { AppSymbol } from '../components/AppSymbol';
 import {
   AnimatedRollingNumber,
   StaggeredItem,
@@ -22,6 +23,7 @@ import {
 import { LiquidGlassCard } from '../components/LiquidGlassView';
 import { SafeConfirmButton } from '../components/SafeConfirmButton';
 import { useLedger } from '../store/useLedger';
+import { theme } from '../theme/tokens';
 
 function formatShortDate(iso: string): string {
   try {
@@ -39,7 +41,7 @@ function formatShortDate(iso: string): string {
   }
 }
 
-const QUICK_TITLES = ['🍱 聚餐代墊', '🧋 飲料外送', '🎬 電影門票', '🛍️ 合購湊單', '💵 借現金'];
+const QUICK_TITLES = ['聚餐代墊', '飲料外送', '電影門票', '合購湊單', '借現金'];
 
 interface PersonGroup {
   personName: string;
@@ -302,7 +304,7 @@ export function DebtsScreen() {
                     isOwedToMe ? styles.dirBadgeTextGreen : styles.dirBadgeTextCoral,
                   ]}
                 >
-                  {isOwedToMe ? `🟢 ${d.personName} 欠我` : `🔴 我欠 ${d.personName}`}
+                  {isOwedToMe ? `${d.personName} 欠我` : `我欠 ${d.personName}`}
                 </Text>
               </View>
 
@@ -317,13 +319,15 @@ export function DebtsScreen() {
                       : styles.agingBadgeFresh,
                   ]}
                 >
-                  <Text style={styles.agingBadgeText}>{aging.badge}</Text>
+                  <Text style={styles.agingBadgeText}>
+                    {aging.badge.replace(/^[^\u4e00-\u9fa5A-Za-z0-9]+/, '').trim()}
+                  </Text>
                 </View>
               )}
 
               {d.accountSuffix ? (
                 <View style={styles.suffixBadge}>
-                  <Text style={styles.suffixBadgeText}>⚡ 末碼 {d.accountSuffix}</Text>
+                  <Text style={styles.suffixBadgeText}>末碼 {d.accountSuffix}</Text>
                 </View>
               ) : null}
             </View>
@@ -332,8 +336,8 @@ export function DebtsScreen() {
             <Text style={styles.recordMeta}>
               {formatShortDate(d.occurredAt)}
               {!isSettled
-                ? ` · 約 ${feelings.bentos} 個便當 🍱 / ${feelings.hours} 小時工時 ⏱️`
-                : ' · ✅ 已結清'}
+                ? ` · 約 ${feelings.bentos} 個便當 / ${feelings.hours} 小時工時`
+                : ' · 已結清'}
             </Text>
           </View>
 
@@ -347,6 +351,7 @@ export function DebtsScreen() {
                   ? styles.amountGreen
                   : styles.amountCoral,
               ]}
+              maxFontSizeMultiplier={theme.typography.maxAmountFontScale}
             >
               {isOwedToMe ? '+' : '-'}$
               {(isSettled ? d.originalAmount : d.remainingAmount).toLocaleString()}
@@ -383,7 +388,7 @@ export function DebtsScreen() {
             </View>
             {d.settlements.map((s) => (
               <Text key={s.id} style={styles.settlementHistoryItem}>
-                ↳ {formatShortDate(s.settledAt)}：{isOwedToMe ? '收回' : '歸還'} $
+                · {formatShortDate(s.settledAt)}：{isOwedToMe ? '收回' : '歸還'} $
                 {s.amount.toLocaleString()}
                 {s.accountId === 'bank'
                   ? '（玉山銀行）'
@@ -409,10 +414,10 @@ export function DebtsScreen() {
             >
               <Text style={styles.settleTriggerText}>
                 {isSettlingThis
-                  ? '✕ 收起面板'
+                  ? '收起面板'
                   : isOwedToMe
-                  ? '💰 收款／部分收回'
-                  : '💸 還款／部分歸還'}
+                  ? '收款 / 部分收回'
+                  : '還款 / 部分歸還'}
               </Text>
             </Pressable>
 
@@ -441,8 +446,8 @@ export function DebtsScreen() {
           <View style={styles.settleDrawer}>
             <Text style={styles.drawerTitle}>
               {isOwedToMe
-                ? `🟢 紀錄「${d.personName}」還錢給我`
-                : `🔴 紀錄我還錢給「${d.personName}」`}
+                ? `紀錄「${d.personName}」還款給我`
+                : `紀錄我還款給「${d.personName}」`}
             </Text>
 
             <View style={styles.drawerAmountRow}>
@@ -452,7 +457,7 @@ export function DebtsScreen() {
                 value={settleAmountInput}
                 onChangeText={setSettleAmountInput}
                 placeholder="輸入金額"
-                placeholderTextColor="rgba(235, 225, 210, 0.35)"
+                placeholderTextColor={theme.colors.text.tertiary}
               />
               <Pressable
                 style={styles.quickPctChip}
@@ -474,9 +479,9 @@ export function DebtsScreen() {
             <View style={styles.accountSelectorRow}>
               {(
                 [
-                  { id: 'bank' as const, label: '🏦 玉山銀行' },
-                  { id: 'cash' as const, label: '💵 現金錢包' },
-                  { id: null, label: '📝 僅勾銷狀態' },
+                  { id: 'bank' as const, label: '玉山銀行' },
+                  { id: 'cash' as const, label: '現金錢包' },
+                  { id: null, label: '僅勾銷狀態' },
                 ] as const
               ).map((opt) => {
                 const active = settleAccount === opt.id;
@@ -504,7 +509,7 @@ export function DebtsScreen() {
               onPress={() => handleConfirmSettle(d)}
             >
               <Text style={styles.confirmSettleBtnText}>
-                ✅ 確認{isOwedToMe ? '收回' : '歸還'} ${Number(settleAmountInput) || 0}
+                確認{isOwedToMe ? '收回' : '歸還'} ${Number(settleAmountInput) || 0}
               </Text>
             </Pressable>
           </View>
@@ -535,26 +540,26 @@ export function DebtsScreen() {
         {/* Dual Summary Cards: Owed To Me vs I Owe */}
         <View style={styles.summaryTwinRow}>
           <LiquidGlassCard style={styles.summaryHalfCard} contentStyle={styles.summaryHalfInner}>
-            <Text style={styles.summaryTagGreen}>🟢 別人欠我（待收回）</Text>
+            <Text style={styles.summaryTagGreen}>別人欠我（待收回）</Text>
             <AnimatedRollingNumber value={totals.owedToMe} style={styles.summaryBigGreen} />
             <Text style={styles.summarySubText}>
-              {totals.owedToMeCount} 人未結清 · 約 {owedFeelings.bentos} 個便當 🍱
+              {totals.owedToMeCount} 人未結清 · 約 {owedFeelings.bentos} 個便當
             </Text>
           </LiquidGlassCard>
 
           <LiquidGlassCard style={styles.summaryHalfCard} contentStyle={styles.summaryHalfInner}>
-            <Text style={styles.summaryTagCoral}>🔴 我欠別人（待歸還）</Text>
+            <Text style={styles.summaryTagCoral}>我欠別人（待歸還）</Text>
             <AnimatedRollingNumber value={totals.iOwe} style={styles.summaryBigCoral} />
             <Text style={styles.summarySubText}>
-              {totals.iOweCount} 人待還 · 約 {iOweFeelings.hours} 小時工時 ⏱️
+              {totals.iOweCount} 人待還 · 約 {iOweFeelings.hours} 小時工時
             </Text>
           </LiquidGlassCard>
         </View>
 
         {/* Net Balance Strip & Quick Composer Triggers */}
-        <LiquidGlassCard contentStyle={styles.netStripInner}>
+        <View style={styles.netStripSurface}>
           <View style={styles.netStripTop}>
-            <Text style={styles.netStripLabel}>⚖️ 雙向相抵淨額</Text>
+            <Text style={styles.netStripLabel}>雙向相抵淨額</Text>
             <Text
               style={[
                 styles.netStripValue,
@@ -576,7 +581,6 @@ export function DebtsScreen() {
           <View style={styles.composerTriggerRow}>
             <TactilePressable
               style={{ flex: 1 }}
-              activeScale={0.95}
               haptic="light"
               onPress={() =>
                 setComposerMode(composerMode === 'single' ? 'none' : 'single')
@@ -589,14 +593,13 @@ export function DebtsScreen() {
                 ]}
               >
                 <Text style={styles.composerBtnPrimaryText}>
-                  {composerMode === 'single' ? '✕ 收起新增' : '＋ 新增欠款（誰欠誰）'}
+                  {composerMode === 'single' ? '收起新增' : '新增欠款（誰欠誰）'}
                 </Text>
               </View>
             </TactilePressable>
 
             <TactilePressable
               style={{ flex: 1 }}
-              activeScale={0.95}
               haptic="light"
               onPress={() =>
                 setComposerMode(composerMode === 'aa_split' ? 'none' : 'aa_split')
@@ -609,16 +612,16 @@ export function DebtsScreen() {
                 ]}
               >
                 <Text style={styles.composerBtnSecondaryText}>
-                  {composerMode === 'aa_split' ? '✕ 收起拆帳' : '🧮 聚餐 AA 拆帳'}
+                  {composerMode === 'aa_split' ? '收起拆帳' : '聚餐 AA 拆帳'}
                 </Text>
               </View>
             </TactilePressable>
           </View>
-        </LiquidGlassCard>
+        </View>
 
         {composerMode === 'single' && (
-          <LiquidGlassCard contentStyle={styles.composerCard}>
-            <Text style={styles.composerHeaderTitle}>✍️ 新增一筆欠款紀錄</Text>
+          <View style={styles.composerSurface}>
+            <Text style={styles.composerHeaderTitle}>新增一筆欠款紀錄</Text>
 
             <View style={styles.dirSwitchRow}>
               <Pressable
@@ -634,7 +637,7 @@ export function DebtsScreen() {
                     direction === 'owed_to_me' && styles.dirSwitchTextGreenActive,
                   ]}
                 >
-                  🟢 別人欠我（我先墊／借出）
+                  別人欠我（我先墊 / 借出）
                 </Text>
               </Pressable>
 
@@ -651,7 +654,7 @@ export function DebtsScreen() {
                     direction === 'i_owe' && styles.dirSwitchTextCoralActive,
                   ]}
                 >
-                  🔴 我欠別人（朋友墊／借入）
+                  我欠別人（朋友墊 / 借入）
                 </Text>
               </Pressable>
             </View>
@@ -671,7 +674,7 @@ export function DebtsScreen() {
                     }}
                   >
                     <Text style={styles.contactChipText}>
-                      👤 {name}
+                      {name}
                       {suf ? ` (${suf})` : ''}
                     </Text>
                   </Pressable>
@@ -687,7 +690,7 @@ export function DebtsScreen() {
                   value={personName}
                   onChangeText={setPersonName}
                   placeholder="例如：阿明、小華"
-                  placeholderTextColor="rgba(235, 225, 210, 0.35)"
+                  placeholderTextColor={theme.colors.text.tertiary}
                 />
               </View>
               <View style={styles.inputCol}>
@@ -698,7 +701,7 @@ export function DebtsScreen() {
                   value={amountInput}
                   onChangeText={setAmountInput}
                   placeholder="例如：350"
-                  placeholderTextColor="rgba(235, 225, 210, 0.35)"
+                  placeholderTextColor={theme.colors.text.tertiary}
                 />
               </View>
             </View>
@@ -709,7 +712,7 @@ export function DebtsScreen() {
                 <Pressable
                   key={t}
                   style={styles.contactChip}
-                  onPress={() => setTitleInput(t.slice(2).trim())}
+                  onPress={() => setTitleInput(t)}
                 >
                   <Text style={styles.contactChipText}>{t}</Text>
                 </Pressable>
@@ -720,7 +723,7 @@ export function DebtsScreen() {
               value={titleInput}
               onChangeText={setTitleInput}
               placeholder="例如：火鍋聚餐代墊、電影票"
-              placeholderTextColor="rgba(235, 225, 210, 0.35)"
+              placeholderTextColor={theme.colors.text.tertiary}
             />
 
             <View style={styles.inputRow2Col}>
@@ -733,7 +736,7 @@ export function DebtsScreen() {
                   value={suffixInput}
                   onChangeText={setSuffixInput}
                   placeholder="轉帳截圖自動沖銷用"
-                  placeholderTextColor="rgba(235, 225, 210, 0.35)"
+                  placeholderTextColor={theme.colors.text.tertiary}
                 />
               </View>
               <View style={styles.inputCol}>
@@ -743,7 +746,7 @@ export function DebtsScreen() {
                   value={noteInput}
                   onChangeText={setNoteInput}
                   placeholder="例如：月底還"
-                  placeholderTextColor="rgba(235, 225, 210, 0.35)"
+                  placeholderTextColor={theme.colors.text.tertiary}
                 />
               </View>
             </View>
@@ -752,9 +755,9 @@ export function DebtsScreen() {
             <View style={styles.accountSelectorRow}>
               {(
                 [
-                  { id: null, label: '📝 僅記欠款' },
-                  { id: 'bank' as const, label: '🏦 同步玉山' },
-                  { id: 'cash' as const, label: '💵 同步現金' },
+                  { id: null, label: '僅記欠款' },
+                  { id: 'bank' as const, label: '同步玉山' },
+                  { id: 'cash' as const, label: '同步現金' },
                 ] as const
               ).map((opt) => {
                 const active = syncAccount === opt.id;
@@ -779,17 +782,17 @@ export function DebtsScreen() {
 
             <Pressable style={styles.submitBtn} onPress={handleCreateSingleDebt}>
               <Text style={styles.submitBtnText}>
-                💾 儲存這筆{direction === 'owed_to_me' ? '「別人欠我」' : '「我欠別人」'}
+                儲存這筆{direction === 'owed_to_me' ? '「別人欠我」' : '「我欠別人」'}
               </Text>
             </Pressable>
-          </LiquidGlassCard>
+          </View>
         )}
 
         {/* Idea 2: AA Split Calculator Composer */}
         {composerMode === 'aa_split' && (
-          <LiquidGlassCard contentStyle={styles.composerCard}>
+          <View style={styles.composerSurface}>
             <Text style={styles.composerHeaderTitle}>
-              🧮 聚餐代墊 AA 拆帳（保護個人預算不被朋友吃掉）
+              聚餐代墊 AA 拆帳（保護個人預算不被朋友吃掉）
             </Text>
 
             <View style={styles.inputRow2Col}>
@@ -801,7 +804,7 @@ export function DebtsScreen() {
                   value={aaTotalInput}
                   onChangeText={setAaTotalInput}
                   placeholder="例如：2000"
-                  placeholderTextColor="rgba(235, 225, 210, 0.35)"
+                  placeholderTextColor={theme.colors.text.tertiary}
                 />
               </View>
               <View style={styles.inputCol}>
@@ -812,7 +815,7 @@ export function DebtsScreen() {
                   value={aaPeopleCountInput}
                   onChangeText={setAaPeopleCountInput}
                   placeholder="例如：4"
-                  placeholderTextColor="rgba(235, 225, 210, 0.35)"
+                  placeholderTextColor={theme.colors.text.tertiary}
                 />
               </View>
             </View>
@@ -823,7 +826,7 @@ export function DebtsScreen() {
               value={aaTitleInput}
               onChangeText={setAaTitleInput}
               placeholder="例如：海底撈聚餐"
-              placeholderTextColor="rgba(235, 225, 210, 0.35)"
+              placeholderTextColor={theme.colors.text.tertiary}
             />
 
             <Text style={styles.fieldLabel}>
@@ -834,18 +837,18 @@ export function DebtsScreen() {
               value={aaFriendsInput}
               onChangeText={setAaFriendsInput}
               placeholder="例如：阿明, 小華, 阿哲"
-              placeholderTextColor="rgba(235, 225, 210, 0.35)"
+              placeholderTextColor={theme.colors.text.tertiary}
             />
 
             <View style={styles.aaPreviewBox}>
               <Text style={styles.aaPreviewTitle}>
-                ⚡ 即時拆帳試算：{aaPreview.totalPeople} 人平分，每人 ${aaPreview.perPerson}
+                即時拆帳試算：{aaPreview.totalPeople} 人平分，每人 ${aaPreview.perPerson}
               </Text>
               <Text style={styles.aaPreviewSub}>
                 · 個人自付：${aaPreview.selfShare}（僅這筆計入個人消費預算）
               </Text>
               <Text style={styles.aaPreviewSub}>
-                · 幫 {aaPreview.friendCount} 位朋友代墊：共 ${aaPreview.advanceTotal}（不扣個人預算！）
+                · 幫 {aaPreview.friendCount} 位朋友代墊：共 ${aaPreview.advanceTotal}（不扣個人預算）
               </Text>
             </View>
 
@@ -853,9 +856,9 @@ export function DebtsScreen() {
             <View style={styles.accountSelectorRow}>
               {(
                 [
-                  { id: 'bank' as const, label: '🏦 玉山先付' },
-                  { id: 'cash' as const, label: '💵 現金先付' },
-                  { id: null, label: '📝 僅建欠款' },
+                  { id: 'bank' as const, label: '玉山先付' },
+                  { id: 'cash' as const, label: '現金先付' },
+                  { id: null, label: '僅建欠款' },
                 ] as const
               ).map((opt) => {
                 const active = aaSyncAccount === opt.id;
@@ -880,10 +883,10 @@ export function DebtsScreen() {
 
             <Pressable style={styles.submitBtn} onPress={handleCreateAaSplit}>
               <Text style={styles.submitBtnText}>
-                🧮 一鍵建立 {aaPreview.friendCount} 筆代墊欠款（每人 ${aaPreview.perPerson}）
+                建立 {aaPreview.friendCount} 筆代墊欠款（每人 ${aaPreview.perPerson}）
               </Text>
             </Pressable>
-          </LiquidGlassCard>
+          </View>
         )}
 
         <View style={styles.segmentRow}>
@@ -892,7 +895,7 @@ export function DebtsScreen() {
             onPress={() => setViewTab('people')}
           >
             <Text style={[styles.segmentText, viewTab === 'people' && styles.segmentTextActive]}>
-              👤 依對象歸戶 ({peopleGroups.length})
+              依對象歸戶 ({peopleGroups.length})
             </Text>
           </Pressable>
 
@@ -901,7 +904,7 @@ export function DebtsScreen() {
             onPress={() => setViewTab('list')}
           >
             <Text style={[styles.segmentText, viewTab === 'list' && styles.segmentTextActive]}>
-              📋 未結清 ({openDebts.length})
+              未結清 ({openDebts.length})
             </Text>
           </Pressable>
 
@@ -910,7 +913,7 @@ export function DebtsScreen() {
             onPress={() => setViewTab('settled')}
           >
             <Text style={[styles.segmentText, viewTab === 'settled' && styles.segmentTextActive]}>
-              ✅ 已結清 ({settledDebts.length})
+              已結清 ({settledDebts.length})
             </Text>
           </Pressable>
         </View>
@@ -918,13 +921,15 @@ export function DebtsScreen() {
         {viewTab === 'people' && (
           <View style={styles.listStack}>
             {peopleGroups.length === 0 ? (
-              <LiquidGlassCard contentStyle={styles.emptyBox}>
-                <Text style={styles.emptyEmoji}>🤝</Text>
-                <Text style={styles.emptyTitle}>目前沒有任何欠款或借貸紀錄</Text>
+              <View style={styles.emptyBox}>
+                <View style={styles.emptyIconCircle}>
+                  <AppSymbol name="arrow.left.arrow.right" size={18} color={theme.colors.text.tertiary} />
+                </View>
+                <Text style={styles.emptyTitle}>目前沒有欠款或代墊紀錄</Text>
                 <Text style={styles.emptyDesc}>
-                  點選上方「＋ 新增欠款」或「🧮 聚餐 AA 拆帳」，也可以從「☰ 明細」把既有消費一鍵轉為朋友代墊！
+                  點選上方「新增欠款」或「聚餐 AA 拆帳」，也可從明細頁將消費轉為朋友代墊
                 </Text>
-              </LiquidGlassCard>
+              </View>
             ) : (
               peopleGroups.map((g, idx) => {
                 const isExpanded =
@@ -933,7 +938,7 @@ export function DebtsScreen() {
 
                 return (
                   <StaggeredItem key={g.personName} index={idx}>
-                    <LiquidGlassCard contentStyle={styles.personCard}>
+                    <View style={styles.personSurface}>
                       <Pressable
                         style={styles.personHeaderRow}
                         onPress={() =>
@@ -942,87 +947,87 @@ export function DebtsScreen() {
                           )
                         }
                       >
-                      <View style={styles.personLeft}>
-                        <View style={styles.personAvatar}>
-                          <Text style={styles.personAvatarText}>
-                            {g.personName.slice(0, 1)}
-                          </Text>
-                        </View>
-                        <View>
-                          <View style={styles.personNameRow}>
-                            <Text style={styles.personName}>{g.personName}</Text>
-                            {g.accountSuffix && (
-                              <View style={styles.suffixBadge}>
-                                <Text style={styles.suffixBadgeText}>
-                                  末碼 {g.accountSuffix}
-                                </Text>
-                              </View>
-                            )}
+                        <View style={styles.personLeft}>
+                          <View style={styles.personAvatar}>
+                            <Text style={styles.personAvatarText}>
+                              {g.personName.slice(0, 1)}
+                            </Text>
                           </View>
-                          <Text style={styles.personSubStats}>
-                            他欠我 ${g.owedToMeOpen.toLocaleString()} · 我欠他 $
-                            {g.iOweOpen.toLocaleString()}（未結 {g.openRecords.length} 筆）
-                          </Text>
+                          <View>
+                            <View style={styles.personNameRow}>
+                              <Text style={styles.personName}>{g.personName}</Text>
+                              {g.accountSuffix && (
+                                <View style={styles.suffixBadge}>
+                                  <Text style={styles.suffixBadgeText}>
+                                    末碼 {g.accountSuffix}
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                            <Text style={styles.personSubStats}>
+                              他欠我 ${g.owedToMeOpen.toLocaleString()} · 我欠他 $
+                              {g.iOweOpen.toLocaleString()}（未結 {g.openRecords.length} 筆）
+                            </Text>
+                          </View>
                         </View>
-                      </View>
 
-                      <View style={styles.personRight}>
-                        <Text
-                          style={[
-                            styles.personNetAmt,
-                            g.netAmount > 0
-                              ? styles.amountGreen
-                              : g.netAmount < 0
-                              ? styles.amountCoral
-                              : styles.amountSettled,
-                          ]}
-                        >
-                          {g.netAmount > 0
-                            ? `+$${g.netAmount.toLocaleString()}`
-                            : g.netAmount < 0
-                            ? `-$${Math.abs(g.netAmount).toLocaleString()}`
-                            : '已兩清'}
-                        </Text>
-                        <Text style={styles.expandHint}>
-                          {isExpanded ? '▲ 收起明細' : '▼ 展開明細'}
-                        </Text>
-                      </View>
-                    </Pressable>
-
-                    {g.canAutoNet && (
-                      <View style={styles.autoNetBanner}>
-                        <View style={styles.autoNetInfo}>
-                          <Text style={styles.autoNetTitle}>
-                            ⚡ 發現雙向欠款！可自動對沖 ${overlap.toLocaleString()}
-                          </Text>
-                          <Text style={styles.autoNetDesc}>
+                        <View style={styles.personRight}>
+                          <Text
+                            style={[
+                              styles.personNetAmt,
+                              g.netAmount > 0
+                                ? styles.amountGreen
+                                : g.netAmount < 0
+                                ? styles.amountCoral
+                                : styles.amountSettled,
+                            ]}
+                          >
                             {g.netAmount > 0
-                              ? `互抵後「${g.personName}」只需再還你 $${g.netAmount.toLocaleString()}`
+                              ? `+$${g.netAmount.toLocaleString()}`
                               : g.netAmount < 0
-                              ? `互抵後你只需再還「${g.personName}」$${Math.abs(g.netAmount).toLocaleString()}`
-                              : '互抵後雙邊剛好完全兩清 $0！'}
+                              ? `-$${Math.abs(g.netAmount).toLocaleString()}`
+                              : '已兩清'}
+                          </Text>
+                          <Text style={styles.expandHint}>
+                            {isExpanded ? '收起明細' : '展開明細'}
                           </Text>
                         </View>
-                        <Pressable
-                          style={styles.autoNetBtn}
-                          onPress={() => netPersonDebts(g.personName)}
-                        >
-                          <Text style={styles.autoNetBtnText}>⚡ 一鍵互抵</Text>
-                        </Pressable>
-                      </View>
-                    )}
+                      </Pressable>
 
-                    {isExpanded && (
-                      <View style={styles.personRecordsList}>
-                        {g.openRecords.map((r) => renderDebtRecordCard(r, true))}
-                        {g.openRecords.length === 0 && g.settledRecords.length > 0 && (
-                          <Text style={styles.allSettledText}>
-                            ✨ 與 {g.personName} 的 {g.settledRecords.length} 筆往來皆已結清
-                          </Text>
-                        )}
-                      </View>
-                    )}
-                    </LiquidGlassCard>
+                      {g.canAutoNet && (
+                        <View style={styles.autoNetBanner}>
+                          <View style={styles.autoNetInfo}>
+                            <Text style={styles.autoNetTitle}>
+                              雙向欠款可自動對沖 ${overlap.toLocaleString()}
+                            </Text>
+                            <Text style={styles.autoNetDesc}>
+                              {g.netAmount > 0
+                                ? `互抵後「${g.personName}」只需再還你 $${g.netAmount.toLocaleString()}`
+                                : g.netAmount < 0
+                                ? `互抵後你只需再還「${g.personName}」$${Math.abs(g.netAmount).toLocaleString()}`
+                                : '互抵後雙邊剛好完全兩清 $0'}
+                            </Text>
+                          </View>
+                          <Pressable
+                            style={styles.autoNetBtn}
+                            onPress={() => netPersonDebts(g.personName)}
+                          >
+                            <Text style={styles.autoNetBtnText}>一鍵互抵</Text>
+                          </Pressable>
+                        </View>
+                      )}
+
+                      {isExpanded && (
+                        <View style={styles.personRecordsList}>
+                          {g.openRecords.map((r) => renderDebtRecordCard(r, true))}
+                          {g.openRecords.length === 0 && g.settledRecords.length > 0 && (
+                            <Text style={styles.allSettledText}>
+                              與 {g.personName} 的 {g.settledRecords.length} 筆往來皆已結清
+                            </Text>
+                          )}
+                        </View>
+                      )}
+                    </View>
                   </StaggeredItem>
                 );
               })
@@ -1033,17 +1038,19 @@ export function DebtsScreen() {
         {viewTab === 'list' && (
           <View style={styles.listStack}>
             {openDebts.length === 0 ? (
-              <LiquidGlassCard contentStyle={styles.emptyBox}>
-                <Text style={styles.emptyEmoji}>🎉</Text>
-                <Text style={styles.emptyTitle}>太棒了！目前沒有未結清的欠款</Text>
-                <Text style={styles.emptyDesc}>所有往來帳目都已結清囉。</Text>
-              </LiquidGlassCard>
+              <View style={styles.emptyBox}>
+                <View style={styles.emptyIconCircle}>
+                  <AppSymbol name="arrow.left.arrow.right" size={18} color={theme.colors.text.tertiary} />
+                </View>
+                <Text style={styles.emptyTitle}>目前沒有未結清的欠款</Text>
+                <Text style={styles.emptyDesc}>所有往來帳目都已結清。</Text>
+              </View>
             ) : (
               openDebts.map((d, idx) => (
                 <StaggeredItem key={d.id} index={idx}>
-                  <LiquidGlassCard contentStyle={styles.singleRecordCardWrap}>
+                  <View style={styles.singleRecordSurface}>
                     {renderDebtRecordCard(d, false)}
-                  </LiquidGlassCard>
+                  </View>
                 </StaggeredItem>
               ))
             )}
@@ -1053,17 +1060,19 @@ export function DebtsScreen() {
         {viewTab === 'settled' && (
           <View style={styles.listStack}>
             {settledDebts.length === 0 ? (
-              <LiquidGlassCard contentStyle={styles.emptyBox}>
-                <Text style={styles.emptyEmoji}>🗂️</Text>
+              <View style={styles.emptyBox}>
+                <View style={styles.emptyIconCircle}>
+                  <AppSymbol name="list.bullet" size={18} color={theme.colors.text.tertiary} />
+                </View>
                 <Text style={styles.emptyTitle}>尚無已結清歷史紀錄</Text>
                 <Text style={styles.emptyDesc}>結清或自動互抵後的欠款會保存在這裡供日後查帳。</Text>
-              </LiquidGlassCard>
+              </View>
             ) : (
               settledDebts.map((d, idx) => (
                 <StaggeredItem key={d.id} index={idx}>
-                  <LiquidGlassCard contentStyle={styles.singleRecordCardWrap}>
+                  <View style={styles.singleRecordSurface}>
                     {renderDebtRecordCard(d, false)}
-                  </LiquidGlassCard>
+                  </View>
                 </StaggeredItem>
               ))
             )}
@@ -1078,21 +1087,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'transparent',
-    paddingHorizontal: 16,
+    paddingHorizontal: theme.spacing.md,
     paddingTop: 10,
   },
   headerRow: {
     marginBottom: 10,
   },
   screenTitle: {
-    color: '#FAF6F0',
+    color: theme.colors.text.primary,
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: '600',
     letterSpacing: -0.4,
   },
   screenSub: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 12,
+    color: theme.colors.text.tertiary,
+    fontSize: theme.typography.caption.fontSize,
     marginTop: 2,
   },
   scroll: {
@@ -1110,40 +1119,46 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   summaryHalfInner: {
-    padding: 13,
+    padding: 14,
     gap: 4,
   },
   summaryTagGreen: {
-    color: '#34D399',
-    fontSize: 11,
-    fontWeight: '700',
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.micro.fontSize,
+    fontWeight: '500',
   },
   summaryBigGreen: {
-    color: '#34D399',
+    color: theme.colors.semantic.remaining,
     fontSize: 24,
-    fontWeight: '800',
+    fontWeight: '600',
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.6,
   },
   summaryTagCoral: {
-    color: '#FB7185',
-    fontSize: 11,
-    fontWeight: '700',
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.micro.fontSize,
+    fontWeight: '500',
   },
   summaryBigCoral: {
-    color: '#FB7185',
+    color: theme.colors.semantic.danger,
     fontSize: 24,
-    fontWeight: '800',
+    fontWeight: '600',
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.6,
   },
   summarySubText: {
-    color: 'rgba(235, 225, 210, 0.55)',
+    color: theme.colors.text.tertiary,
     fontSize: 10.5,
+    fontVariant: ['tabular-nums'],
   },
-  netStripInner: {
-    padding: 12,
+  netStripSurface: {
+    padding: 13,
     gap: 10,
+    borderRadius: theme.radii.listGroup,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.listSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
   },
   netStripTop: {
     flexDirection: 'row',
@@ -1151,13 +1166,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   netStripLabel: {
-    color: '#E6D5B8',
+    color: theme.colors.text.secondary,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '500',
   },
   netStripValue: {
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
   composerTriggerRow: {
@@ -1167,43 +1182,50 @@ const styles = StyleSheet.create({
   composerBtnPrimary: {
     flex: 1.15,
     paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: 'rgba(245, 158, 11, 0.18)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(251, 191, 36, 0.4)',
+    borderRadius: theme.radii.innerCard,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.accent.subtleBg,
+    borderWidth: 1,
+    borderColor: theme.colors.accent.subtleBorder,
     alignItems: 'center',
   },
   composerBtnSecondary: {
     flex: 1,
     paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderRadius: theme.radii.innerCard,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.subtleSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
     alignItems: 'center',
   },
   composerBtnActive: {
-    backgroundColor: 'rgba(251, 191, 36, 0.28)',
-    borderColor: '#FBBF24',
+    backgroundColor: theme.colors.accent.subtleBg,
+    borderColor: theme.colors.accent.primary,
   },
   composerBtnPrimaryText: {
-    color: '#FBBF24',
+    color: theme.colors.text.primary,
     fontSize: 12.5,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   composerBtnSecondaryText: {
-    color: '#FAF6F0',
+    color: theme.colors.text.secondary,
     fontSize: 12.5,
-    fontWeight: '700',
+    fontWeight: '500',
   },
-  composerCard: {
+  composerSurface: {
     padding: 15,
     gap: 10,
+    borderRadius: theme.radii.listGroup,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.listSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
   },
   composerHeaderTitle: {
-    color: '#FAF6F0',
+    color: theme.colors.text.primary,
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   dirSwitchRow: {
     flexDirection: 'row',
@@ -1213,32 +1235,33 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 9,
     paddingHorizontal: 8,
-    borderRadius: 12,
-    backgroundColor: 'rgba(214, 195, 165, 0.1)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.22)',
+    borderRadius: theme.radii.innerCard,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.subtleSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
     alignItems: 'center',
   },
   dirSwitchBtnGreenActive: {
-    backgroundColor: 'rgba(52, 211, 153, 0.16)',
-    borderColor: 'rgba(52, 211, 153, 0.45)',
+    backgroundColor: theme.colors.semantic.remainingSubtle,
+    borderColor: theme.colors.accent.subtleBorder,
   },
   dirSwitchBtnCoralActive: {
-    backgroundColor: 'rgba(251, 113, 133, 0.16)',
-    borderColor: 'rgba(251, 113, 133, 0.45)',
+    backgroundColor: theme.colors.semantic.dangerSubtle,
+    borderColor: 'rgba(181, 90, 82, 0.35)',
   },
   dirSwitchText: {
-    color: 'rgba(235, 225, 210, 0.65)',
+    color: theme.colors.text.secondary,
     fontSize: 11.5,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   dirSwitchTextGreenActive: {
-    color: '#34D399',
-    fontWeight: '700',
+    color: theme.colors.semantic.remaining,
+    fontWeight: '600',
   },
   dirSwitchTextCoralActive: {
-    color: '#FB7185',
-    fontWeight: '700',
+    color: theme.colors.semantic.danger,
+    fontWeight: '600',
   },
   quickChipRow: {
     flexDirection: 'row',
@@ -1246,21 +1269,21 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   contactChip: {
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
-    borderColor: 'rgba(230, 213, 184, 0.25)',
-    borderWidth: 0.8,
+    backgroundColor: theme.colors.background.subtleSurface,
+    borderColor: theme.colors.glass.subtleBorder,
+    borderWidth: 1,
     paddingHorizontal: 9,
     paddingVertical: 5,
-    borderRadius: 999,
+    borderRadius: theme.radii.pill,
   },
   contactChipActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.22)',
-    borderColor: '#FBBF24',
+    backgroundColor: theme.colors.accent.subtleBg,
+    borderColor: theme.colors.accent.subtleBorder,
   },
   contactChipText: {
-    color: '#E6D5B8',
+    color: theme.colors.text.secondary,
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   inputRow2Col: {
     flexDirection: 'row',
@@ -1271,19 +1294,21 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   fieldLabel: {
-    color: 'rgba(235, 225, 210, 0.7)',
+    color: theme.colors.text.secondary,
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   textInput: {
-    backgroundColor: 'rgba(12, 10, 8, 0.65)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
-    borderRadius: 10,
+    backgroundColor: theme.colors.background.base,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.fallbackBorder,
+    borderRadius: theme.radii.chip,
+    borderCurve: 'continuous',
     paddingHorizontal: 11,
     paddingVertical: 8,
-    color: '#FAF6F0',
+    color: theme.colors.text.primary,
     fontSize: 13,
+    fontVariant: ['tabular-nums'],
   },
   accountSelectorRow: {
     flexDirection: 'row',
@@ -1292,53 +1317,58 @@ const styles = StyleSheet.create({
   acctOptionBtn: {
     flex: 1,
     paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: 'rgba(214, 195, 165, 0.1)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.22)',
+    borderRadius: theme.radii.chip,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.subtleSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
     alignItems: 'center',
   },
   acctOptionBtnActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.2)',
-    borderColor: '#FBBF24',
+    backgroundColor: theme.colors.accent.subtleBg,
+    borderColor: theme.colors.accent.subtleBorder,
   },
   acctOptionText: {
-    color: 'rgba(235, 225, 210, 0.65)',
+    color: theme.colors.text.secondary,
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   acctOptionTextActive: {
-    color: '#FBBF24',
-    fontWeight: '700',
+    color: theme.colors.text.primary,
+    fontWeight: '600',
   },
   submitBtn: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: theme.colors.accent.primary,
     paddingVertical: 11,
-    borderRadius: 12,
+    borderRadius: theme.radii.innerCard,
+    borderCurve: 'continuous',
     alignItems: 'center',
     marginTop: 4,
   },
   submitBtnText: {
-    color: '#080705',
+    color: theme.colors.text.inverse,
     fontSize: 13.5,
-    fontWeight: '800',
+    fontWeight: '600',
   },
   aaPreviewBox: {
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(251, 191, 36, 0.35)',
-    borderRadius: 12,
+    backgroundColor: theme.colors.accent.subtleBg,
+    borderWidth: 1,
+    borderColor: theme.colors.accent.subtleBorder,
+    borderRadius: theme.radii.innerCard,
+    borderCurve: 'continuous',
     padding: 10,
     gap: 3,
   },
   aaPreviewTitle: {
-    color: '#FBBF24',
+    color: theme.colors.text.primary,
     fontSize: 12.5,
-    fontWeight: '700',
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
   },
   aaPreviewSub: {
-    color: '#E6D5B8',
+    color: theme.colors.text.secondary,
     fontSize: 11,
+    fontVariant: ['tabular-nums'],
   },
   segmentRow: {
     flexDirection: 'row',
@@ -1347,24 +1377,25 @@ const styles = StyleSheet.create({
   segmentBtn: {
     flex: 1,
     paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderRadius: theme.radii.control,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.listSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
     alignItems: 'center',
   },
   segmentBtnActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.18)',
-    borderColor: 'rgba(251, 191, 36, 0.38)',
+    backgroundColor: theme.colors.accent.subtleBg,
+    borderColor: theme.colors.accent.subtleBorder,
   },
   segmentText: {
-    color: '#E6D5B8',
+    color: theme.colors.text.secondary,
     fontSize: 11.5,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   segmentTextActive: {
-    color: '#FBBF24',
-    fontWeight: '700',
+    color: theme.colors.text.primary,
+    fontWeight: '600',
   },
   listStack: {
     gap: 10,
@@ -1372,154 +1403,189 @@ const styles = StyleSheet.create({
   emptyBox: {
     padding: 26,
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+    borderRadius: theme.radii.listGroup,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.listSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
   },
-  emptyEmoji: {
-    fontSize: 30,
+  emptyIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: theme.radii.innerCard,
+    backgroundColor: theme.colors.background.subtleSurface,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 2,
   },
   emptyTitle: {
-    color: '#FAF6F0',
+    color: theme.colors.text.primary,
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '500',
   },
-  emptyDesc: { color: 'rgba(235, 225, 210, 0.55)', fontSize: 12, textAlign: 'center', lineHeight: 18 },
-  personCard: { padding: 14, gap: 10 },
+  emptyDesc: {
+    color: theme.colors.text.tertiary,
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  personSurface: {
+    padding: 14,
+    gap: 10,
+    borderRadius: theme.radii.listGroup,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.listSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
+  },
   personHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   personLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   personAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 999,
-    backgroundColor: 'rgba(245, 158, 11, 0.18)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(251, 191, 36, 0.35)',
+    width: 36,
+    height: 36,
+    borderRadius: theme.radii.chip,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.accent.subtleBg,
+    borderWidth: 1,
+    borderColor: theme.colors.accent.subtleBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  personAvatarText: { color: '#FBBF24', fontSize: 16, fontWeight: '800' },
+  personAvatarText: { color: theme.colors.text.primary, fontSize: 15, fontWeight: '600' },
   personNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  personName: { color: '#FAF6F0', fontSize: 16, fontWeight: '700' },
-  personSubStats: { color: 'rgba(235, 225, 210, 0.55)', fontSize: 11, marginTop: 2, fontVariant: ['tabular-nums'] },
+  personName: { color: theme.colors.text.primary, fontSize: 15, fontWeight: '600' },
+  personSubStats: { color: theme.colors.text.tertiary, fontSize: 11, marginTop: 2, fontVariant: ['tabular-nums'] },
   personRight: { alignItems: 'flex-end' },
-  personNetAmt: { fontSize: 17, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  expandHint: { color: 'rgba(235, 225, 210, 0.45)', fontSize: 10, marginTop: 2 },
+  personNetAmt: { fontSize: 16, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  expandHint: { color: theme.colors.text.tertiary, fontSize: 10, marginTop: 2 },
   autoNetBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(251, 191, 36, 0.4)',
-    borderRadius: 12,
+    backgroundColor: theme.colors.accent.subtleBg,
+    borderWidth: 1,
+    borderColor: theme.colors.accent.subtleBorder,
+    borderRadius: theme.radii.innerCard,
+    borderCurve: 'continuous',
     paddingHorizontal: 11,
     paddingVertical: 9,
     gap: 8,
   },
   autoNetInfo: { flex: 1, gap: 2 },
-  autoNetTitle: { color: '#FBBF24', fontSize: 12, fontWeight: '700' },
-  autoNetDesc: { color: '#E6D5B8', fontSize: 11 },
-  autoNetBtn: { backgroundColor: '#F59E0B', paddingHorizontal: 11, paddingVertical: 7, borderRadius: 999 },
-  autoNetBtnText: { color: '#080705', fontSize: 11.5, fontWeight: '800' },
+  autoNetTitle: { color: theme.colors.text.primary, fontSize: 12, fontWeight: '600' },
+  autoNetDesc: { color: theme.colors.text.secondary, fontSize: 11 },
+  autoNetBtn: { backgroundColor: theme.colors.accent.primary, paddingHorizontal: 11, paddingVertical: 7, borderRadius: theme.radii.pill },
+  autoNetBtnText: { color: theme.colors.text.inverse, fontSize: 11.5, fontWeight: '600' },
   personRecordsList: {
     gap: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(230, 213, 184, 0.18)',
+    borderTopColor: theme.colors.glass.hairline,
     paddingTop: 10,
   },
-  allSettledText: { color: 'rgba(235, 225, 210, 0.5)', fontSize: 11.5, textAlign: 'center', paddingVertical: 4 },
-  singleRecordCardWrap: { padding: 14 },
+  allSettledText: { color: theme.colors.text.tertiary, fontSize: 11.5, textAlign: 'center', paddingVertical: 4 },
+  singleRecordSurface: {
+    padding: 14,
+    borderRadius: theme.radii.listGroup,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.listSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
+  },
   recordCard: { gap: 8 },
   recordCardCompact: {
-    backgroundColor: 'rgba(12, 10, 8, 0.45)',
-    borderRadius: 12,
+    backgroundColor: theme.colors.background.subtleSurface,
+    borderRadius: theme.radii.innerCard,
+    borderCurve: 'continuous',
     padding: 11,
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.14)',
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
   },
-  recordCardSettled: { opacity: 0.72 },
+  recordCardSettled: { opacity: 0.68 },
   recordTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
   recordTitleCol: { flex: 1, gap: 3 },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 2 },
-  dirBadge: { paddingHorizontal: 8, paddingVertical: 2.5, borderRadius: 999, borderWidth: 0.8 },
-  dirBadgeGreen: { backgroundColor: 'rgba(52, 211, 153, 0.14)', borderColor: 'rgba(52, 211, 153, 0.35)' },
-  dirBadgeCoral: { backgroundColor: 'rgba(251, 113, 133, 0.14)', borderColor: 'rgba(251, 113, 133, 0.35)' },
-  dirBadgeText: { fontSize: 10.5, fontWeight: '700' },
-  dirBadgeTextGreen: { color: '#34D399' },
-  dirBadgeTextCoral: { color: '#FB7185' },
-  agingBadge: { paddingHorizontal: 8, paddingVertical: 2.5, borderRadius: 999, borderWidth: 0.8 },
-  agingBadgeFresh: { backgroundColor: 'rgba(214, 195, 165, 0.12)', borderColor: 'rgba(230, 213, 184, 0.25)' },
-  agingBadgeWarm: { backgroundColor: 'rgba(245, 158, 11, 0.15)', borderColor: 'rgba(251, 191, 36, 0.35)' },
-  agingBadgeAlert: { backgroundColor: 'rgba(244, 63, 94, 0.18)', borderColor: 'rgba(251, 113, 133, 0.45)' },
-  agingBadgeText: { color: '#FAF6F0', fontSize: 10, fontWeight: '600' },
+  dirBadge: { paddingHorizontal: 8, paddingVertical: 2.5, borderRadius: theme.radii.pill, borderWidth: 1 },
+  dirBadgeGreen: { backgroundColor: theme.colors.semantic.remainingSubtle, borderColor: theme.colors.accent.subtleBorder },
+  dirBadgeCoral: { backgroundColor: theme.colors.semantic.dangerSubtle, borderColor: 'rgba(181, 90, 82, 0.32)' },
+  dirBadgeText: { fontSize: 10.5, fontWeight: '500' },
+  dirBadgeTextGreen: { color: theme.colors.semantic.remaining },
+  dirBadgeTextCoral: { color: theme.colors.semantic.danger },
+  agingBadge: { paddingHorizontal: 8, paddingVertical: 2.5, borderRadius: theme.radii.pill, borderWidth: 1 },
+  agingBadgeFresh: { backgroundColor: theme.colors.background.subtleSurface, borderColor: theme.colors.glass.subtleBorder },
+  agingBadgeWarm: { backgroundColor: theme.colors.semantic.warningSubtle, borderColor: 'rgba(184, 134, 72, 0.32)' },
+  agingBadgeAlert: { backgroundColor: theme.colors.semantic.dangerSubtle, borderColor: 'rgba(181, 90, 82, 0.35)' },
+  agingBadgeText: { color: theme.colors.text.secondary, fontSize: 10, fontWeight: '500' },
   suffixBadge: {
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
-    borderColor: 'rgba(251, 191, 36, 0.35)',
-    borderWidth: 0.8,
+    backgroundColor: theme.colors.background.subtleSurface,
+    borderColor: theme.colors.glass.subtleBorder,
+    borderWidth: 1,
     paddingHorizontal: 7,
     paddingVertical: 2,
-    borderRadius: 999,
+    borderRadius: theme.radii.pill,
   },
-  suffixBadgeText: { color: '#FBBF24', fontSize: 10, fontWeight: '700' },
-  recordTitle: { color: '#FAF6F0', fontSize: 15, fontWeight: '700' },
-  recordMeta: { color: 'rgba(235, 225, 210, 0.5)', fontSize: 11, fontVariant: ['tabular-nums'] },
+  suffixBadgeText: { color: theme.colors.text.secondary, fontSize: 10, fontWeight: '500', fontVariant: ['tabular-nums'] },
+  recordTitle: { color: theme.colors.text.primary, fontSize: 15, fontWeight: '500' },
+  recordMeta: { color: theme.colors.text.tertiary, fontSize: 11, fontVariant: ['tabular-nums'] },
   recordAmountCol: { alignItems: 'flex-end' },
-  recordAmount: { fontSize: 17, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  amountGreen: { color: '#34D399' },
-  amountCoral: { color: '#FB7185' },
-  amountNeutral: { color: '#E6D5B8' },
-  amountSettled: { color: 'rgba(235, 225, 210, 0.45)' },
-  originalAmtHint: { color: 'rgba(235, 225, 210, 0.45)', fontSize: 10, marginTop: 2 },
-  progressSection: { backgroundColor: 'rgba(18, 15, 12, 0.55)', borderRadius: 10, padding: 8, gap: 5 },
+  recordAmount: { fontSize: 17, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  amountGreen: { color: theme.colors.semantic.remaining },
+  amountCoral: { color: theme.colors.semantic.danger },
+  amountNeutral: { color: theme.colors.text.secondary },
+  amountSettled: { color: theme.colors.text.tertiary },
+  originalAmtHint: { color: theme.colors.text.tertiary, fontSize: 10, marginTop: 2, fontVariant: ['tabular-nums'] },
+  progressSection: { backgroundColor: theme.colors.background.subtleSurface, borderRadius: theme.radii.chip, padding: 8, gap: 5 },
   progressHeader: { flexDirection: 'row', justifyContent: 'space-between' },
-  progressText: { color: '#E6D5B8', fontSize: 11, fontWeight: '600' },
-  progressRemainText: { color: '#FBBF24', fontSize: 11, fontWeight: '700' },
-  progressTrack: { height: 6, borderRadius: 999, backgroundColor: 'rgba(230, 213, 184, 0.14)', overflow: 'hidden' },
-  progressFill: { height: '100%', borderRadius: 999 },
-  progressFillGreen: { backgroundColor: '#34D399' },
-  progressFillCoral: { backgroundColor: '#FB7185' },
-  settlementHistoryItem: { color: 'rgba(235, 225, 210, 0.6)', fontSize: 10.5 },
-  recordNote: { color: '#E6D5B8', fontSize: 11.5 },
+  progressText: { color: theme.colors.text.secondary, fontSize: 11, fontWeight: '500', fontVariant: ['tabular-nums'] },
+  progressRemainText: { color: theme.colors.text.primary, fontSize: 11, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  progressTrack: { height: 4, borderRadius: theme.radii.pill, backgroundColor: 'rgba(255, 255, 255, 0.08)', overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: theme.radii.pill },
+  progressFillGreen: { backgroundColor: theme.colors.semantic.remaining },
+  progressFillCoral: { backgroundColor: theme.colors.semantic.danger },
+  settlementHistoryItem: { color: theme.colors.text.tertiary, fontSize: 10.5, fontVariant: ['tabular-nums'] },
+  recordNote: { color: theme.colors.text.secondary, fontSize: 11.5 },
   recordActionsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 },
-  settleTriggerBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 0.8 },
-  settleTriggerGreen: { backgroundColor: 'rgba(52, 211, 153, 0.16)', borderColor: 'rgba(52, 211, 153, 0.4)' },
-  settleTriggerCoral: { backgroundColor: 'rgba(251, 113, 133, 0.16)', borderColor: 'rgba(251, 113, 133, 0.4)' },
-  settleTriggerText: { color: '#FAF6F0', fontSize: 11.5, fontWeight: '700' },
-  settledDateHint: { color: 'rgba(235, 225, 210, 0.45)', fontSize: 11 },
+  settleTriggerBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: theme.radii.pill, borderWidth: 1 },
+  settleTriggerGreen: { backgroundColor: theme.colors.semantic.remainingSubtle, borderColor: theme.colors.accent.subtleBorder },
+  settleTriggerCoral: { backgroundColor: theme.colors.semantic.dangerSubtle, borderColor: 'rgba(181, 90, 82, 0.32)' },
+  settleTriggerText: { color: theme.colors.text.primary, fontSize: 11.5, fontWeight: '500' },
+  settledDateHint: { color: theme.colors.text.tertiary, fontSize: 11, fontVariant: ['tabular-nums'] },
   settleDrawer: {
-    backgroundColor: 'rgba(18, 15, 12, 0.82)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(251, 191, 36, 0.35)',
-    borderRadius: 12,
+    backgroundColor: theme.colors.background.elevatedSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.fallbackBorder,
+    borderRadius: theme.radii.innerCard,
+    borderCurve: 'continuous',
     padding: 11,
     gap: 8,
     marginTop: 4,
   },
-  drawerTitle: { color: '#FAF6F0', fontSize: 12.5, fontWeight: '700' },
+  drawerTitle: { color: theme.colors.text.primary, fontSize: 12.5, fontWeight: '600' },
   drawerAmountRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   drawerInput: {
     flex: 1,
-    backgroundColor: 'rgba(8, 7, 5, 0.8)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.3)',
-    borderRadius: 9,
+    backgroundColor: theme.colors.background.base,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.fallbackBorder,
+    borderRadius: theme.radii.chip,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    color: '#FAF6F0',
+    color: theme.colors.text.primary,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
   },
   quickPctChip: {
-    backgroundColor: 'rgba(214, 195, 165, 0.14)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.28)',
+    backgroundColor: theme.colors.background.subtleSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
     paddingHorizontal: 9,
     paddingVertical: 6,
-    borderRadius: 999,
+    borderRadius: theme.radii.pill,
   },
-  quickPctChipText: { color: '#E6D5B8', fontSize: 11, fontWeight: '600' },
-  drawerLabel: { color: 'rgba(235, 225, 210, 0.65)', fontSize: 11 },
-  confirmSettleBtn: { backgroundColor: '#34D399', paddingVertical: 9, borderRadius: 10, alignItems: 'center' },
-  confirmSettleBtnText: { color: '#062016', fontSize: 12.5, fontWeight: '800' },
+  quickPctChipText: { color: theme.colors.text.secondary, fontSize: 11, fontWeight: '500', fontVariant: ['tabular-nums'] },
+  drawerLabel: { color: theme.colors.text.secondary, fontSize: 11 },
+  confirmSettleBtn: { backgroundColor: theme.colors.accent.primary, paddingVertical: 9, borderRadius: theme.radii.chip, alignItems: 'center' },
+  confirmSettleBtnText: { color: theme.colors.text.inverse, fontSize: 12.5, fontWeight: '600' },
 });
 

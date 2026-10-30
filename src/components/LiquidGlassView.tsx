@@ -1,5 +1,5 @@
-import { BlurView, type BlurTint } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
+import { type BlurTint } from 'expo-blur';
+import { GlassContainer, GlassView, type GlassStyle } from 'expo-glass-effect';
 import React from 'react';
 import {
   Platform,
@@ -8,117 +8,117 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import { theme } from '../theme/tokens';
 
 export interface LiquidGlassProps {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
   contentStyle?: StyleProp<ViewStyle>;
-  shape?: 'card' | 'group' | 'pill';
+  shape?: 'card' | 'group' | 'pill' | 'control';
+  glassStyle?: GlassStyle;
+  interactive?: boolean;
+  tintColor?: string;
+  /** Kept for backward compatibility with existing screens before they are migrated */
   intensity?: number;
   tint?: BlurTint;
   elevated?: boolean;
 }
 
 /**
- * iOS 26 / iOS 27 Desert Titanium & Warm Amber <LiquidGlassCard> Component:
- * 1. Base: BlurView (intensity={55}, tint="systemThinMaterialDark") + Warm Smoked Overlay rgba(28, 24, 20, 0.4), borderRadius: 28 (continuous)
- * 2. 135° Champagne Surface Sheen: LinearGradient (0,0 -> 1,1) ['rgba(255, 238, 210, 0.16)', 'rgba(255, 238, 210, 0.03)', 'transparent']
- * 3. Asymmetric Desert Titanium Specular Rim: borderWidth: 0.8,
- *    top: 'rgba(255, 230, 190, 0.38)', left: 'rgba(255, 230, 190, 0.20)',
- *    right: 'rgba(212, 175, 55, 0.06)', bottom: 'rgba(212, 175, 55, 0.06)'
+ * iOS 26 Native Liquid Glass View (via `expo-glass-effect` GlassView & GlassContainer).
+ * - Uses native `GlassView` directly on iOS 26 with `glassEffectStyle="regular"` by default.
+ * - Concentric continuous corner curves (`borderCurve: 'continuous'`).
  */
 export function LiquidGlassCard({
   children,
   style,
   contentStyle,
   shape = 'card',
-  intensity = 55,
-  tint = 'systemThinMaterialDark',
-  elevated = false,
+  glassStyle = 'regular',
+  interactive = false,
+  tintColor,
 }: LiquidGlassProps) {
   const radiusStyle =
     shape === 'pill'
       ? styles.radiusPill
+      : shape === 'control'
+      ? styles.radiusControl
       : shape === 'group'
       ? styles.radiusGroup
       : styles.radiusCard;
 
-  return (
-    <View
-      style={[
-        styles.outerShell,
-        elevated ? styles.bgElevated : styles.bgDefault,
-        radiusStyle,
-        Platform.OS === 'web' ? styles.webBackdrop : null,
-        style,
-      ]}
-    >
-      {/* Layer 1: Base Frosted Material Blur (intensity={55}, tint="systemThinMaterialDark") */}
-      <BlurView
-        tint={tint}
-        intensity={intensity}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
-
-      {/* Layer 2: 135° Champagne Surface Sheen (左上 0,0 -> 右下 1,1) */}
-      <LinearGradient
-        colors={[
-          'rgba(255, 238, 210, 0.16)',
-          'rgba(255, 238, 210, 0.03)',
-          'transparent',
-        ]}
-        locations={[0, 0.48, 1]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
-
-      {/* Layer 3: Asymmetric Desert Titanium Specular Rim + Content */}
-      <View style={[styles.specularRim, radiusStyle, contentStyle]}>
+  if (Platform.OS === 'ios') {
+    return (
+      <GlassView
+        glassEffectStyle={glassStyle}
+        isInteractive={interactive}
+        colorScheme="dark"
+        tintColor={tintColor}
+        style={[styles.nativeShell, radiusStyle, style, contentStyle]}
+      >
         {children}
-      </View>
+      </GlassView>
+    );
+  }
+
+  return (
+    <View style={[styles.webShell, radiusStyle, style, contentStyle]}>
+      {children}
     </View>
   );
 }
 
-// Alias for backward compatibility
+export function LiquidGlassGroup({
+  spacing = 8,
+  style,
+  children,
+}: {
+  spacing?: number;
+  style?: StyleProp<ViewStyle>;
+  children: React.ReactNode;
+}) {
+  if (Platform.OS === 'ios') {
+    return (
+      <GlassContainer spacing={spacing} style={style}>
+        {children}
+      </GlassContainer>
+    );
+  }
+  return <View style={style}>{children}</View>;
+}
+
 export const LiquidGlassView = LiquidGlassCard;
 
 const styles = StyleSheet.create({
-  outerShell: {
+  nativeShell: {
     overflow: 'hidden',
     position: 'relative',
   },
-  bgDefault: {
-    backgroundColor: 'rgba(28, 24, 20, 0.4)',
-  },
-  bgElevated: {
-    backgroundColor: 'rgba(34, 28, 22, 0.62)',
+  webShell: {
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: theme.colors.glass.fallbackBg,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.fallbackBorder,
+    // @ts-expect-error web backdrop filter for preview screenshot
+    backdropFilter: 'blur(28px) saturate(140%)',
+    WebkitBackdropFilter: 'blur(28px) saturate(140%)',
   },
   radiusCard: {
-    borderRadius: 28,
+    borderRadius: theme.radii.outerCard,
     borderCurve: 'continuous',
   },
   radiusGroup: {
-    borderRadius: 28,
+    borderRadius: theme.radii.listGroup,
+    borderCurve: 'continuous',
+  },
+  radiusControl: {
+    borderRadius: theme.radii.control,
     borderCurve: 'continuous',
   },
   radiusPill: {
-    borderRadius: 999,
+    borderRadius: theme.radii.pill,
     borderCurve: 'continuous',
   },
-  webBackdrop: {
-    // @ts-expect-error web CSS backdrop filter for PC simulator
-    backdropFilter: 'blur(32px) saturate(165%)',
-    WebkitBackdropFilter: 'blur(32px) saturate(165%)',
-  },
-  specularRim: {
-    borderWidth: 0.8,
-    borderTopColor: 'rgba(255, 230, 190, 0.38)',
-    borderLeftColor: 'rgba(255, 230, 190, 0.20)',
-    borderRightColor: 'rgba(212, 175, 55, 0.06)',
-    borderBottomColor: 'rgba(212, 175, 55, 0.06)',
-  },
 });
+

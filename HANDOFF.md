@@ -1,7 +1,7 @@
 # HANDOFF.md — 跨工具／跨模型交接紀錄
 
-> **最後更新時間**：2026-10-31 03:10 (UTC+8)
-> **最後更新 Agent**：Cline (完成全站版面精簡與首頁英雄卡重構：首頁主顯「本月剩餘預算」、點擊記帳不跳鍵盤、捷徑頁收件匣與指南改為開關式抽屜、精簡全站冗長文字提示)
+> **最後更新時間**：2026-10-31 05:50 (UTC+8)
+> **最後更新 Agent**：Cline (完成全站 iOS 26 原生 Liquid Glass 精密儀表視覺重構 + 設定輸入不歸零修復：建立單一設計 Token `src/theme/tokens.ts`、原生 `expo-glass-effect` `GlassView`/`GlassContainer`、原生 `expo-symbols` `SymbolView`、`react-native-svg` 冷色調 `RadialGradient` 背景，並將首頁、明細、欠款、捷徑、設定、彈出 Sheet 與 Swift Widget 全面切換至克制精密儀表風格)
 > **專案路徑**：`C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger`
 > **Git 分支與最新 Commit**：`main` @ `e70462a`（GitHub Actions 打包成功）
 > **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `1e12ae0d-666f-42bd-beb3-d061a3a2e4ec`，前版可 Rollback ID: `845769c7-ceaf-40a6-aa24-5120b363981e`)

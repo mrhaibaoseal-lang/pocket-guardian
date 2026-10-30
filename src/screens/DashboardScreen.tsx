@@ -1,4 +1,3 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import React, { useMemo, useRef } from 'react';
 import {
   Pressable,
@@ -12,18 +11,17 @@ import {
 import { taipeiDate } from '../../core';
 import type { Transaction } from '../../core';
 import type { ActiveModal } from '../components/ActionSheetModals';
+import { AppSymbol, type AppIconName } from '../components/AppSymbol';
 import {
   AnimatedRollingNumber,
   LiquidLightTube,
   StaggeredItem,
   TactilePressable,
 } from '../components/iosAnimations';
-import { LiquidGlassCard } from '../components/LiquidGlassView';
-import {
-  getCategoryGlassTint,
-  MorphingCategoryPill,
-} from '../components/MorphingCategoryPill';
+import { LiquidGlassCard, LiquidGlassGroup } from '../components/LiquidGlassView';
+import { MorphingCategoryPill } from '../components/MorphingCategoryPill';
 import { useLedger } from '../store/useLedger';
+import { theme } from '../theme/tokens';
 
 interface DashboardScreenProps {
   topInsetPadding?: number;
@@ -33,12 +31,16 @@ interface DashboardScreenProps {
   onScrollShrinkChange?: (shrunk: boolean) => void;
 }
 
-const QUICK_CASH_CHIPS = [
-  { glyph: '◈', label: '超商', category: '超商' },
-  { glyph: '◯', label: '食物', category: '食物' },
-  { glyph: '△', label: '飲料', category: '飲料' },
-  { glyph: '□', label: '車費', category: '車費' },
-] as const;
+const QUICK_CASH_CHIPS: ReadonlyArray<{
+  icon: AppIconName;
+  label: string;
+  category: string;
+}> = [
+  { icon: 'bag', label: '超商', category: '超商' },
+  { icon: 'fork.knife', label: '食物', category: '食物' },
+  { icon: 'cup.and.saucer', label: '飲料', category: '飲料' },
+  { icon: 'tram', label: '車費', category: '車費' },
+];
 
 function formatGroupDateTitle(dateStr: string, todayStr: string): string {
   if (dateStr === todayStr) return '今天';
@@ -59,18 +61,18 @@ function formatTimeShort(iso: string): string {
   }
 }
 
-function glyphForTx(tx: Transaction): string {
-  if (tx.type === 'transfer') return '⇄';
-  if (tx.type === 'adjustment') return '⚖';
-  if (tx.type === 'income') return '↓';
-  if (tx.method === 'apple_pay') return '';
-  if (tx.method === 'bank_transfer') return '↗';
-  if (tx.method === 'debit_card') return '▣';
-  return '◈';
+function iconForTx(tx: Transaction): AppIconName {
+  if (tx.type === 'transfer') return 'arrow.left.arrow.right';
+  if (tx.type === 'adjustment') return 'equal.circle';
+  if (tx.type === 'income') return 'arrow.down.left';
+  if (tx.method === 'apple_pay') return 'wave.3.right';
+  if (tx.method === 'bank_transfer') return 'arrow.up.right';
+  if (tx.method === 'debit_card') return 'creditcard';
+  return 'banknote';
 }
 
 export function DashboardScreen({
-  topInsetPadding = 114,
+  topInsetPadding = 72,
   bottomInsetPadding = 116,
   onOpenModal,
   onNavigateTab,
@@ -88,7 +90,6 @@ export function DashboardScreen({
   const lastScrollY = useRef(0);
   const todaySettled = settings.lastSettledDate === safe.today;
 
-  // Group active transactions by Taipei date (YYYY-MM-DD) for Inset Grouped Glass List
   const groupedTransactions = useMemo(() => {
     const active = data.transactions
       .filter((t) => !t.deletedAt)
@@ -115,17 +116,23 @@ export function DashboardScreen({
   }, [data.transactions, safe.today]);
 
   const remainingMonthlyBudget = safe.remainingMonthlyBudget;
+  const totalBudgetPool =
+    settings.monthlyBudget > 0
+      ? settings.monthlyBudget
+      : Math.max(0, safe.spentThisCycle + remainingMonthlyBudget);
 
   const budgetProgressPercent = useMemo(() => {
     if (safe.spentThisCycle <= 0) return 0;
-    const totalPool =
-      settings.monthlyBudget > 0
-        ? settings.monthlyBudget
-        : safe.spentThisCycle + remainingMonthlyBudget;
-    if (totalPool <= 0) return 100;
-    const raw = (safe.spentThisCycle / totalPool) * 100;
-    return Math.min(100, Math.max(4, raw));
-  }, [safe.spentThisCycle, settings.monthlyBudget, remainingMonthlyBudget]);
+    if (totalBudgetPool <= 0) return 100;
+    const raw = (safe.spentThisCycle / totalBudgetPool) * 100;
+    return Math.min(100, Math.max(3, raw));
+  }, [safe.spentThisCycle, totalBudgetPool]);
+
+  const budgetTone: 'normal' | 'warning' | 'danger' = useMemo(() => {
+    if (remainingMonthlyBudget < 0 || safe.todayLeft < 0) return 'danger';
+    if (totalBudgetPool > 0 && remainingMonthlyBudget / totalBudgetPool < 0.2) return 'warning';
+    return 'normal';
+  }, [remainingMonthlyBudget, safe.todayLeft, totalBudgetPool]);
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (!onScrollShrinkChange) return;
@@ -156,42 +163,45 @@ export function DashboardScreen({
         scrollEventThrottle={16}
         onScroll={handleScroll}
       >
-        {/* ====================================================================
-            1. HERO LIQUID GLASS CARD (本月總覽主卡 + 琥珀香檳光管進度條)
-           ==================================================================== */}
+        {/* 1. Primary Instrument Hero Card (Single Focal Glass Layer) */}
         <LiquidGlassCard
           shape="card"
-          elevated
-          intensity={55}
+          glassStyle="regular"
           contentStyle={styles.heroCardInner}
         >
           <View style={styles.heroTopLabelRow}>
-            <Text style={styles.heroOverline}>本月剩餘預算 · DESERT TITANIUM</Text>
+            <Text style={styles.heroOverline}>本月剩餘預算</Text>
             <Pressable
               style={styles.cycleCapsule}
               onPress={() => onNavigateTab('settings')}
+              hitSlop={8}
             >
               <Text style={styles.cycleCapsuleText}>
                 剩 {safe.daysRemaining} 天 · 每月 {settings.cycleStartDay} 號結算
               </Text>
+              <AppSymbol name="chevron.right" size={11} color={theme.colors.text.tertiary} />
             </Pressable>
           </View>
 
           <View style={styles.heroNumberRow}>
             <AnimatedRollingNumber
               value={remainingMonthlyBudget}
-              style={styles.heroBigAmount}
+              style={[
+                styles.heroBigAmount,
+                budgetTone === 'danger' && styles.amountDanger,
+                budgetTone === 'warning' && styles.amountWarning,
+              ]}
             />
 
             <View style={styles.heroSubStatsCol}>
-              <View style={styles.heroSubStatPill}>
+              <View style={styles.heroSubStatRow}>
                 <Text style={styles.heroSubStatLabel}>本月已花</Text>
                 <AnimatedRollingNumber
                   value={safe.spentThisCycle}
                   style={styles.heroSubStatValue}
                 />
               </View>
-              <View style={styles.heroSubStatPill}>
+              <View style={styles.heroSubStatRow}>
                 <Text style={styles.heroSubStatLabel}>今日花費</Text>
                 <AnimatedRollingNumber
                   value={safe.spentToday}
@@ -201,33 +211,36 @@ export function DashboardScreen({
             </View>
           </View>
 
-          {/* 琥珀香檳光管進度條 (Warm Amber -> Champagne Gold Light Tube + Shimmer) */}
-          <LiquidLightTube percent={budgetProgressPercent} />
+          <LiquidLightTube percent={budgetProgressPercent} tone={budgetTone} />
 
           <View style={styles.tubeSubRow}>
             <Text style={styles.tubeSubText}>
-              今日還能花{' '}
-              <Text style={styles.amberHighlightText}>
+              今日可用{' '}
+              <Text
+                style={[
+                  styles.remainingHighlightText,
+                  safe.todayLeft < 0 && styles.amountDanger,
+                ]}
+              >
                 ${Math.floor(safe.todayLeft).toLocaleString()}
               </Text>{' '}
               / 日額 ${safe.dailyAllowance.toLocaleString()}
             </Text>
-            <Pressable onPress={() => onNavigateTab('settings')}>
+            <Pressable onPress={() => onNavigateTab('settings')} hitSlop={8} style={styles.budgetModeLink}>
               <Text style={styles.tubeSubText}>
-                總預算{' '}
-                <Text style={styles.amberHighlightText}>
+                上限{' '}
+                <Text style={styles.secondaryValueInline}>
                   {settings.monthlyBudget > 0
                     ? `$${settings.monthlyBudget.toLocaleString()}`
                     : '依餘額'}
-                </Text>{' '}
-                ▸
+                </Text>
               </Text>
+              <AppSymbol name="chevron.right" size={10} color={theme.colors.text.tertiary} />
             </Pressable>
           </View>
 
           <View style={styles.horizontalHairline} />
 
-          {/* 3-Column Asset Matrix */}
           <View style={styles.balanceMatrixRow}>
             <View style={styles.balanceCell}>
               <Text style={styles.balanceCellLabel}>
@@ -255,14 +268,13 @@ export function DashboardScreen({
               <Text style={styles.balanceCellLabel}>真正總可用</Text>
               <AnimatedRollingNumber
                 value={Math.floor(safe.trueAvailable)}
-                style={[styles.balanceCellValue, styles.amberHighlightText]}
+                style={[styles.balanceCellValue, styles.remainingHighlightText]}
               />
             </View>
           </View>
 
           <View style={styles.horizontalHairline} />
 
-          {/* Piggy Bank & Evening Settlement Footer */}
           <View style={styles.heroFooterRow}>
             <View style={styles.achievementRow}>
               <Text style={styles.achievementText}>
@@ -282,13 +294,23 @@ export function DashboardScreen({
 
             <TactilePressable
               onPress={settleEveningPiggy}
-              haptic="medium"
+              haptic="light"
               contentStyle={[
                 styles.settleGlassPill,
                 todaySettled && styles.settleGlassPillDisabled,
               ]}
             >
-              <Text style={styles.settleGlassPillText}>
+              <AppSymbol
+                name="moon.stars"
+                size={11}
+                color={todaySettled ? theme.colors.text.tertiary : theme.colors.accent.primary}
+              />
+              <Text
+                style={[
+                  styles.settleGlassPillText,
+                  todaySettled && styles.settleGlassPillTextDisabled,
+                ]}
+              >
                 {todaySettled
                   ? '今日已結算'
                   : `晚間結算 +$${Math.max(0, Math.floor(safe.todayLeft))}`}
@@ -297,207 +319,146 @@ export function DashboardScreen({
           </View>
         </LiquidGlassCard>
 
-        {/* ====================================================================
-            2. 3-SECOND QUICK CASH CAPSULES & LIQUID GLASS ACTION DECK
-           ==================================================================== */}
+        {/* 2. Restrained Instrument Control Deck (Grouped Native Glass Controls + Matte Quick Cash) */}
         <View style={styles.controlDeckSection}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionHeaderTitle}>快速記帳</Text>
-            <Text style={styles.sectionHeaderMeta}>現金常用</Text>
-          </View>
+          <LiquidGlassGroup spacing={8} style={styles.primaryActionsRow}>
+            <TactilePressable
+              style={styles.primaryRecordBtnWrap}
+              haptic="light"
+              onPress={() => onOpenModal('expense')}
+            >
+              <LiquidGlassCard
+                shape="control"
+                glassStyle="regular"
+                interactive
+                contentStyle={styles.primaryRecordBtnInner}
+              >
+                <View style={styles.primaryAccentIconBox}>
+                  <AppSymbol name="plus" size={16} color={theme.colors.accent.primary} weight="semibold" />
+                </View>
+                <View style={styles.actionCardTextCol}>
+                  <Text style={styles.actionCardTitle} numberOfLines={1}>
+                    記收支 / 轉帳
+                  </Text>
+                  <Text style={styles.actionCardSub} numberOfLines={1}>
+                    手動入帳
+                  </Text>
+                </View>
+              </LiquidGlassCard>
+            </TactilePressable>
 
-          {/* 4 Same-Family Metallic Glass Capsules */}
+            <TactilePressable
+              style={styles.compactToolBtnWrap}
+              haptic="light"
+              onPress={() => onOpenModal('atm')}
+            >
+              <LiquidGlassCard
+                shape="control"
+                glassStyle="regular"
+                interactive
+                contentStyle={styles.compactToolBtnInner}
+              >
+                <AppSymbol name="arrow.left.arrow.right" size={15} color={theme.colors.text.primary} />
+                <Text style={styles.compactToolLabel}>ATM</Text>
+              </LiquidGlassCard>
+            </TactilePressable>
+
+            <TactilePressable
+              style={styles.compactToolBtnWrap}
+              haptic="light"
+              onPress={() => onOpenModal('scold')}
+            >
+              <LiquidGlassCard
+                shape="control"
+                glassStyle="regular"
+                interactive
+                contentStyle={styles.compactToolBtnInner}
+              >
+                <AppSymbol name="gauge.with.needle" size={15} color={theme.colors.text.primary} />
+                <Text style={styles.compactToolLabel}>罵醒我</Text>
+              </LiquidGlassCard>
+            </TactilePressable>
+
+            <TactilePressable
+              style={styles.compactToolBtnWrap}
+              haptic="light"
+              onPress={() => onOpenModal('reconcile')}
+            >
+              <LiquidGlassCard
+                shape="control"
+                glassStyle="regular"
+                interactive
+                contentStyle={styles.compactToolBtnInner}
+              >
+                <AppSymbol name="equal.circle" size={15} color={theme.colors.text.primary} />
+                <Text style={styles.compactToolLabel}>平帳</Text>
+              </LiquidGlassCard>
+            </TactilePressable>
+          </LiquidGlassGroup>
+
           <View style={styles.quickPillRow}>
-            {QUICK_CASH_CHIPS.map((chip) => {
-              const tint = getCategoryGlassTint(chip.category);
-              return (
-                <TactilePressable
-                  key={chip.category}
-                  style={styles.quickPillWrapper}
-                  activeScale={0.92}
-                  haptic="light"
-                  onPress={() => onOpenModal('expense', chip.category)}
-                >
-                  <View
-                    style={[
-                      styles.quickMetallicPill,
-                      {
-                        backgroundColor: tint.bg,
-                        borderColor: tint.border,
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.quickPillGlyph, { color: tint.text }]}>
-                      {chip.glyph}
-                    </Text>
-                    <Text style={[styles.quickPillLabel, { color: tint.text }]}>
-                      {chip.label}
-                    </Text>
-                  </View>
-                </TactilePressable>
-              );
-            })}
-          </View>
-
-          {/* 2x2 Liquid Glass Action Grid */}
-          <View style={styles.actionGrid}>
-            <View style={styles.actionGridRow}>
+            {QUICK_CASH_CHIPS.map((chip) => (
               <TactilePressable
-                style={styles.actionCardWrap}
-                activeScale={0.95}
+                key={chip.category}
+                style={styles.quickPillWrapper}
                 haptic="light"
-                onPress={() => onOpenModal('expense')}
+                onPress={() => onOpenModal('expense', chip.category)}
               >
-                <LiquidGlassCard
-                  shape="card"
-                  elevated
-                  intensity={55}
-                  contentStyle={styles.actionCardInner}
-                >
-                  <View style={styles.glassIconCircle}>
-                    <Text style={[styles.glassIconGlyph, { color: '#FBBF24' }]}>
-                      ＋
-                    </Text>
-                  </View>
-                  <View style={styles.actionCardTextCol}>
-                    <Text style={styles.actionCardTitle}>記收支 / 轉帳</Text>
-                    <Text style={styles.actionCardSub}>自訂記帳</Text>
-                  </View>
-                </LiquidGlassCard>
+                <View style={styles.quickMattePill}>
+                  <AppSymbol name={chip.icon} size={13} color={theme.colors.text.secondary} />
+                  <Text style={styles.quickPillLabel}>{chip.label}</Text>
+                </View>
               </TactilePressable>
-
-              <TactilePressable
-                style={styles.actionCardWrap}
-                activeScale={0.95}
-                haptic="light"
-                onPress={() => onOpenModal('atm')}
-              >
-                <LiquidGlassCard
-                  shape="card"
-                  elevated
-                  intensity={55}
-                  contentStyle={styles.actionCardInner}
-                >
-                  <View style={styles.glassIconCircle}>
-                    <Text style={[styles.glassIconGlyph, { color: '#E6D5B8' }]}>
-                      ⇄
-                    </Text>
-                  </View>
-                  <View style={styles.actionCardTextCol}>
-                    <Text style={styles.actionCardTitle}>ATM 存提同步</Text>
-                    <Text style={styles.actionCardSub}>帳戶互轉</Text>
-                  </View>
-                </LiquidGlassCard>
-              </TactilePressable>
-            </View>
-
-            <View style={styles.actionGridRow}>
-              <TactilePressable
-                style={styles.actionCardWrap}
-                activeScale={0.95}
-                haptic="medium"
-                onPress={() => onOpenModal('scold')}
-              >
-                <LiquidGlassCard
-                  shape="card"
-                  elevated
-                  intensity={55}
-                  contentStyle={styles.actionCardInner}
-                >
-                  <View style={styles.glassIconCircle}>
-                    <Text style={[styles.glassIconGlyph, { color: '#FBBF24' }]}>
-                      ⚡
-                    </Text>
-                  </View>
-                  <View style={styles.actionCardTextCol}>
-                    <Text style={styles.actionCardTitle}>罵醒我</Text>
-                    <Text style={styles.actionCardSub}>防衝動消費</Text>
-                  </View>
-                </LiquidGlassCard>
-              </TactilePressable>
-
-              <TactilePressable
-                style={styles.actionCardWrap}
-                activeScale={0.95}
-                haptic="light"
-                onPress={() => onOpenModal('reconcile')}
-              >
-                <LiquidGlassCard
-                  shape="card"
-                  elevated
-                  intensity={55}
-                  contentStyle={styles.actionCardInner}
-                >
-                  <View style={styles.glassIconCircle}>
-                    <Text style={[styles.glassIconGlyph, { color: '#E6D5B8' }]}>
-                      ⚖
-                    </Text>
-                  </View>
-                  <View style={styles.actionCardTextCol}>
-                    <Text style={styles.actionCardTitle}>魔術平帳</Text>
-                    <Text style={styles.actionCardSub}>校正餘額</Text>
-                  </View>
-                </LiquidGlassCard>
-              </TactilePressable>
-            </View>
+            ))}
           </View>
         </View>
 
-        {/* Micro-Spend Radar / Upcoming Ghost Strip */}
+        {/* Micro-Spend Radar / Upcoming Strip (Non-Glass Matte Readout) */}
         {(radar.weekCount > 0 || upcoming.length > 0) && (
-          <LiquidGlassCard
-            shape="card"
-            intensity={55}
-            contentStyle={styles.radarStripInner}
-          >
+          <View style={styles.radarStripSurface}>
             <View style={styles.radarRow}>
               <Text style={styles.radarLabel}>
-                小額消費雷達（&lt;$200）：本週 {radar.weekCount} 筆 · 共{' '}
+                小額消費（&lt;$200）：本週 {radar.weekCount} 筆 · 共{' '}
                 <Text style={styles.tabularInline}>${radar.weekTotal}</Text>
               </Text>
               {upcoming.length > 0 && (
-                <Pressable onPress={() => onNavigateTab('settings')}>
+                <Pressable onPress={() => onNavigateTab('settings')} style={styles.upcomingLinkRow}>
                   <Text style={styles.upcomingTag}>
-                    即將扣款 {upcoming.length} 筆 ▸
+                    待扣款 {upcoming.length} 筆
                   </Text>
+                  <AppSymbol name="chevron.right" size={10} color={theme.colors.text.tertiary} />
                 </Pressable>
               )}
             </View>
-          </LiquidGlassCard>
+          </View>
         )}
 
-        {/* ====================================================================
-            3. INSET GROUPED GLASS TRANSACTION LIST + METALLIC MORPHING PILL
-           ==================================================================== */}
+        {/* 3. Non-Glass Precision Transaction List */}
         <View style={styles.transactionsSection}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionHeaderTitle}>近期明細</Text>
-            <Pressable onPress={() => onNavigateTab('transactions')}>
-              <Text style={styles.sectionHeaderAction}>完整紀錄 ▸</Text>
+            <Pressable onPress={() => onNavigateTab('transactions')} style={styles.upcomingLinkRow} hitSlop={8}>
+              <Text style={styles.sectionHeaderAction}>完整紀錄</Text>
+              <AppSymbol name="chevron.right" size={11} color={theme.colors.text.tertiary} />
             </Pressable>
           </View>
 
           {groupedTransactions.length === 0 ? (
-            <LiquidGlassCard
-              shape="card"
-              elevated
-              intensity={55}
-              contentStyle={styles.emptyListInner}
-            >
+            <View style={styles.emptyListSurface}>
               <View style={styles.emptyCircle}>
-                <Text style={styles.emptyCircleGlyph}></Text>
+                <AppSymbol name="list.bullet" size={18} color={theme.colors.text.tertiary} />
               </View>
               <Text style={styles.emptyTitle}>尚無消費紀錄</Text>
               <Text style={styles.emptySubtitle}>
                 可由上方快速記帳，或透過 iOS 捷徑自動入帳
               </Text>
-            </LiquidGlassCard>
+            </View>
           ) : (
             groupedTransactions.map((group, groupIdx) => (
               <StaggeredItem key={group.date} index={groupIdx} style={styles.dateGroupBlock}>
                 <Text style={styles.dateGroupHeader}>{group.title}</Text>
 
-                <LiquidGlassCard shape="card" elevated intensity={55}>
+                <View style={styles.txGroupSurface}>
                   {group.items.map((tx, idx) => {
                     const isLast = idx === group.items.length - 1;
                     const isMerged = Boolean(
@@ -512,20 +473,20 @@ export function DashboardScreen({
                     const prefix = isPositive
                       ? '+'
                       : tx.type === 'transfer'
-                      ? '⇄ '
+                      ? ''
                       : '-';
 
                     return (
                       <StaggeredItem key={tx.id} index={idx}>
                         <View style={styles.txRow}>
-                          {/* Left Desert Titanium Circle Icon */}
                           <View style={styles.txIconCircle}>
-                            <Text style={styles.txIconGlyph}>
-                              {glyphForTx(tx)}
-                            </Text>
+                            <AppSymbol
+                              name={iconForTx(tx)}
+                              size={15}
+                              color={theme.colors.text.secondary}
+                            />
                           </View>
 
-                          {/* Middle Merchant + Metallic Morphing Category Pill */}
                           <View style={styles.txMiddleCol}>
                             <View style={styles.txTitleRow}>
                               <Text style={styles.txMerchant} numberOfLines={1}>
@@ -533,6 +494,7 @@ export function DashboardScreen({
                               </Text>
                               {isMerged && (
                                 <View style={styles.mergedMiniBadge}>
+                                  <AppSymbol name="lock.fill" size={9} color={theme.colors.text.tertiary} />
                                   <Text style={styles.mergedMiniBadgeText}>
                                     雙源已鎖
                                   </Text>
@@ -563,13 +525,13 @@ export function DashboardScreen({
                             </View>
                           </View>
 
-                          {/* Right Warm Porcelain White Tabular Amount */}
                           <View style={styles.txRightCol}>
                             <Text
                               style={[
                                 styles.txAmountText,
                                 isPositive && styles.txAmountPositive,
                               ]}
+                              maxFontSizeMultiplier={theme.typography.maxAmountFontScale}
                             >
                               {prefix}${Math.abs(tx.amount).toLocaleString()}
                             </Text>
@@ -579,12 +541,11 @@ export function DashboardScreen({
                           </View>
                         </View>
 
-                        {/* Inset Hairline Divider aligned with text column */}
                         {!isLast && <View style={styles.insetDivider} />}
                       </StaggeredItem>
                     );
                   })}
-                </LiquidGlassCard>
+                </View>
               </StaggeredItem>
             ))
           )}
@@ -604,13 +565,13 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingTop: 62,
-    paddingHorizontal: 16,
+    paddingHorizontal: theme.spacing.md,
     paddingBottom: 112,
-    gap: 14,
+    gap: theme.spacing.lg,
   },
   heroCardInner: {
-    padding: 18,
-    gap: 12,
+    padding: theme.spacing.lg,
+    gap: theme.spacing.sm,
   },
   heroTopLabelRow: {
     flexDirection: 'row',
@@ -618,138 +579,133 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   heroOverline: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.6,
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.sectionTitle.fontSize,
+    fontWeight: theme.typography.sectionTitle.fontWeight,
+    letterSpacing: theme.typography.sectionTitle.letterSpacing,
   },
   cycleCapsule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 999,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    paddingVertical: 4,
+    borderRadius: theme.radii.pill,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.subtleSurface,
   },
   cycleCapsuleText: {
-    color: '#E6D5B8',
-    fontSize: 11,
-    fontWeight: '600',
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.micro.fontSize,
+    fontWeight: '500',
     fontVariant: ['tabular-nums'],
   },
   heroNumberRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
+    marginTop: 2,
   },
   heroBigAmount: {
-    color: '#FAF6F0',
-    fontSize: 44,
-    fontWeight: '700',
+    color: theme.colors.text.primary,
+    fontSize: theme.typography.heroAmount.fontSize,
+    fontWeight: theme.typography.heroAmount.fontWeight,
+    lineHeight: theme.typography.heroAmount.lineHeight,
+    letterSpacing: theme.typography.heroAmount.letterSpacing,
     fontVariant: ['tabular-nums'],
-    letterSpacing: -1,
+  },
+  amountWarning: {
+    color: theme.colors.semantic.warning,
+  },
+  amountDanger: {
+    color: theme.colors.semantic.danger,
   },
   heroSubStatsCol: {
-    gap: 4.5,
+    gap: 5,
     alignItems: 'flex-end',
     marginBottom: 4,
   },
-  heroSubStatPill: {
+  heroSubStatRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4.5,
-    borderRadius: 999,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.22)',
+    gap: 8,
   },
   heroSubStatLabel: {
-    color: 'rgba(235, 225, 210, 0.55)',
-    fontSize: 10.5,
-    fontWeight: '600',
+    color: theme.colors.text.tertiary,
+    fontSize: theme.typography.caption.fontSize,
+    fontWeight: '400',
   },
   heroSubStatValue: {
-    color: '#FAF6F0',
-    fontSize: 12.5,
-    fontWeight: '700',
+    color: theme.colors.text.secondary,
+    fontSize: 13,
+    fontWeight: '500',
     fontVariant: ['tabular-nums'],
-    letterSpacing: -0.3,
-  },
-  lightTubeTrack: {
-    height: 8,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255, 235, 200, 0.08)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(255, 230, 190, 0.16)',
-    overflow: 'visible',
-  },
-  lightTubeGlowWrap: {
-    height: '100%',
-    borderRadius: 999,
-    shadowColor: '#F59E0B',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.78,
-    shadowRadius: 8,
-  },
-  lightTubeGradient: {
-    flex: 1,
-    borderRadius: 999,
+    letterSpacing: -0.2,
   },
   tubeSubRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 2,
   },
   tubeSubText: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 12,
+    color: theme.colors.text.tertiary,
+    fontSize: theme.typography.caption.fontSize,
     fontVariant: ['tabular-nums'],
-    letterSpacing: -0.3,
   },
-  amberHighlightText: {
-    color: '#FBBF24',
-    fontWeight: '700',
+  budgetModeLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  remainingHighlightText: {
+    color: theme.colors.semantic.remaining,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
+  secondaryValueInline: {
+    color: theme.colors.text.secondary,
+    fontWeight: '500',
     fontVariant: ['tabular-nums'],
   },
   balanceMatrixRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingVertical: 2,
   },
   balanceCell: {
     flex: 1,
-    gap: 3,
+    gap: 4,
   },
   balanceCellLabel: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 11,
-    fontWeight: '500',
+    color: theme.colors.text.tertiary,
+    fontSize: theme.typography.micro.fontSize,
+    fontWeight: '400',
   },
   balanceCellValue: {
-    color: '#FAF6F0',
-    fontSize: 18,
-    fontWeight: '700',
+    color: theme.colors.text.primary,
+    fontSize: theme.typography.statAmount.fontSize,
+    fontWeight: theme.typography.statAmount.fontWeight,
+    letterSpacing: theme.typography.statAmount.letterSpacing,
     fontVariant: ['tabular-nums'],
-    letterSpacing: -0.5,
   },
   verticalHairline: {
     width: StyleSheet.hairlineWidth,
-    height: 30,
-    backgroundColor: 'rgba(255, 230, 190, 0.14)',
-    marginHorizontal: 12,
+    height: 28,
+    backgroundColor: theme.colors.glass.hairline,
+    marginHorizontal: theme.spacing.sm,
   },
   horizontalHairline: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255, 230, 190, 0.12)',
+    backgroundColor: theme.colors.glass.hairline,
   },
   heroFooterRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: theme.spacing.xs,
   },
   achievementRow: {
     flexDirection: 'row',
@@ -757,138 +713,161 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   achievementText: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 12,
+    color: theme.colors.text.tertiary,
+    fontSize: theme.typography.caption.fontSize,
   },
   achievementDot: {
-    color: 'rgba(235, 225, 210, 0.3)',
-    fontSize: 12,
+    color: theme.colors.text.tertiary,
+    fontSize: theme.typography.caption.fontSize,
   },
   tabularInline: {
-    color: '#FAF6F0',
-    fontWeight: '600',
+    color: theme.colors.text.secondary,
+    fontWeight: '500',
     fontVariant: ['tabular-nums'],
-    letterSpacing: -0.5,
   },
   settleGlassPill: {
-    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 11,
     paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(251, 191, 36, 0.3)',
+    borderRadius: theme.radii.pill,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.accent.subtleBg,
+    borderWidth: 1,
+    borderColor: theme.colors.accent.subtleBorder,
   },
   settleGlassPillDisabled: {
-    opacity: 0.45,
+    backgroundColor: theme.colors.background.subtleSurface,
+    borderColor: 'transparent',
   },
   settleGlassPillText: {
-    color: '#FBBF24',
-    fontSize: 11,
-    fontWeight: '700',
+    color: theme.colors.text.primary,
+    fontSize: theme.typography.micro.fontSize,
+    fontWeight: '500',
     fontVariant: ['tabular-nums'],
-    letterSpacing: -0.3,
+  },
+  settleGlassPillTextDisabled: {
+    color: theme.colors.text.tertiary,
   },
   controlDeckSection: {
-    gap: 10,
+    gap: theme.spacing.xs,
+  },
+  primaryActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: theme.spacing.xs,
+    width: '100%',
+  },
+  primaryRecordBtnWrap: {
+    flex: 1.95,
+    minWidth: 0,
+  },
+  primaryRecordBtnInner: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  primaryAccentIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: theme.radii.chip,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.accent.subtleBg,
+    borderWidth: 1,
+    borderColor: theme.colors.accent.subtleBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactToolBtnWrap: {
+    flex: 0.78,
+    minWidth: 0,
+  },
+  compactToolBtnInner: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    gap: 4,
+  },
+  compactToolLabel: {
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.micro.fontSize,
+    fontWeight: '500',
+  },
+  actionCardTextCol: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  actionCardTitle: {
+    color: theme.colors.text.primary,
+    fontSize: 13,
+    fontWeight: theme.typography.bodyMedium.fontWeight,
+    letterSpacing: -0.3,
+  },
+  actionCardSub: {
+    color: theme.colors.text.tertiary,
+    fontSize: theme.typography.micro.fontSize,
+  },
+  quickPillRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.xs,
+  },
+  quickPillWrapper: {
+    flex: 1,
+  },
+  quickMattePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    borderRadius: theme.radii.chip,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.listSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
+    gap: 6,
+  },
+  quickPillLabel: {
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.caption.fontSize,
+    fontWeight: '500',
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 2,
+    paddingHorizontal: 4,
   },
   sectionHeaderTitle: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.2,
-  },
-  sectionHeaderMeta: {
-    color: '#E6D5B8',
-    fontSize: 11,
-    fontWeight: '500',
-    opacity: 0.8,
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.sectionTitle.fontSize,
+    fontWeight: theme.typography.sectionTitle.fontWeight,
+    letterSpacing: theme.typography.sectionTitle.letterSpacing,
   },
   sectionHeaderAction: {
-    color: '#FBBF24',
-    fontSize: 12,
-    fontWeight: '600',
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.caption.fontSize,
+    fontWeight: '500',
   },
-  quickPillRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  quickPillWrapper: {
-    flex: 1,
-  },
-  quickMetallicPill: {
+  upcomingLinkRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 999,
-    borderCurve: 'continuous',
-    borderWidth: 0.8,
-    gap: 5,
+    gap: 3,
   },
-  quickPillGlyph: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  quickPillLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-  },
-  actionGrid: {
-    gap: 8,
-  },
-  actionGridRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionCardWrap: {
-    flex: 1,
-  },
-  actionCardInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 13,
-    paddingVertical: 12,
-    gap: 10,
-  },
-  glassIconCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  glassIconGlyph: {
-    color: '#FAF6F0',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  actionCardTextCol: {
-    flex: 1,
-    gap: 2,
-  },
-  actionCardTitle: {
-    color: '#FAF6F0',
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: -0.2,
-  },
-  actionCardSub: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 11,
-  },
-  radarStripInner: {
+  radarStripSurface: {
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 11,
+    borderRadius: theme.radii.control,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.listSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
   },
   radarRow: {
     flexDirection: 'row',
@@ -898,26 +877,34 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   radarLabel: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 12,
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.caption.fontSize,
   },
   upcomingTag: {
-    color: '#FBBF24',
-    fontSize: 11,
-    fontWeight: '700',
+    color: theme.colors.accent.primary,
+    fontSize: theme.typography.micro.fontSize,
+    fontWeight: '500',
   },
   transactionsSection: {
-    gap: 10,
+    gap: theme.spacing.sm,
   },
   dateGroupBlock: {
     gap: 6,
   },
   dateGroupHeader: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 12,
-    fontWeight: '600',
+    color: theme.colors.text.tertiary,
+    fontSize: theme.typography.caption.fontSize,
+    fontWeight: '500',
     paddingHorizontal: 6,
     marginTop: 2,
+  },
+  txGroupSurface: {
+    borderRadius: theme.radii.listGroup,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.listSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
+    overflow: 'hidden',
   },
   txRow: {
     flexDirection: 'row',
@@ -927,19 +914,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   txIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    width: 34,
+    height: 34,
+    borderRadius: theme.radii.chip,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.subtleSurface,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  txIconGlyph: {
-    color: '#E6D5B8',
-    fontSize: 16,
-    fontWeight: '600',
   },
   txMiddleCol: {
     flex: 1,
@@ -951,24 +932,25 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   txMerchant: {
-    color: '#FAF6F0',
-    fontSize: 15,
-    fontWeight: '600',
-    letterSpacing: -0.3,
+    color: theme.colors.text.primary,
+    fontSize: theme.typography.body.fontSize,
+    fontWeight: '500',
+    letterSpacing: -0.2,
     flexShrink: 1,
   },
   mergedMiniBadge: {
-    paddingHorizontal: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 999,
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(251, 191, 36, 0.3)',
+    borderRadius: theme.radii.pill,
+    backgroundColor: theme.colors.background.subtleSurface,
   },
   mergedMiniBadgeText: {
-    color: '#FBBF24',
-    fontSize: 9,
-    fontWeight: '700',
+    color: theme.colors.text.tertiary,
+    fontSize: 10,
+    fontWeight: '500',
   },
   txSubRow: {
     flexDirection: 'row',
@@ -977,81 +959,74 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   txTimeText: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 11,
+    color: theme.colors.text.tertiary,
+    fontSize: theme.typography.micro.fontSize,
     fontVariant: ['tabular-nums'],
-    letterSpacing: -0.3,
   },
   splitMiniPill: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     paddingVertical: 2,
-    borderRadius: 999,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderRadius: theme.radii.pill,
+    backgroundColor: theme.colors.background.subtleSurface,
   },
   splitMiniPillText: {
-    color: '#E6D5B8',
+    color: theme.colors.text.secondary,
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   txRightCol: {
     alignItems: 'flex-end',
     gap: 2,
   },
   txAmountText: {
-    color: '#FAF6F0',
-    fontSize: 16,
-    fontWeight: '700',
+    color: theme.colors.text.primary,
+    fontSize: theme.typography.listAmount.fontSize,
+    fontWeight: theme.typography.listAmount.fontWeight,
+    letterSpacing: theme.typography.listAmount.letterSpacing,
     fontVariant: ['tabular-nums'],
-    letterSpacing: -0.5,
   },
   txAmountPositive: {
-    color: '#FDE68A',
+    color: theme.colors.semantic.remaining,
   },
   txAccountSub: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: theme.colors.text.tertiary,
     fontSize: 10,
   },
   insetDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255, 230, 190, 0.1)',
-    marginLeft: 64,
+    backgroundColor: theme.colors.glass.hairline,
+    marginLeft: 60,
   },
-  emptyListInner: {
-    paddingVertical: 30,
+  emptyListSurface: {
+    paddingVertical: 32,
     paddingHorizontal: 20,
     alignItems: 'center',
     gap: 8,
+    borderRadius: theme.radii.listGroup,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.listSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
   },
   emptyCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    width: 40,
+    height: 40,
+    borderRadius: theme.radii.innerCard,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.subtleSurface,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 2,
   },
-  emptyCircleGlyph: {
-    color: '#E6D5B8',
-    fontSize: 20,
-  },
   emptyTitle: {
-    color: '#FAF6F0',
-    fontSize: 15,
-    fontWeight: '600',
+    color: theme.colors.text.primary,
+    fontSize: theme.typography.bodyMedium.fontSize,
+    fontWeight: '500',
   },
   emptySubtitle: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 12,
+    color: theme.colors.text.tertiary,
+    fontSize: theme.typography.caption.fontSize,
     textAlign: 'center',
     lineHeight: 18,
-  },
-  pressedScale: {
-    opacity: 0.8,
-    transform: [{ scale: 0.985 }],
   },
 });

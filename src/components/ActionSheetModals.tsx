@@ -12,6 +12,8 @@ import {
 import { convertToFeelings } from '../../core';
 import type { AccountId, PayMethod, ScoldMode } from '../../core';
 import { useLedger } from '../store/useLedger';
+import { theme } from '../theme/tokens';
+import { AppSymbol } from './AppSymbol';
 import { SafeConfirmButton } from './SafeConfirmButton';
 
 export type ActiveModal = 'none' | 'expense' | 'atm' | 'scold' | 'reconcile';
@@ -138,13 +140,13 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
           {/* Header */}
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>
-              {active === 'expense' && '💵 極速記收支 / 轉帳'}
-              {active === 'atm' && '🏧 ATM 存提款一鍵同步'}
-              {active === 'scold' && '🛑 救命！我想亂買東西，罵醒我'}
-              {active === 'reconcile' && '⚖️ 魔術平帳（與現實餘額對齊）'}
+              {active === 'expense' && '記收支 / 轉帳'}
+              {active === 'atm' && 'ATM 存提款同步'}
+              {active === 'scold' && '衝動消費評估'}
+              {active === 'reconcile' && '餘額校正平帳'}
             </Text>
-            <Pressable onPress={onClose} style={styles.closeBtn}>
-              <Text style={styles.closeBtnText}>✕ 關閉</Text>
+            <Pressable onPress={onClose} style={styles.closeBtn} hitSlop={8}>
+              <AppSymbol name="xmark" size={13} color={theme.colors.text.secondary} />
             </Pressable>
           </View>
 
@@ -152,29 +154,27 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
             {/* 1. EXPENSE / INCOME MODAL */}
             {active === 'expense' && (
               <View style={styles.section}>
-                {/* Natural language 1-line input */}
                 <View style={styles.nlBox}>
                   <TextInput
                     value={quickSentence}
                     onChangeText={setQuickSentence}
-                    placeholder="⚡ 一句話快記（例：現金買鹽酥雞 135）"
-                    placeholderTextColor="#64748B"
+                    placeholder="一句話快記（例：現金買鹽酥雞 135）"
+                    placeholderTextColor={theme.colors.text.tertiary}
                     style={styles.nlInput}
                     onSubmitEditing={parseSentenceAndSubmit}
                   />
                   <Pressable onPress={parseSentenceAndSubmit} style={styles.nlBtn}>
-                    <Text style={styles.nlBtnText}>秒記</Text>
+                    <Text style={styles.nlBtnText}>快記</Text>
                   </Pressable>
                 </View>
 
-                {/* Expense vs Income switch */}
                 <View style={styles.segmentRow}>
                   <Pressable
                     onPress={() => setEntryMode('expense')}
                     style={[styles.segmentBtn, entryMode === 'expense' && styles.segmentActive]}
                   >
                     <Text style={[styles.segmentText, entryMode === 'expense' && styles.segmentTextActive]}>
-                      💸 記支出 / 轉帳
+                      記支出 / 轉帳
                     </Text>
                   </Pressable>
                   <Pressable
@@ -182,7 +182,7 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
                     style={[styles.segmentBtn, entryMode === 'income' && styles.segmentActiveGreen]}
                   >
                     <Text style={[styles.segmentText, entryMode === 'income' && styles.segmentTextActive]}>
-                      💰 記收入（薪水/還錢）
+                      記收入（薪水/還款）
                     </Text>
                   </Pressable>
                 </View>
@@ -193,9 +193,9 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
                     <View style={styles.segmentRow}>
                       {(
                         [
-                          ['cash', '💵 現金'],
-                          ['debit_card', '💳 玉山金融卡'],
-                          ['bank_transfer', '🏦 網銀轉帳'],
+                          ['cash', '現金'],
+                          ['debit_card', '玉山金融卡'],
+                          ['bank_transfer', '網銀轉帳'],
                         ] as const
                       ).map(([m, title]) => (
                         <Pressable
@@ -227,8 +227,8 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
                     <View style={styles.segmentRow}>
                       {(
                         [
-                          ['bank', '🏦 玉山銀行帳戶'],
-                          ['cash', '💵 現金錢包'],
+                          ['bank', '玉山銀行帳戶'],
+                          ['cash', '現金錢包'],
                         ] as const
                       ).map(([acc, title]) => (
                         <Pressable
@@ -250,14 +250,14 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
                     onChangeText={setAmountStr}
                     keyboardType="numeric"
                     placeholder="輸入金額"
-                    placeholderTextColor="#64748B"
+                    placeholderTextColor={theme.colors.text.tertiary}
                     style={styles.amountInput}
                     onSubmitEditing={handleExpenseSubmit}
                   />
                   {amountStr.length > 0 && (
                     <SafeConfirmButton
                       label="清空"
-                      confirmLabel="確定清空?"
+                      confirmLabel="確定清空"
                       compact
                       onConfirm={() => setAmountStr('')}
                     />
@@ -266,7 +266,7 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
 
                 {Number(amountStr) >= 200 && (
                   <Text style={styles.feelingHint}>
-                    ⏳ 體感換算：約等於工作 {feelings.hours} 小時 ／ {feelings.bentos} 個雞腿便當
+                    體感換算：約等於工作 {feelings.hours} 小時 ／ {feelings.bentos} 個便當
                   </Text>
                 )}
 
@@ -275,13 +275,13 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
                   value={merchant}
                   onChangeText={setMerchant}
                   placeholder={entryMode === 'income' ? '例：10月薪資 / 小明還錢' : '例：7-ELEVEN / 雞腿便當'}
-                  placeholderTextColor="#64748B"
+                  placeholderTextColor={theme.colors.text.tertiary}
                   style={styles.textInput}
                 />
 
                 <Pressable onPress={handleExpenseSubmit} style={styles.primaryBtn}>
                   <Text style={styles.primaryBtnText}>
-                    {entryMode === 'income' ? '✅ 確認入帳' : '✅ 確認記帳'}
+                    {entryMode === 'income' ? '確認入帳' : '確認記帳'}
                   </Text>
                 </Pressable>
               </View>
@@ -291,7 +291,7 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
             {active === 'atm' && (
               <View style={styles.section}>
                 <Text style={styles.helperText}>
-                  ATM 提款與存款屬於「資產內部移轉」，只會同步增減你的玉山銀行與現金餘額，**絕對不會算成把錢花掉**！
+                  ATM 提款與存款屬於資產內部移轉，僅同步增減玉山銀行與現金餘額，不會計入支出。
                 </Text>
 
                 <View style={styles.segmentRow}>
@@ -300,7 +300,7 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
                     style={[styles.segmentBtn, atmDir === 'withdraw' && styles.segmentActive]}
                   >
                     <Text style={[styles.segmentText, atmDir === 'withdraw' && styles.segmentTextActive]}>
-                      📤 ATM 提款（玉山 ➔ 現金）
+                      ATM 提款（玉山 → 現金）
                     </Text>
                   </Pressable>
                   <Pressable
@@ -308,12 +308,12 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
                     style={[styles.segmentBtn, atmDir === 'deposit' && styles.segmentActiveGreen]}
                   >
                     <Text style={[styles.segmentText, atmDir === 'deposit' && styles.segmentTextActive]}>
-                      📥 ATM 存款（現金 ➔ 玉山）
+                      ATM 存款（現金 → 玉山）
                     </Text>
                   </Pressable>
                 </View>
 
-                <Text style={styles.label}>一鍵選擇常用面額</Text>
+                <Text style={styles.label}>常用面額</Text>
                 <View style={styles.wrapRow}>
                   {ATM_AMOUNTS.map((amt) => (
                     <Pressable
@@ -328,7 +328,7 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
                   ))}
                 </View>
 
-                <Text style={styles.label}>或自訂金額</Text>
+                <Text style={styles.label}>自訂金額</Text>
                 <TextInput
                   value={atmAmountStr}
                   onChangeText={setAtmAmountStr}
@@ -343,7 +343,7 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
 
                 <Pressable onPress={handleAtmSubmit} style={styles.primaryBtn}>
                   <Text style={styles.primaryBtnText}>
-                    🏧 同步更新餘額（{atmDir === 'withdraw' ? `玉山 -$${Number(atmAmountStr) + (atmHasFee ? 5 : 0)} / 現金 +$${atmAmountStr}` : `現金 -$${atmAmountStr} / 玉山 +$${atmAmountStr}`}）
+                    同步更新餘額（{atmDir === 'withdraw' ? `玉山 -$${Number(atmAmountStr) + (atmHasFee ? 5 : 0)} / 現金 +$${atmAmountStr}` : `現金 -$${atmAmountStr} / 玉山 +$${atmAmountStr}`}）
                   </Text>
                 </Pressable>
               </View>
@@ -352,13 +352,13 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
             {/* 3. SCOLD ME MODAL */}
             {active === 'scold' && (
               <View style={styles.section}>
-                <Text style={styles.label}>選擇毒舌風格</Text>
+                <Text style={styles.label}>評估視角</Text>
                 <View style={styles.segmentRow}>
                   {(
                     [
-                      ['friend', '🤬 毒舌損友'],
-                      ['data', '📊 殘酷數據'],
-                      ['mom', '👵 暴躁老媽'],
+                      ['friend', '直白損友'],
+                      ['data', '數據分析'],
+                      ['mom', '嚴格長輩'],
                     ] as const
                   ).map(([m, label]) => (
                     <Pressable
@@ -371,22 +371,22 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
                   ))}
                 </View>
 
-                <Text style={styles.label}>你現在心癢想買什麼？</Text>
+                <Text style={styles.label}>想買的商品</Text>
                 <TextInput
                   value={scoldItem}
                   onChangeText={setScoldItem}
-                  placeholder="例：限量球鞋 / 新耳機 / 課金禮包"
-                  placeholderTextColor="#64748B"
+                  placeholder="例：限量球鞋 / 新耳機"
+                  placeholderTextColor={theme.colors.text.tertiary}
                   style={styles.textInput}
                 />
 
-                <Text style={styles.label}>多少錢？ (NT$)</Text>
+                <Text style={styles.label}>價格 (NT$)</Text>
                 <TextInput
                   value={scoldPriceStr}
                   onChangeText={setScoldPriceStr}
                   keyboardType="numeric"
                   placeholder="輸入商品價格"
-                  placeholderTextColor="#64748B"
+                  placeholderTextColor={theme.colors.text.tertiary}
                   style={styles.amountInput}
                 />
 
@@ -404,7 +404,7 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
                     <Text style={styles.scoldHeadline}>{scoldOutput.headline}</Text>
                     {scoldOutput.lines.map((line, idx) => (
                       <Text key={idx} style={styles.scoldLine}>
-                        • {line}
+                        · {line}
                       </Text>
                     ))}
                   </View>
@@ -422,7 +422,7 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
                       style={styles.resistBtn}
                     >
                       <Text style={styles.resistBtnText}>
-                        😤 我被罵醒了！忍住不買（存入省錢榮譽榜 +${scoldPrice}）
+                        克制不買（計入省下紀錄 +${scoldPrice}）
                       </Text>
                     </Pressable>
 
@@ -435,7 +435,7 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
                       }}
                       style={styles.buyAnywayBtn}
                     >
-                      <Text style={styles.buyAnywayText}>💸 我不管，剁手也要買（直接記帳扣款）</Text>
+                      <Text style={styles.buyAnywayText}>確認購買並直接記帳扣款</Text>
                     </Pressable>
                   </View>
                 )}
@@ -446,7 +446,7 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
             {active === 'reconcile' && (
               <View style={styles.section}>
                 <Text style={styles.helperText}>
-                  輸入帳戶實際餘額，系統將自動平帳補差額。
+                  輸入帳戶實際餘額，系統將自動計算並補齊差額。
                 </Text>
 
                 <View style={styles.segmentRow}>
@@ -455,7 +455,7 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
                     style={[styles.segmentBtn, recAccount === 'cash' && styles.segmentActive]}
                   >
                     <Text style={[styles.segmentText, recAccount === 'cash' && styles.segmentTextActive]}>
-                      💵 校正現金（帳面 ${summary.balances.cash}）
+                      校正現金（帳面 ${summary.balances.cash}）
                     </Text>
                   </Pressable>
                   <Pressable
@@ -463,40 +463,40 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
                     style={[styles.segmentBtn, recAccount === 'bank' && styles.segmentActive]}
                   >
                     <Text style={[styles.segmentText, recAccount === 'bank' && styles.segmentTextActive]}>
-                      🏦 校正玉山（帳面 ${summary.balances.bank}）
+                      校正玉山（帳面 ${summary.balances.bank}）
                     </Text>
                   </Pressable>
                 </View>
 
                 <Text style={styles.label}>
-                  你現在實際看到的{recAccount === 'bank' ? '玉山銀行' : '手頭現金'}餘額是多少？
+                  目前實際看到的{recAccount === 'bank' ? '玉山銀行' : '手頭現金'}餘額
                 </Text>
                 <TextInput
                   value={recActualStr}
                   onChangeText={setRecActualStr}
                   keyboardType="numeric"
                   placeholder={`目前帳面為 $${currentAccountBal}`}
-                  placeholderTextColor="#64748B"
+                  placeholderTextColor={theme.colors.text.tertiary}
                   style={styles.amountInput}
                 />
 
                 {recActualStr.trim() !== '' && (
                   <View style={styles.deltaBox}>
                     <Text style={styles.deltaText}>
-                      自動計算差額：{recDelta >= 0 ? `+$${recDelta}（多出來的錢）` : `-$${Math.abs(recDelta)}（遺忘黑洞支出）`}
+                      計算差額：{recDelta >= 0 ? `+$${recDelta}` : `-$${Math.abs(recDelta)}`}
                     </Text>
                   </View>
                 )}
 
                 {recDelta < 0 && (
                   <View style={styles.switchRow}>
-                    <Text style={styles.switchLabel}>將差額計入本月消費預算（關閉則僅校正餘額、不扣今日額度）</Text>
+                    <Text style={styles.switchLabel}>將差額計入本月消費預算（關閉則僅校正餘額）</Text>
                     <Switch value={recAffectsBudget} onValueChange={setRecAffectsBudget} />
                   </View>
                 )}
 
                 <Pressable onPress={handleReconcileSubmit} style={styles.primaryBtn}>
-                  <Text style={styles.primaryBtnText}>✨ 一鍵魔術平帳對齊</Text>
+                  <Text style={styles.primaryBtnText}>確認平帳對齊</Text>
                 </Pressable>
               </View>
             )}
@@ -510,26 +510,23 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(8, 7, 5, 0.78)',
+    backgroundColor: 'rgba(5, 6, 8, 0.78)',
     justifyContent: 'flex-end',
   },
   sheet: {
     width: '100%',
     maxWidth: 430,
     alignSelf: 'center',
-    backgroundColor: 'rgba(24, 20, 16, 0.95)',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    backgroundColor: theme.colors.background.elevatedSurface,
+    borderTopLeftRadius: theme.radii.outerCard,
+    borderTopRightRadius: theme.radii.outerCard,
     borderCurve: 'continuous',
     paddingHorizontal: 18,
     paddingTop: 16,
     paddingBottom: 28,
     maxHeight: '88%',
-    borderWidth: 0.8,
-    borderTopColor: 'rgba(255, 230, 190, 0.38)',
-    borderLeftColor: 'rgba(255, 230, 190, 0.20)',
-    borderRightColor: 'rgba(212, 175, 55, 0.06)',
-    borderBottomColor: 'rgba(212, 175, 55, 0.06)',
+    borderWidth: 1,
+    borderColor: theme.colors.glass.fallbackBorder,
   },
   sheetHeader: {
     flexDirection: 'row',
@@ -538,23 +535,20 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sheetTitle: {
-    color: '#FAF6F0',
+    color: theme.colors.text.primary,
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
     letterSpacing: -0.3,
   },
   closeBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
-  },
-  closeBtnText: {
-    color: '#E6D5B8',
-    fontSize: 12,
-    fontWeight: '600',
+    width: 30,
+    height: 30,
+    borderRadius: theme.radii.pill,
+    backgroundColor: theme.colors.background.subtleSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   body: {
     paddingBottom: 12,
@@ -564,7 +558,7 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   helperText: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: theme.colors.text.secondary,
     fontSize: 12,
     lineHeight: 18,
   },
@@ -572,38 +566,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
-    backgroundColor: 'rgba(28, 24, 20, 0.6)',
-    borderRadius: 999,
+    backgroundColor: theme.colors.background.base,
+    borderRadius: theme.radii.control,
+    borderCurve: 'continuous',
     padding: 5,
-    borderWidth: 0.8,
-    borderTopColor: 'rgba(255, 230, 190, 0.38)',
-    borderLeftColor: 'rgba(255, 230, 190, 0.20)',
-    borderRightColor: 'rgba(212, 175, 55, 0.06)',
-    borderBottomColor: 'rgba(212, 175, 55, 0.06)',
+    borderWidth: 1,
+    borderColor: theme.colors.glass.fallbackBorder,
   },
   nlInput: {
     flex: 1,
     minWidth: 0,
-    color: '#FAF6F0',
+    color: theme.colors.text.primary,
     fontSize: 13,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 7,
   },
   nlBtn: {
-    backgroundColor: '#FBBF24',
+    backgroundColor: theme.colors.accent.primary,
     paddingVertical: 8,
     paddingHorizontal: 14,
-    borderRadius: 999,
+    borderRadius: theme.radii.chip,
   },
   nlBtnText: {
-    color: '#080705',
-    fontWeight: '700',
+    color: theme.colors.text.inverse,
+    fontWeight: '600',
     fontSize: 12,
   },
   label: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: theme.colors.text.secondary,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '500',
     marginTop: 4,
   },
   segmentRow: {
@@ -614,50 +606,52 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     paddingHorizontal: 10,
-    borderRadius: 999,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    borderRadius: theme.radii.control,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.subtleSurface,
     alignItems: 'center',
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
   },
   segmentActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.22)',
-    borderColor: 'rgba(251, 191, 36, 0.45)',
+    backgroundColor: theme.colors.accent.subtleBg,
+    borderColor: theme.colors.accent.subtleBorder,
   },
   segmentActiveGreen: {
-    backgroundColor: 'rgba(245, 158, 11, 0.22)',
-    borderColor: 'rgba(251, 191, 36, 0.45)',
+    backgroundColor: theme.colors.semantic.remainingSubtle,
+    borderColor: theme.colors.accent.subtleBorder,
   },
   segmentText: {
-    color: '#E6D5B8',
+    color: theme.colors.text.secondary,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   segmentTextActive: {
-    color: '#FBBF24',
-    fontWeight: '700',
+    color: theme.colors.text.primary,
+    fontWeight: '600',
   },
   chipBtn: {
     flex: 1,
     paddingVertical: 9,
-    borderRadius: 999,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    borderRadius: theme.radii.chip,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.subtleSurface,
     alignItems: 'center',
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
   },
   chipBtnActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.22)',
-    borderColor: 'rgba(251, 191, 36, 0.45)',
+    backgroundColor: theme.colors.accent.subtleBg,
+    borderColor: theme.colors.accent.subtleBorder,
   },
   chipText: {
-    color: '#E6D5B8',
+    color: theme.colors.text.secondary,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   chipTextActive: {
-    color: '#FBBF24',
-    fontWeight: '700',
+    color: theme.colors.text.primary,
+    fontWeight: '600',
   },
   wrapRow: {
     flexDirection: 'row',
@@ -667,23 +661,23 @@ const styles = StyleSheet.create({
   tagBtn: {
     paddingVertical: 7,
     paddingHorizontal: 12,
-    borderRadius: 999,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderRadius: theme.radii.pill,
+    backgroundColor: theme.colors.background.subtleSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
   },
   tagBtnActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.22)',
-    borderColor: 'rgba(251, 191, 36, 0.45)',
+    backgroundColor: theme.colors.accent.subtleBg,
+    borderColor: theme.colors.accent.subtleBorder,
   },
   tagText: {
-    color: '#E6D5B8',
+    color: theme.colors.text.secondary,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   tagTextActive: {
-    color: '#FBBF24',
-    fontWeight: '700',
+    color: theme.colors.text.primary,
+    fontWeight: '600',
   },
   amountInputRow: {
     flexDirection: 'row',
@@ -693,156 +687,163 @@ const styles = StyleSheet.create({
   amountInput: {
     flex: 1,
     minWidth: 0,
-    backgroundColor: 'rgba(28, 24, 20, 0.65)',
-    color: '#FAF6F0',
-    fontSize: 24,
-    fontWeight: '700',
+    backgroundColor: theme.colors.background.base,
+    color: theme.colors.text.primary,
+    fontSize: 22,
+    fontWeight: '600',
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.5,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 18,
-    borderWidth: 0.8,
-    borderTopColor: 'rgba(255, 230, 190, 0.38)',
-    borderLeftColor: 'rgba(255, 230, 190, 0.20)',
-    borderRightColor: 'rgba(212, 175, 55, 0.06)',
-    borderBottomColor: 'rgba(212, 175, 55, 0.06)',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: theme.radii.control,
+    borderCurve: 'continuous',
+    borderWidth: 1,
+    borderColor: theme.colors.glass.fallbackBorder,
   },
   textInput: {
     minWidth: 0,
-    backgroundColor: 'rgba(28, 24, 20, 0.65)',
-    color: '#FAF6F0',
+    backgroundColor: theme.colors.background.base,
+    color: theme.colors.text.primary,
     fontSize: 14,
     paddingHorizontal: 14,
     paddingVertical: 11,
-    borderRadius: 16,
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderRadius: theme.radii.innerCard,
+    borderCurve: 'continuous',
+    borderWidth: 1,
+    borderColor: theme.colors.glass.fallbackBorder,
   },
   feelingHint: {
-    color: '#FBBF24',
+    color: theme.colors.text.secondary,
     fontSize: 12,
     fontWeight: '500',
+    fontVariant: ['tabular-nums'],
   },
   primaryBtn: {
-    backgroundColor: '#FBBF24',
-    paddingVertical: 14,
-    borderRadius: 999,
+    backgroundColor: theme.colors.accent.primary,
+    paddingVertical: 13,
+    borderRadius: theme.radii.control,
+    borderCurve: 'continuous',
     alignItems: 'center',
     marginTop: 6,
   },
   primaryBtnText: {
-    color: '#080705',
+    color: theme.colors.text.inverse,
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '600',
   },
   atmChip: {
     flex: 1,
     minWidth: '22%',
-    paddingVertical: 11,
-    borderRadius: 999,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    paddingVertical: 10,
+    borderRadius: theme.radii.chip,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.subtleSurface,
     alignItems: 'center',
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
   },
   atmChipActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.22)',
-    borderColor: 'rgba(251, 191, 36, 0.45)',
+    backgroundColor: theme.colors.accent.subtleBg,
+    borderColor: theme.colors.accent.subtleBorder,
   },
   atmChipText: {
-    color: '#E6D5B8',
+    color: theme.colors.text.secondary,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '500',
     fontVariant: ['tabular-nums'],
   },
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(28, 24, 20, 0.6)',
+    backgroundColor: theme.colors.background.subtleSurface,
     padding: 12,
-    borderRadius: 16,
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.2)',
+    borderRadius: theme.radii.innerCard,
+    borderCurve: 'continuous',
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
   },
   switchLabel: {
-    color: '#E6D5B8',
+    color: theme.colors.text.secondary,
     fontSize: 12,
     flex: 1,
     marginRight: 8,
   },
   scoldCard: {
     padding: 14,
-    borderRadius: 20,
-    borderWidth: 0.8,
-    borderTopColor: 'rgba(255, 230, 190, 0.38)',
-    borderLeftColor: 'rgba(255, 230, 190, 0.20)',
-    borderRightColor: 'rgba(212, 175, 55, 0.06)',
-    borderBottomColor: 'rgba(212, 175, 55, 0.06)',
-    backgroundColor: 'rgba(28, 24, 20, 0.7)',
+    borderRadius: theme.radii.control,
+    borderCurve: 'continuous',
+    borderWidth: 1,
+    borderColor: theme.colors.glass.fallbackBorder,
+    backgroundColor: theme.colors.background.subtleSurface,
     gap: 6,
   },
   scoldStop: {
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
+    backgroundColor: theme.colors.semantic.dangerSubtle,
+    borderColor: 'rgba(181, 90, 82, 0.32)',
   },
   scoldThink: {
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    backgroundColor: theme.colors.semantic.warningSubtle,
+    borderColor: 'rgba(184, 134, 72, 0.32)',
   },
   scoldOk: {
-    backgroundColor: 'rgba(28, 24, 20, 0.6)',
+    backgroundColor: theme.colors.background.subtleSurface,
   },
   scoldHeadline: {
-    color: '#FAF6F0',
+    color: theme.colors.text.primary,
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '600',
     marginBottom: 4,
   },
   scoldLine: {
-    color: '#E6D5B8',
+    color: theme.colors.text.secondary,
     fontSize: 13,
     lineHeight: 20,
+    fontVariant: ['tabular-nums'],
   },
   scoldActions: {
     gap: 8,
     marginTop: 6,
   },
   resistBtn: {
-    backgroundColor: '#FBBF24',
+    backgroundColor: theme.colors.accent.primary,
     paddingVertical: 13,
     paddingHorizontal: 14,
-    borderRadius: 999,
+    borderRadius: theme.radii.control,
+    borderCurve: 'continuous',
     alignItems: 'center',
   },
   resistBtnText: {
-    color: '#080705',
-    fontWeight: '800',
+    color: theme.colors.text.inverse,
+    fontWeight: '600',
     fontSize: 13,
   },
   buyAnywayBtn: {
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    backgroundColor: theme.colors.background.subtleSurface,
     paddingVertical: 11,
-    borderRadius: 999,
+    borderRadius: theme.radii.control,
+    borderCurve: 'continuous',
     alignItems: 'center',
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
   },
   buyAnywayText: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontWeight: '600',
+    color: theme.colors.text.tertiary,
+    fontWeight: '500',
     fontSize: 12,
   },
   deltaBox: {
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
+    backgroundColor: theme.colors.accent.subtleBg,
     padding: 12,
-    borderRadius: 16,
-    borderWidth: 0.8,
-    borderColor: 'rgba(251, 191, 36, 0.3)',
+    borderRadius: theme.radii.innerCard,
+    borderCurve: 'continuous',
+    borderWidth: 1,
+    borderColor: theme.colors.accent.subtleBorder,
   },
   deltaText: {
-    color: '#FAF6F0',
+    color: theme.colors.text.primary,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
 });

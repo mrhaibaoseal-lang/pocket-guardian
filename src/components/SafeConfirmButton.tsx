@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { theme } from '../theme/tokens';
 
 interface SafeConfirmButtonProps {
   label: string;
@@ -10,13 +11,9 @@ interface SafeConfirmButtonProps {
   compact?: boolean;
 }
 
-/**
- * 🛡️ 二次確認防誤觸按鈕 (Desert Titanium & Warm Amber Liquid Glass):
- * First tap arms the button in warm champagne gold for 3 seconds; second tap executes.
- */
 export function SafeConfirmButton({
   label,
-  confirmLabel = '再按一次確認 (3s)',
+  confirmLabel = '再按一次確認',
   onConfirm,
   style,
   compact = false,
@@ -32,12 +29,17 @@ export function SafeConfirmButton({
   const handlePress = () => {
     if (!armed) {
       try {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       } catch {
         // ignore on web
       }
       setArmed(true);
     } else {
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      } catch {
+        // ignore on web
+      }
       setArmed(false);
       onConfirm();
     }
@@ -64,35 +66,35 @@ const styles = StyleSheet.create({
   base: {
     paddingVertical: 10,
     paddingHorizontal: 14,
-    borderRadius: 999,
+    borderRadius: theme.radii.control,
     borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 0.8,
+    borderWidth: 1,
   },
   compact: {
     paddingVertical: 5,
-    paddingHorizontal: 11,
-    borderRadius: 999,
+    paddingHorizontal: 10,
+    borderRadius: theme.radii.pill,
   },
   idle: {
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    backgroundColor: theme.colors.background.subtleSurface,
+    borderColor: theme.colors.glass.subtleBorder,
   },
   armed: {
-    backgroundColor: '#FBBF24',
-    borderColor: '#FDE68A',
+    backgroundColor: theme.colors.semantic.dangerSubtle,
+    borderColor: theme.colors.semantic.danger,
   },
   text: {
-    color: '#E6D5B8',
-    fontSize: 12,
-    fontWeight: '700',
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.caption.fontSize,
+    fontWeight: '500',
   },
   compactText: {
-    fontSize: 11,
+    fontSize: theme.typography.micro.fontSize,
   },
   armedText: {
-    color: '#080705',
-    fontWeight: '800',
+    color: theme.colors.semantic.danger,
+    fontWeight: '600',
   },
 });

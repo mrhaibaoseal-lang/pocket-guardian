@@ -7,8 +7,11 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { AppSymbol } from '../components/AppSymbol';
+import { TactilePressable } from '../components/iosAnimations';
 import { LiquidGlassCard } from '../components/LiquidGlassView';
 import { useLedger } from '../store/useLedger';
+import { theme } from '../theme/tokens';
 
 export function ShortcutsTestBenchScreen() {
   const { data, meta, syncFromCloud, deleteInboxEvent, resolveInboxEvent } = useLedger();
@@ -40,51 +43,55 @@ export function ShortcutsTestBenchScreen() {
     >
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.screenTitle}>iOS 捷徑與收件匣</Text>
+          <Text style={styles.screenTitle}>捷徑與收件匣</Text>
           <Text style={styles.screenSub}>
-            捷徑雲端接收、未入帳收件匣與自動化指南
+            雲端 Webhook 狀態、待確認事件與自動化設定
           </Text>
         </View>
-        <Pressable
-          style={styles.syncBtn}
+        <TactilePressable
           onPress={() => {
             syncFromCloud().catch(() => undefined);
           }}
+          contentStyle={styles.syncBtn}
         >
           <Text style={styles.syncBtnText}>同步雲端</Text>
-        </Pressable>
+        </TactilePressable>
       </View>
 
-      {/* Cloud Endpoint Status Card */}
-      <LiquidGlassCard shape="card" elevated contentStyle={styles.endpointCard}>
-        <Text style={styles.endpointLabel}>雲端捷徑接收網址</Text>
+      {/* Single Focal Glass Card: Cloud Endpoint Status */}
+      <LiquidGlassCard shape="card" glassStyle="regular" contentStyle={styles.endpointCard}>
+        <Text style={styles.endpointLabel}>雲端捷徑接收端點</Text>
         <Text style={styles.endpointUrl} selectable>
           {meta.workerUrl.replace(/\/+$/, '')}/api/ingest
         </Text>
       </LiquidGlassCard>
 
-      {/* Unbooked / Skipped Inbox (Collapsible Drawer) */}
-      <LiquidGlassCard shape="card" elevated contentStyle={styles.sectionCard}>
+      {/* Unbooked / Skipped Inbox (Non-Glass Matte Surface) */}
+      <View style={styles.surfaceSection}>
         <Pressable
           style={styles.collapsibleHeaderRow}
           onPress={() => setInboxExpanded((prev) => !prev)}
         >
           <View style={{ flex: 1 }}>
             <Text style={styles.sectionTitle}>
-              📥 未入帳收件匣 ({inboxEvents.length})
+              未入帳收件匣 ({inboxEvents.length})
             </Text>
             <Text style={styles.screenSub}>
               {inboxExpanded ? '點選收起' : '外幣、缺金額或略過事件 · 點選展開'}
             </Text>
           </View>
           <View style={styles.collapseChevronBtn}>
-            <Text style={styles.collapseChevron}>{inboxExpanded ? '▴' : '▾'}</Text>
+            <AppSymbol
+              name={inboxExpanded ? 'chevron.down' : 'chevron.right'}
+              size={12}
+              color={theme.colors.text.secondary}
+            />
           </View>
         </Pressable>
 
         {inboxExpanded && (
           inboxEvents.length === 0 ? (
-            <Text style={styles.emptyText}>目前沒有待確認或未入帳的事件 🎉</Text>
+            <Text style={styles.emptyText}>目前沒有待確認或未入帳的事件</Text>
           ) : (
             inboxEvents.map((ev) => {
               const isEditing = editingId === ev.id;
@@ -112,14 +119,15 @@ export function ShortcutsTestBenchScreen() {
                         }}
                       >
                         <Text style={styles.inboxActionText}>
-                          {isEditing ? '取消' : '✍️ 補記'}
+                          {isEditing ? '取消' : '補記'}
                         </Text>
                       </Pressable>
                       <Pressable
                         style={styles.inboxDeleteBtn}
                         onPress={() => deleteInboxEvent(ev.id)}
+                        hitSlop={6}
                       >
-                        <Text style={styles.inboxDeleteText}>🗑️</Text>
+                        <AppSymbol name="xmark" size={11} color={theme.colors.text.tertiary} />
                       </Pressable>
                     </View>
                   </View>
@@ -134,7 +142,7 @@ export function ShortcutsTestBenchScreen() {
                       <TextInput
                         style={[styles.inlineInput, { width: 95 }]}
                         placeholder="台幣金額"
-                        placeholderTextColor="rgba(235,225,210,0.4)"
+                        placeholderTextColor={theme.colors.text.tertiary}
                         keyboardType="numeric"
                         value={draftAmount}
                         onChangeText={setDraftAmount}
@@ -142,7 +150,7 @@ export function ShortcutsTestBenchScreen() {
                       <TextInput
                         style={[styles.inlineInput, { flex: 1 }]}
                         placeholder="商家或備註"
-                        placeholderTextColor="rgba(235,225,210,0.4)"
+                        placeholderTextColor={theme.colors.text.tertiary}
                         value={draftMerchant}
                         onChangeText={setDraftMerchant}
                       />
@@ -165,67 +173,63 @@ export function ShortcutsTestBenchScreen() {
             })
           )
         )}
-      </LiquidGlassCard>
+      </View>
 
-      {/* iOS Shortcuts Setup Guide (Collapsible Drawer) */}
-      <LiquidGlassCard shape="card" contentStyle={styles.sectionCard}>
+      {/* iOS Shortcuts Setup Guide (Non-Glass Matte Surface) */}
+      <View style={styles.surfaceSection}>
         <Pressable
           style={styles.collapsibleHeaderRow}
           onPress={() => setGuideExpanded((prev) => !prev)}
         >
           <View style={{ flex: 1 }}>
-            <Text style={styles.sectionTitle}>
-              📖 捷徑設定指南
-            </Text>
+            <Text style={styles.sectionTitle}>捷徑設定指南</Text>
             <Text style={styles.screenSub}>
               {guideExpanded ? '點選收起' : 'Apple Pay、銀行通知與截圖捷徑 · 點選展開'}
             </Text>
           </View>
           <View style={styles.collapseChevronBtn}>
-            <Text style={styles.collapseChevron}>{guideExpanded ? '▴' : '▾'}</Text>
+            <AppSymbol
+              name={guideExpanded ? 'chevron.down' : 'chevron.right'}
+              size={12}
+              color={theme.colors.text.secondary}
+            />
           </View>
         </Pressable>
 
         {guideExpanded && (
           <>
             <View style={styles.guideStep}>
-              <Text style={styles.guideStepTitle}>
-                Apple Pay 感應自動記帳
-              </Text>
+              <Text style={styles.guideStepTitle}>Apple Pay 感應自動記帳</Text>
               <Text style={styles.guideStepText}>
                 1. 自動化觸發：「感應卡片時」{'\n'}
-                2. 加入【文字】模塊，選取捷徑輸入的「商家」與「數量」{'\n'}
-                3. 加入【🛡️ 智慧入帳】，傳入該文字
+                2. 加入「文字」模塊，選取捷徑輸入的「商家」與「數量」{'\n'}
+                3. 加入「智慧入帳」，傳入該文字
               </Text>
             </View>
 
             <View style={styles.guideStep}>
-              <Text style={styles.guideStepTitle}>
-                玉山銀行推播自動記帳
-              </Text>
+              <Text style={styles.guideStepTitle}>玉山銀行推播自動記帳</Text>
               <Text style={styles.guideStepText}>
                 1. 自動化觸發：「收到玉山銀行通知時」{'\n'}
-                2. 加入【🛡️ 智慧入帳】，選取「通知」
+                2. 加入「智慧入帳」，選取「通知」
               </Text>
             </View>
 
             <View style={styles.guideStep}>
-              <Text style={styles.guideStepTitle}>
-                轉帳／存摺截圖記帳（動作按鈕／捷徑）
-              </Text>
+              <Text style={styles.guideStepTitle}>轉帳／存摺截圖記帳（動作按鈕）</Text>
               <Text style={styles.guideStepText}>
                 1. 加入「拍攝螢幕快照」{'\n'}
-                2. 加入【🛡️ 智慧入帳】，在「畫面截圖影像」選取「螢幕快照」原圖
+                2. 加入「智慧入帳」，在「畫面截圖影像」選取「螢幕快照」原圖
               </Text>
             </View>
           </>
         )}
-      </LiquidGlassCard>
+      </View>
 
-      {/* Recent Raw Event Log */}
-      <LiquidGlassCard shape="card" contentStyle={styles.sectionCard}>
+      {/* Recent Raw Event Log (Non-Glass Matte Surface) */}
+      <View style={styles.surfaceSection}>
         <Text style={styles.sectionTitle}>
-          最近收到的捷徑事件紀錄 ({data.events.length})
+          近期收訊紀錄 ({data.events.length})
         </Text>
         {data.events.length === 0 ? (
           <Text style={styles.emptyText}>尚無收訊紀錄</Text>
@@ -243,7 +247,7 @@ export function ShortcutsTestBenchScreen() {
               </View>
             ))
         )}
-      </LiquidGlassCard>
+      </View>
     </ScrollView>
   );
 }
@@ -254,10 +258,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   content: {
-    paddingHorizontal: 16,
+    paddingHorizontal: theme.spacing.md,
     paddingTop: 10,
     paddingBottom: 32,
-    gap: 14,
+    gap: theme.spacing.md,
   },
   headerRow: {
     flexDirection: 'row',
@@ -266,52 +270,58 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   screenTitle: {
-    color: '#FAF6F0',
+    color: theme.colors.text.primary,
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: '600',
     letterSpacing: -0.4,
   },
   screenSub: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 12,
+    color: theme.colors.text.tertiary,
+    fontSize: theme.typography.caption.fontSize,
     marginTop: 2,
   },
   syncBtn: {
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
-    borderColor: 'rgba(251, 191, 36, 0.3)',
-    borderWidth: 0.8,
+    backgroundColor: theme.colors.accent.subtleBg,
+    borderColor: theme.colors.accent.subtleBorder,
+    borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 999,
+    borderRadius: theme.radii.pill,
+    borderCurve: 'continuous',
   },
   syncBtnText: {
-    color: '#FBBF24',
-    fontSize: 12,
-    fontWeight: '700',
+    color: theme.colors.text.primary,
+    fontSize: theme.typography.caption.fontSize,
+    fontWeight: '500',
   },
   endpointCard: {
-    padding: 15,
+    padding: theme.spacing.md,
     gap: 4,
   },
   endpointLabel: {
-    color: '#FBBF24',
-    fontSize: 11,
-    fontWeight: '700',
+    color: theme.colors.text.tertiary,
+    fontSize: theme.typography.micro.fontSize,
+    fontWeight: '500',
   },
   endpointUrl: {
-    color: '#FAF6F0',
-    fontSize: 12,
-    fontWeight: '600',
+    color: theme.colors.text.primary,
+    fontSize: theme.typography.caption.fontSize,
+    fontWeight: '500',
     fontVariant: ['tabular-nums'],
   },
-  sectionCard: {
-    padding: 15,
+  surfaceSection: {
+    padding: theme.spacing.md,
     gap: 10,
+    borderRadius: theme.radii.listGroup,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.listSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
   },
   sectionTitle: {
-    color: '#FAF6F0',
-    fontSize: 15,
-    fontWeight: '700',
+    color: theme.colors.text.primary,
+    fontSize: theme.typography.bodyMedium.fontSize,
+    fontWeight: '600',
   },
   collapsibleHeaderRow: {
     flexDirection: 'row',
@@ -322,56 +332,53 @@ const styles = StyleSheet.create({
   collapseChevronBtn: {
     width: 28,
     height: 28,
-    borderRadius: 999,
-    backgroundColor: 'rgba(214, 195, 165, 0.1)',
+    borderRadius: theme.radii.pill,
+    backgroundColor: theme.colors.background.subtleSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  collapseChevron: {
-    color: '#E6D5B8',
-    fontSize: 13,
-    fontWeight: '700',
-  },
   guideStep: {
-    backgroundColor: 'rgba(214, 195, 165, 0.08)',
-    borderColor: 'rgba(230, 213, 184, 0.18)',
-    borderWidth: 0.8,
-    borderRadius: 16,
-    padding: 11,
-    gap: 3,
+    backgroundColor: theme.colors.background.subtleSurface,
+    borderColor: theme.colors.glass.subtleBorder,
+    borderWidth: 1,
+    borderRadius: theme.radii.innerCard,
+    borderCurve: 'continuous',
+    padding: 12,
+    gap: 4,
   },
   guideStepTitle: {
-    color: '#FBBF24',
-    fontSize: 13,
-    fontWeight: '700',
+    color: theme.colors.text.primary,
+    fontSize: theme.typography.caption.fontSize,
+    fontWeight: '600',
   },
   guideStepText: {
-    color: '#E6D5B8',
-    fontSize: 12,
-    lineHeight: 17,
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.caption.fontSize,
+    lineHeight: 18,
   },
   emptyText: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 12,
+    color: theme.colors.text.tertiary,
+    fontSize: theme.typography.caption.fontSize,
     paddingVertical: 8,
   },
   eventRow: {
-    backgroundColor: 'rgba(214, 195, 165, 0.08)',
-    borderColor: 'rgba(230, 213, 184, 0.18)',
-    borderWidth: 0.8,
-    borderRadius: 14,
+    backgroundColor: theme.colors.background.subtleSurface,
+    borderColor: theme.colors.glass.subtleBorder,
+    borderWidth: 1,
+    borderRadius: theme.radii.innerCard,
+    borderCurve: 'continuous',
     padding: 10,
-    gap: 2,
+    gap: 3,
   },
   eventMeta: {
-    color: '#FAF6F0',
-    fontSize: 12,
-    fontWeight: '700',
+    color: theme.colors.text.primary,
+    fontSize: theme.typography.caption.fontSize,
+    fontWeight: '500',
     fontVariant: ['tabular-nums'],
   },
   eventReason: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 11,
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.micro.fontSize,
   },
   inboxTopRow: {
     flexDirection: 'row',
@@ -385,33 +392,31 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   inboxActionBtn: {
-    backgroundColor: 'rgba(245, 158, 11, 0.16)',
-    borderColor: 'rgba(251, 191, 36, 0.35)',
-    borderWidth: 0.8,
+    backgroundColor: theme.colors.accent.subtleBg,
+    borderColor: theme.colors.accent.subtleBorder,
+    borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 999,
+    borderRadius: theme.radii.pill,
   },
   inboxActionText: {
-    color: '#FBBF24',
-    fontSize: 11,
-    fontWeight: '700',
+    color: theme.colors.text.primary,
+    fontSize: theme.typography.micro.fontSize,
+    fontWeight: '500',
   },
   inboxDeleteBtn: {
-    backgroundColor: 'rgba(214, 195, 165, 0.1)',
-    borderColor: 'rgba(230, 213, 184, 0.2)',
-    borderWidth: 0.8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  inboxDeleteText: {
-    color: '#E6D5B8',
-    fontSize: 11,
+    backgroundColor: theme.colors.background.subtleSurface,
+    borderColor: theme.colors.glass.subtleBorder,
+    borderWidth: 1,
+    width: 24,
+    height: 24,
+    borderRadius: theme.radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   rawPreview: {
-    color: 'rgba(230, 213, 184, 0.72)',
-    fontSize: 11,
+    color: theme.colors.text.tertiary,
+    fontSize: theme.typography.micro.fontSize,
     marginTop: 2,
     fontVariant: ['tabular-nums'],
   },
@@ -422,24 +427,25 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   inlineInput: {
-    backgroundColor: 'rgba(28, 24, 20, 0.75)',
-    borderColor: 'rgba(230, 213, 184, 0.28)',
-    borderWidth: 0.8,
-    borderRadius: 10,
+    backgroundColor: theme.colors.background.base,
+    borderColor: theme.colors.glass.fallbackBorder,
+    borderWidth: 1,
+    borderRadius: theme.radii.chip,
     paddingHorizontal: 8,
     paddingVertical: 6,
-    color: '#FAF6F0',
-    fontSize: 12,
+    color: theme.colors.text.primary,
+    fontSize: theme.typography.caption.fontSize,
+    fontVariant: ['tabular-nums'],
   },
   confirmBookBtn: {
-    backgroundColor: '#FBBF24',
+    backgroundColor: theme.colors.accent.primary,
     paddingHorizontal: 12,
     paddingVertical: 7,
-    borderRadius: 10,
+    borderRadius: theme.radii.chip,
   },
   confirmBookText: {
-    color: '#080705',
-    fontSize: 12,
-    fontWeight: '800',
+    color: theme.colors.text.inverse,
+    fontSize: theme.typography.caption.fontSize,
+    fontWeight: '600',
   },
 });

@@ -1,10 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { Transaction } from '../../core';
+import { AppSymbol, type AppIconName } from '../components/AppSymbol';
 import { StaggeredItem, triggerHaptic } from '../components/iosAnimations';
-import { LiquidGlassCard } from '../components/LiquidGlassView';
+import { LiquidGlassCard, LiquidGlassGroup } from '../components/LiquidGlassView';
 import { SafeConfirmButton } from '../components/SafeConfirmButton';
 import { useLedger } from '../store/useLedger';
+import { theme } from '../theme/tokens';
 
 function formatTaipeiTime(iso: string): string {
   try {
@@ -23,21 +25,31 @@ function formatTaipeiTime(iso: string): string {
 }
 
 function methodBadgeText(tx: Transaction): string {
-  if (tx.type === 'transfer') return '⇄ ATM 內部互轉';
-  if (tx.type === 'adjustment') return '⚖ 魔術平帳校正';
-  if (tx.type === 'income') return '↓ 收入入帳';
+  if (tx.type === 'transfer') return 'ATM 內部互轉';
+  if (tx.type === 'adjustment') return '餘額平帳校正';
+  if (tx.type === 'income') return '收入入帳';
   switch (tx.method) {
     case 'apple_pay':
-      return ' Apple Pay (玉山)';
+      return 'Apple Pay (玉山)';
     case 'debit_card':
-      return '▣ 玉山簽帳金融卡';
+      return '玉山簽帳金融卡';
     case 'bank_transfer':
-      return '↗ 玉山銀行轉帳';
+      return '玉山銀行轉帳';
     case 'cash':
-      return '◈ 現金';
+      return '現金';
     default:
-      return '◈ 其他';
+      return '其他';
   }
+}
+
+function iconForTx(tx: Transaction): AppIconName {
+  if (tx.type === 'transfer') return 'arrow.left.arrow.right';
+  if (tx.type === 'adjustment') return 'equal.circle';
+  if (tx.type === 'income') return 'arrow.down.left';
+  if (tx.method === 'apple_pay') return 'wave.3.right';
+  if (tx.method === 'bank_transfer') return 'arrow.up.right';
+  if (tx.method === 'debit_card') return 'creditcard';
+  return 'banknote';
 }
 
 export function TransactionsScreen() {
@@ -109,7 +121,7 @@ export function TransactionsScreen() {
         </View>
       </View>
 
-      <View style={styles.segmentRow}>
+      <LiquidGlassGroup spacing={8} style={styles.segmentRow}>
         <Pressable
           style={[styles.segmentBtn, viewMode === 'active' && styles.segmentBtnActive]}
           onPress={() => {
@@ -143,7 +155,7 @@ export function TransactionsScreen() {
             7天回收桶 ({trashTxs.length})
           </Text>
         </Pressable>
-      </View>
+      </LiquidGlassGroup>
 
       <ScrollView
         style={styles.listScroll}
@@ -151,10 +163,10 @@ export function TransactionsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {list.length === 0 ? (
-          <LiquidGlassCard shape="card" elevated contentStyle={styles.emptyBox}>
-            <Text style={styles.emptyEmoji}>
-              {viewMode === 'active' ? '' : '◈'}
-            </Text>
+          <View style={styles.emptyBox}>
+            <View style={styles.emptyIconCircle}>
+              <AppSymbol name="list.bullet" size={18} color={theme.colors.text.tertiary} />
+            </View>
             <Text style={styles.emptyTitle}>
               {viewMode === 'active' ? '目前沒有交易紀錄' : '回收桶是空的'}
             </Text>
@@ -163,7 +175,7 @@ export function TransactionsScreen() {
                 ? '可由首頁快速記帳，或透過 iOS 捷徑自動接收 Apple Pay 與玉山通知'
                 : '被撤銷的交易會在這裡保留 7 天，隨時可無損還原'}
             </Text>
-          </LiquidGlassCard>
+          </View>
         ) : (
           list.map((tx, idx) => {
             const isMerged = Boolean(
@@ -177,207 +189,206 @@ export function TransactionsScreen() {
               tx.type === 'income' || (tx.type === 'adjustment' && tx.amount > 0);
 
             const amountColor = isPositive
-              ? '#FDE68A'
+              ? theme.colors.semantic.remaining
               : tx.type === 'transfer' || tx.isAdvance
-              ? '#E6D5B8'
-              : '#FAF6F0';
+              ? theme.colors.text.secondary
+              : theme.colors.text.primary;
 
             const amountPrefix = isPositive
               ? '+'
               : tx.type === 'transfer'
-              ? '⇄ '
+              ? ''
               : '-';
 
             return (
               <StaggeredItem key={tx.id} index={idx}>
-                <LiquidGlassCard
-                  shape="card"
-                  elevated={isMerged}
-                  contentStyle={styles.txCard}
-                >
-                {/* Top Row: Title + Amount */}
-                <View style={styles.txTopRow}>
-                  <View style={styles.txTitleWrap}>
-                    <Text style={styles.txTitle}>
-                      {tx.merchant || tx.category || '未命名交易'}
-                    </Text>
-                    <Text style={styles.txMeta}>
-                      {formatTaipeiTime(tx.occurredAt)} · {methodBadgeText(tx)}
-                    </Text>
-                  </View>
-
-                  <View style={styles.txAmountWrap}>
-                    <Text style={[styles.txAmount, { color: amountColor }]}>
-                      {amountPrefix}${Math.abs(tx.amount).toLocaleString()}
-                    </Text>
-                    <Text style={styles.txAccountTag}>
-                      {tx.type === 'transfer'
-                        ? `${tx.accountId === 'bank' ? '玉山' : '現金'} → ${
-                            tx.toAccountId === 'bank' ? '玉山' : '現金'
-                          }`
-                        : tx.accountId === 'bank'
-                        ? '玉山銀行'
-                        : '現金錢包'}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Slot Pairing Badges (Desert Titanium & Warm Amber Pills) */}
-                {(tx.frontendSlot || tx.bankSlot || tx.isAdvance) && (
-                  <View style={styles.slotRow}>
-                    {tx.frontendSlot && (
-                      <View style={styles.slotPillTitanium}>
-                        <Text style={styles.slotPillTitaniumText}>
-                          前端槽：{tx.frontendSlot === 'apple_pay' ? 'Apple Pay 店名' : '手動輸入'}
-                        </Text>
-                      </View>
-                    )}
-                    {tx.bankSlot && (
-                      <View style={styles.slotPillTitanium}>
-                        <Text style={styles.slotPillTitaniumText}>
-                          銀行槽：{tx.bankSlot === 'efingo_push' ? '玉山 e.Fingo' : '轉帳成功頁'}
-                        </Text>
-                      </View>
-                    )}
-                    {isMerged && (
-                      <View style={styles.slotPillAmber}>
-                        <Text style={styles.slotPillAmberText}>
-                          雙源已合併上鎖（只扣 1 次錢）
-                        </Text>
-                      </View>
-                    )}
-                    {tx.isAdvance && (
-                      <View style={styles.slotPillAmber}>
-                        <Text style={styles.slotPillAmberText}>
-                          代墊款（不計入個人花費）
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                )}
-
-                {tx.note ? <Text style={styles.txNote}>備註：{tx.note}</Text> : null}
-
-                {/* Action Footer */}
-                {viewMode === 'active' ? (
-                  <View style={styles.txActionRow}>
-                    <View style={styles.leftActions}>
-                      {isMerged && (
-                        <Pressable
-                          style={styles.splitBtn}
-                          onPress={() => splitMergedTx(tx.id)}
-                        >
-                          <Text style={styles.splitBtnText}>
-                            我真的買了兩次（拆成兩筆）
-                          </Text>
-                        </Pressable>
-                      )}
-
-                      {tx.type === 'expense' && (
-                        <>
-                          <Pressable
-                            style={[
-                              styles.advanceBtn,
-                              tx.isAdvance && styles.advanceBtnActive,
-                            ]}
-                            onPress={() => toggleAdvanceTx(tx.id)}
-                          >
-                            <Text style={styles.advanceBtnText}>
-                              {tx.isAdvance ? '改回個人花費' : '標記幫朋友代墊'}
-                            </Text>
-                          </Pressable>
-
-                          <Pressable
-                            style={[
-                              styles.advanceBtn,
-                              debtSplitTxId === tx.id && styles.advanceBtnActive,
-                            ]}
-                            onPress={() => handleOpenDebtSplit(tx)}
-                          >
-                            <Text style={styles.advanceBtnText}>
-                              {debtSplitTxId === tx.id ? '✕ 收起拆帳' : '🤝 轉欠款／AA拆帳'}
-                            </Text>
-                          </Pressable>
-                        </>
-                      )}
+                <View style={styles.txCard}>
+                  <View style={styles.txTopRow}>
+                    <View style={styles.txIconCircle}>
+                      <AppSymbol name={iconForTx(tx)} size={15} color={theme.colors.text.secondary} />
                     </View>
-
-                    <SafeConfirmButton
-                      label="撤銷"
-                      confirmLabel="再點確認撤銷"
-                      onConfirm={() => softDeleteTx(tx.id)}
-                      compact
-                    />
-                  </View>
-                ) : (
-                  <View style={styles.txActionRow}>
-                    <Text style={styles.deletedTimeText}>
-                      已移入回收桶（7天內可還原）
-                    </Text>
-                    <Pressable
-                      style={styles.restoreBtn}
-                      onPress={() => restoreTx(tx.id)}
-                    >
-                      <Text style={styles.restoreBtnText}>一鍵無損還原</Text>
-                    </Pressable>
-                  </View>
-                )}
-
-                {/* Idea 2: Inline Convert/AA-Split to Debt Drawer */}
-                {viewMode === 'active' && debtSplitTxId === tx.id && (
-                  <View style={styles.debtSplitDrawer}>
-                    <Text style={styles.debtSplitTitle}>
-                      🧮 從這筆消費 (${tx.amount}) 轉出朋友欠款（代墊部分不吃個人預算）
-                    </Text>
-
-                    <View style={styles.debtSplitQuickRow}>
-                      {[
-                        { label: '2人平分', amt: Math.round(tx.amount / 2) },
-                        { label: '3人平分', amt: Math.round(tx.amount / 3) },
-                        { label: '4人平分', amt: Math.round(tx.amount / 4) },
-                        { label: '全額代墊', amt: tx.amount },
-                      ].map((q) => (
-                        <Pressable
-                          key={q.label}
-                          style={styles.debtQuickChip}
-                          onPress={() => setDebtAmountInput(String(Math.max(1, q.amt)))}
-                        >
-                          <Text style={styles.debtQuickChipText}>
-                            {q.label} (${q.amt})
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-
-                    <View style={styles.debtSplitInputRow}>
-                      <TextInput
-                        style={[styles.debtSplitInput, { flex: 1.4 }]}
-                        value={debtPeopleInput}
-                        onChangeText={setDebtPeopleInput}
-                        placeholder="朋友稱呼（多人用逗號，如：阿明, 小華）"
-                        placeholderTextColor="rgba(235, 225, 210, 0.35)"
-                      />
-                      <TextInput
-                        style={[styles.debtSplitInput, { flex: 0.8 }]}
-                        keyboardType="numeric"
-                        value={debtAmountInput}
-                        onChangeText={setDebtAmountInput}
-                        placeholder="每人金額"
-                        placeholderTextColor="rgba(235, 225, 210, 0.35)"
-                      />
-                    </View>
-
-                    <Pressable
-                      style={styles.debtSplitConfirmBtn}
-                      onPress={() => handleConfirmDebtSplit(tx)}
-                    >
-                      <Text style={styles.debtSplitConfirmText}>
-                        ✅ 建立欠款並保護個人預算
+                    <View style={styles.txTitleWrap}>
+                      <Text style={styles.txTitle}>
+                        {tx.merchant || tx.category || '未命名交易'}
                       </Text>
-                    </Pressable>
+                      <Text style={styles.txMeta}>
+                        {formatTaipeiTime(tx.occurredAt)} · {methodBadgeText(tx)}
+                      </Text>
+                    </View>
+
+                    <View style={styles.txAmountWrap}>
+                      <Text
+                        style={[styles.txAmount, { color: amountColor }]}
+                        maxFontSizeMultiplier={theme.typography.maxAmountFontScale}
+                      >
+                        {amountPrefix}${Math.abs(tx.amount).toLocaleString()}
+                      </Text>
+                      <Text style={styles.txAccountTag}>
+                        {tx.type === 'transfer'
+                          ? `${tx.accountId === 'bank' ? '玉山' : '現金'} → ${
+                              tx.toAccountId === 'bank' ? '玉山' : '現金'
+                            }`
+                          : tx.accountId === 'bank'
+                          ? '玉山銀行'
+                          : '現金錢包'}
+                      </Text>
+                    </View>
                   </View>
-                )}
-                </LiquidGlassCard>
+
+                  {(tx.frontendSlot || tx.bankSlot || tx.isAdvance) && (
+                    <View style={styles.slotRow}>
+                      {tx.frontendSlot && (
+                        <View style={styles.slotPillTitanium}>
+                          <Text style={styles.slotPillTitaniumText}>
+                            前端槽：{tx.frontendSlot === 'apple_pay' ? 'Apple Pay 店名' : '手動輸入'}
+                          </Text>
+                        </View>
+                      )}
+                      {tx.bankSlot && (
+                        <View style={styles.slotPillTitanium}>
+                          <Text style={styles.slotPillTitaniumText}>
+                            銀行槽：{tx.bankSlot === 'efingo_push' ? '玉山 e.Fingo' : '轉帳成功頁'}
+                          </Text>
+                        </View>
+                      )}
+                      {isMerged && (
+                        <View style={styles.slotPillAmber}>
+                          <AppSymbol name="lock.fill" size={9} color={theme.colors.text.secondary} />
+                          <Text style={styles.slotPillAmberText}>
+                            雙源已合併上鎖（只扣 1 次錢）
+                          </Text>
+                        </View>
+                      )}
+                      {tx.isAdvance && (
+                        <View style={styles.slotPillAmber}>
+                          <Text style={styles.slotPillAmberText}>
+                            代墊款（不計入個人花費）
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {tx.note ? <Text style={styles.txNote}>備註：{tx.note}</Text> : null}
+
+                  {viewMode === 'active' ? (
+                    <View style={styles.txActionRow}>
+                      <View style={styles.leftActions}>
+                        {isMerged && (
+                          <Pressable
+                            style={styles.splitBtn}
+                            onPress={() => splitMergedTx(tx.id)}
+                          >
+                            <Text style={styles.splitBtnText}>
+                              拆成兩筆獨立交易
+                            </Text>
+                          </Pressable>
+                        )}
+
+                        {tx.type === 'expense' && (
+                          <>
+                            <Pressable
+                              style={[
+                                styles.advanceBtn,
+                                tx.isAdvance && styles.advanceBtnActive,
+                              ]}
+                              onPress={() => toggleAdvanceTx(tx.id)}
+                            >
+                              <Text style={styles.advanceBtnText}>
+                                {tx.isAdvance ? '改回個人花費' : '標記朋友代墊'}
+                              </Text>
+                            </Pressable>
+
+                            <Pressable
+                              style={[
+                                styles.advanceBtn,
+                                debtSplitTxId === tx.id && styles.advanceBtnActive,
+                              ]}
+                              onPress={() => handleOpenDebtSplit(tx)}
+                            >
+                              <Text style={styles.advanceBtnText}>
+                                {debtSplitTxId === tx.id ? '收起拆帳' : '轉欠款 / AA拆帳'}
+                              </Text>
+                            </Pressable>
+                          </>
+                        )}
+                      </View>
+
+                      <SafeConfirmButton
+                        label="撤銷"
+                        confirmLabel="確認撤銷"
+                        onConfirm={() => softDeleteTx(tx.id)}
+                        compact
+                      />
+                    </View>
+                    ) : (
+                    <View style={styles.txActionRow}>
+                      <Text style={styles.deletedTimeText}>
+                        已移入回收桶（7天內可還原）
+                      </Text>
+                      <Pressable
+                        style={styles.restoreBtn}
+                        onPress={() => restoreTx(tx.id)}
+                      >
+                        <Text style={styles.restoreBtnText}>無損還原</Text>
+                      </Pressable>
+                    </View>
+                  )}
+
+                  {viewMode === 'active' && debtSplitTxId === tx.id && (
+                    <View style={styles.debtSplitDrawer}>
+                      <Text style={styles.debtSplitTitle}>
+                        從這筆消費 (${tx.amount}) 轉出朋友欠款（代墊部分不吃個人預算）
+                      </Text>
+
+                      <View style={styles.debtSplitQuickRow}>
+                        {[
+                          { label: '2人平分', amt: Math.round(tx.amount / 2) },
+                          { label: '3人平分', amt: Math.round(tx.amount / 3) },
+                          { label: '4人平分', amt: Math.round(tx.amount / 4) },
+                          { label: '全額代墊', amt: tx.amount },
+                        ].map((q) => (
+                          <Pressable
+                            key={q.label}
+                            style={styles.debtQuickChip}
+                            onPress={() => setDebtAmountInput(String(Math.max(1, q.amt)))}
+                          >
+                            <Text style={styles.debtQuickChipText}>
+                              {q.label} (${q.amt})
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+
+                      <View style={styles.debtSplitInputRow}>
+                        <TextInput
+                          style={[styles.debtSplitInput, { flex: 1.4 }]}
+                          value={debtPeopleInput}
+                          onChangeText={setDebtPeopleInput}
+                          placeholder="朋友稱呼（多人用逗號，如：阿明, 小華）"
+                          placeholderTextColor={theme.colors.text.tertiary}
+                        />
+                        <TextInput
+                          style={[styles.debtSplitInput, { flex: 0.8 }]}
+                          keyboardType="numeric"
+                          value={debtAmountInput}
+                          onChangeText={setDebtAmountInput}
+                          placeholder="每人金額"
+                          placeholderTextColor={theme.colors.text.tertiary}
+                        />
+                      </View>
+
+                      <Pressable
+                        style={styles.debtSplitConfirmBtn}
+                        onPress={() => handleConfirmDebtSplit(tx)}
+                      >
+                        <Text style={styles.debtSplitConfirmText}>
+                          建立欠款並保護個人預算
+                        </Text>
+                      </Pressable>
+                    </View>
+                  )}
+                </View>
               </StaggeredItem>
             );
           })
@@ -391,21 +402,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'transparent',
-    paddingHorizontal: 16,
+    paddingHorizontal: theme.spacing.md,
     paddingTop: 10,
   },
   headerRow: {
     marginBottom: 10,
   },
   screenTitle: {
-    color: '#FAF6F0',
+    color: theme.colors.text.primary,
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: '600',
     letterSpacing: -0.4,
   },
   screenSub: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 12,
+    color: theme.colors.text.tertiary,
+    fontSize: theme.typography.caption.fontSize,
     marginTop: 2,
   },
   segmentRow: {
@@ -416,24 +427,25 @@ const styles = StyleSheet.create({
   segmentBtn: {
     flex: 1,
     paddingVertical: 9,
-    borderRadius: 999,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderRadius: theme.radii.control,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.listSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
     alignItems: 'center',
   },
   segmentBtnActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.18)',
-    borderColor: 'rgba(251, 191, 36, 0.35)',
+    backgroundColor: theme.colors.accent.subtleBg,
+    borderColor: theme.colors.accent.subtleBorder,
   },
   segmentText: {
-    color: '#E6D5B8',
+    color: theme.colors.text.secondary,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   segmentTextActive: {
-    color: '#FBBF24',
-    fontWeight: '700',
+    color: theme.colors.text.primary,
+    fontWeight: '600',
   },
   listScroll: {
     flex: 1,
@@ -445,27 +457,41 @@ const styles = StyleSheet.create({
   emptyBox: {
     padding: 28,
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+    borderRadius: theme.radii.listGroup,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.listSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
   },
-  emptyEmoji: {
-    color: '#E6D5B8',
-    fontSize: 32,
-    marginBottom: 4,
+  emptyIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: theme.radii.innerCard,
+    backgroundColor: theme.colors.background.subtleSurface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
   },
   emptyTitle: {
-    color: '#FAF6F0',
-    fontSize: 16,
-    fontWeight: '700',
+    color: theme.colors.text.primary,
+    fontSize: 15,
+    fontWeight: '500',
   },
   emptyDesc: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 12,
+    color: theme.colors.text.tertiary,
+    fontSize: theme.typography.caption.fontSize,
     textAlign: 'center',
     lineHeight: 18,
   },
   txCard: {
     padding: 15,
     gap: 8,
+    borderRadius: theme.radii.listGroup,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.listSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
   },
   txTopRow: {
     flexDirection: 'row',
@@ -473,17 +499,27 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 10,
   },
+  txIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: theme.radii.chip,
+    borderCurve: 'continuous',
+    backgroundColor: theme.colors.background.subtleSurface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
   txTitleWrap: {
     flex: 1,
   },
   txTitle: {
-    color: '#FAF6F0',
-    fontSize: 16,
-    fontWeight: '700',
+    color: theme.colors.text.primary,
+    fontSize: 15,
+    fontWeight: '500',
   },
   txMeta: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 11,
+    color: theme.colors.text.tertiary,
+    fontSize: theme.typography.micro.fontSize,
     marginTop: 3,
     fontVariant: ['tabular-nums'],
   },
@@ -491,13 +527,13 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   txAmount: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '500',
     fontVariant: ['tabular-nums'],
-    letterSpacing: -0.5,
+    letterSpacing: -0.4,
   },
   txAccountTag: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: theme.colors.text.tertiary,
     fontSize: 10,
     marginTop: 2,
   },
@@ -507,33 +543,36 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   slotPillTitanium: {
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
-    borderColor: 'rgba(230, 213, 184, 0.25)',
-    borderWidth: 0.8,
-    paddingHorizontal: 9,
+    backgroundColor: theme.colors.background.subtleSurface,
+    borderColor: theme.colors.glass.subtleBorder,
+    borderWidth: 1,
+    paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 999,
+    borderRadius: theme.radii.pill,
   },
   slotPillTitaniumText: {
-    color: '#E6D5B8',
+    color: theme.colors.text.secondary,
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   slotPillAmber: {
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
-    borderColor: 'rgba(251, 191, 36, 0.3)',
-    borderWidth: 0.8,
-    paddingHorizontal: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: theme.colors.accent.subtleBg,
+    borderColor: theme.colors.accent.subtleBorder,
+    borderWidth: 1,
+    paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 999,
+    borderRadius: theme.radii.pill,
   },
   slotPillAmberText: {
-    color: '#FBBF24',
+    color: theme.colors.text.primary,
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '500',
   },
   txNote: {
-    color: '#E6D5B8',
+    color: theme.colors.text.secondary,
     fontSize: 12,
   },
   txActionRow: {
@@ -544,7 +583,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingTop: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255, 230, 190, 0.12)',
+    borderTopColor: theme.colors.glass.hairline,
   },
   leftActions: {
     flexDirection: 'row',
@@ -553,63 +592,64 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   splitBtn: {
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
-    borderColor: 'rgba(251, 191, 36, 0.3)',
-    borderWidth: 0.8,
+    backgroundColor: theme.colors.accent.subtleBg,
+    borderColor: theme.colors.accent.subtleBorder,
+    borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 999,
+    borderRadius: theme.radii.pill,
   },
   splitBtnText: {
-    color: '#FBBF24',
+    color: theme.colors.text.primary,
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '500',
   },
   advanceBtn: {
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
-    borderColor: 'rgba(230, 213, 184, 0.25)',
-    borderWidth: 0.8,
+    backgroundColor: theme.colors.background.subtleSurface,
+    borderColor: theme.colors.glass.subtleBorder,
+    borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 999,
+    borderRadius: theme.radii.pill,
   },
   advanceBtnActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.18)',
-    borderColor: 'rgba(251, 191, 36, 0.35)',
+    backgroundColor: theme.colors.accent.subtleBg,
+    borderColor: theme.colors.accent.subtleBorder,
   },
   advanceBtnText: {
-    color: '#E6D5B8',
+    color: theme.colors.text.secondary,
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   deletedTimeText: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: theme.colors.text.tertiary,
     fontSize: 11,
   },
   restoreBtn: {
-    backgroundColor: '#FBBF24',
+    backgroundColor: theme.colors.accent.primary,
     paddingHorizontal: 12,
     paddingVertical: 7,
-    borderRadius: 999,
+    borderRadius: theme.radii.pill,
   },
   restoreBtnText: {
-    color: '#080705',
+    color: theme.colors.text.inverse,
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '600',
   },
   debtSplitDrawer: {
-    backgroundColor: 'rgba(18, 15, 12, 0.84)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(251, 191, 36, 0.35)',
-    borderRadius: 12,
+    backgroundColor: theme.colors.background.elevatedSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.fallbackBorder,
+    borderRadius: theme.radii.innerCard,
+    borderCurve: 'continuous',
     padding: 11,
     gap: 8,
     marginTop: 4,
   },
   debtSplitTitle: {
-    color: '#FBBF24',
+    color: theme.colors.text.primary,
     fontSize: 11.5,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   debtSplitQuickRow: {
     flexDirection: 'row',
@@ -617,41 +657,43 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   debtQuickChip: {
-    backgroundColor: 'rgba(214, 195, 165, 0.14)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.28)',
+    backgroundColor: theme.colors.background.subtleSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 999,
+    borderRadius: theme.radii.pill,
   },
   debtQuickChipText: {
-    color: '#E6D5B8',
+    color: theme.colors.text.secondary,
     fontSize: 10.5,
-    fontWeight: '600',
+    fontWeight: '500',
+    fontVariant: ['tabular-nums'],
   },
   debtSplitInputRow: {
     flexDirection: 'row',
     gap: 6,
   },
   debtSplitInput: {
-    backgroundColor: 'rgba(8, 7, 5, 0.8)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.28)',
-    borderRadius: 9,
+    backgroundColor: theme.colors.background.base,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.fallbackBorder,
+    borderRadius: theme.radii.chip,
     paddingHorizontal: 9,
     paddingVertical: 6,
-    color: '#FAF6F0',
+    color: theme.colors.text.primary,
     fontSize: 12,
+    fontVariant: ['tabular-nums'],
   },
   debtSplitConfirmBtn: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: theme.colors.accent.primary,
     paddingVertical: 8,
-    borderRadius: 9,
+    borderRadius: theme.radii.chip,
     alignItems: 'center',
   },
   debtSplitConfirmText: {
-    color: '#080705',
+    color: theme.colors.text.inverse,
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '600',
   },
 });

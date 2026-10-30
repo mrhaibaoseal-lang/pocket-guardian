@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
-import Animated, {
-  FadeIn,
-  FadeOut,
-  LinearTransition,
-} from 'react-native-reanimated';
-import { triggerHaptic } from './iosAnimations';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { theme } from '../theme/tokens';
+import { AppSymbol } from './AppSymbol';
+import { iosLayoutSpring, triggerHaptic } from './iosAnimations';
 
 const CATEGORY_OPTIONS = ['超商', '食物', '飲料', '車費', '日用品', '娛樂', '轉帳'] as const;
 
@@ -15,26 +13,11 @@ export interface CategoryGlassTint {
   text: string;
 }
 
-/**
- * 同色系金屬膠囊色溫：
- * - 『餐飲』（食物、飲料、早餐、午餐、晚餐、便當）：琥珀玻璃
- *   底 rgba(245, 158, 11, 0.14)、字 #FBBF24、邊框 rgba(251, 191, 36, 0.3)
- * - 『交通/日常』（車費、超商、日用品、娛樂、轉帳等）：大漠鈦金玻璃
- *   底 rgba(214, 195, 165, 0.12)、字 #E6D5B8、邊框 rgba(230, 213, 184, 0.25)
- */
-export function getCategoryGlassTint(cat: string | null): CategoryGlassTint {
-  const c = cat || '';
-  if (/(食物|飲料|早餐|午餐|便當|晚餐|宵夜|餐飲)/.test(c)) {
-    return {
-      bg: 'rgba(245, 158, 11, 0.14)',
-      border: 'rgba(251, 191, 36, 0.3)',
-      text: '#FBBF24',
-    };
-  }
+export function getCategoryGlassTint(_cat: string | null): CategoryGlassTint {
   return {
-    bg: 'rgba(214, 195, 165, 0.12)',
-    border: 'rgba(230, 213, 184, 0.25)',
-    text: '#E6D5B8',
+    bg: theme.colors.background.subtleSurface,
+    border: theme.colors.glass.subtleBorder,
+    text: theme.colors.text.secondary,
   };
 }
 
@@ -43,33 +26,26 @@ interface MorphingCategoryPillProps {
   onSelectCategory: (category: string) => void;
 }
 
-const layoutSpring = LinearTransition.springify().damping(19).stiffness(240);
-
 export function MorphingCategoryPill({
   currentCategory,
   onSelectCategory,
 }: MorphingCategoryPillProps) {
   const [expanded, setExpanded] = useState(false);
   const label = currentCategory || '日常';
-  const tint = getCategoryGlassTint(label);
 
   return (
     <Animated.View
-      layout={layoutSpring}
+      layout={iosLayoutSpring}
       style={[
         styles.pillShell,
-        {
-          backgroundColor: expanded ? 'rgba(28, 22, 16, 0.94)' : tint.bg,
-          borderColor: tint.border,
-        },
         expanded && styles.pillShellExpanded,
       ]}
     >
       {!expanded ? (
         <Animated.View
           key="collapsed"
-          entering={FadeIn.duration(140)}
-          exiting={FadeOut.duration(100)}
+          entering={FadeIn.duration(120)}
+          exiting={FadeOut.duration(90)}
         >
           <Pressable
             onPress={() => {
@@ -79,20 +55,19 @@ export function MorphingCategoryPill({
             style={styles.collapsedBtn}
             hitSlop={6}
           >
-            <Text style={[styles.collapsedText, { color: tint.text }]}>{label}</Text>
-            <Text style={[styles.chevronText, { color: tint.text }]}>▾</Text>
+            <Text style={styles.collapsedText}>{label}</Text>
+            <AppSymbol name="chevron.down" size={9} color={theme.colors.text.tertiary} />
           </Pressable>
         </Animated.View>
       ) : (
         <Animated.View
           key="expanded"
-          entering={FadeIn.duration(160)}
-          exiting={FadeOut.duration(110)}
+          entering={FadeIn.duration(140)}
+          exiting={FadeOut.duration(90)}
           style={styles.expandedRow}
         >
           {CATEGORY_OPTIONS.map((cat) => {
             const isSelected = cat === label;
-            const optTint = getCategoryGlassTint(cat);
             return (
               <Pressable
                 key={cat}
@@ -103,16 +78,13 @@ export function MorphingCategoryPill({
                 }}
                 style={[
                   styles.optionPill,
-                  {
-                    backgroundColor: isSelected ? optTint.text : optTint.bg,
-                    borderColor: optTint.border,
-                  },
+                  isSelected && styles.optionPillSelected,
                 ]}
               >
                 <Text
                   style={[
                     styles.optionText,
-                    { color: isSelected ? '#080705' : optTint.text },
+                    isSelected && styles.optionTextSelected,
                   ]}
                 >
                   {cat}
@@ -128,7 +100,7 @@ export function MorphingCategoryPill({
             style={styles.closeMiniBtn}
             hitSlop={6}
           >
-            <Text style={styles.closeMiniText}>✕</Text>
+            <AppSymbol name="xmark" size={10} color={theme.colors.text.tertiary} />
           </Pressable>
         </Animated.View>
       )}
@@ -139,13 +111,17 @@ export function MorphingCategoryPill({
 const styles = StyleSheet.create({
   pillShell: {
     alignSelf: 'flex-start',
-    borderRadius: 999,
+    borderRadius: theme.radii.pill,
     borderCurve: 'continuous',
-    borderWidth: 0.8,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
+    backgroundColor: theme.colors.background.subtleSurface,
     overflow: 'hidden',
   },
   pillShellExpanded: {
-    borderRadius: 18,
+    borderRadius: theme.radii.innerCard,
+    backgroundColor: theme.colors.background.elevatedSurface,
+    borderColor: theme.colors.glass.fallbackBorder,
     paddingVertical: 4,
     paddingHorizontal: 5,
     marginTop: 4,
@@ -153,42 +129,45 @@ const styles = StyleSheet.create({
   collapsedBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 3.5,
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
     gap: 4,
   },
   collapsedText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-  },
-  chevronText: {
-    fontSize: 10,
-    opacity: 0.78,
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.micro.fontSize,
+    fontWeight: theme.typography.micro.fontWeight,
   },
   expandedRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
   },
   optionPill: {
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 0.8,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: theme.radii.pill,
+    borderWidth: 1,
+    borderColor: theme.colors.glass.subtleBorder,
+    backgroundColor: theme.colors.background.subtleSurface,
+  },
+  optionPillSelected: {
+    backgroundColor: theme.colors.accent.primary,
+    borderColor: theme.colors.accent.primary,
   },
   optionText: {
-    fontSize: 11,
-    fontWeight: '700',
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.micro.fontSize,
+    fontWeight: '500',
+  },
+  optionTextSelected: {
+    color: theme.colors.text.inverse,
+    fontWeight: '600',
   },
   closeMiniBtn: {
     paddingHorizontal: 6,
     paddingVertical: 3,
   },
-  closeMiniText: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 11,
-    fontWeight: '700',
-  },
 });
+

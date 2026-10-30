@@ -65,15 +65,29 @@ struct PocketProvider: TimelineProvider {
     }
 }
 
+/**
+ * Synchronized Swift Design Tokens (matching `src/theme/tokens.ts`)
+ */
+enum ThemeTokens {
+    static let backgroundBase = Color(red: 0.043, green: 0.047, blue: 0.059) // #0B0C0F
+    static let textPrimary = Color.white.opacity(0.92)
+    static let textSecondary = Color.white.opacity(0.60)
+    static let textTertiary = Color.white.opacity(0.38)
+    static let accentPrimary = Color(red: 0.494, green: 0.600, blue: 0.702) // #7E99B3
+    static let semanticRemaining = Color(red: 0.580, green: 0.690, blue: 0.761) // #94B0C2
+    static let semanticWarning = Color(red: 0.722, green: 0.525, blue: 0.282) // #B88648
+    static let semanticDanger = Color(red: 0.710, green: 0.353, blue: 0.322) // #B55A52
+}
+
 struct PocketGuardianWidgetEntryView: View {
     var entry: PocketProvider.Entry
     @Environment(\.widgetFamily) var family
 
     var themeColor: Color {
         switch entry.payload.weather {
-        case "red": return Color(red: 0.94, green: 0.27, blue: 0.27)
-        case "yellow": return Color(red: 0.96, green: 0.62, blue: 0.04)
-        default: return Color(red: 0.06, green: 0.73, blue: 0.51)
+        case "red": return ThemeTokens.semanticDanger
+        case "yellow": return ThemeTokens.semanticWarning
+        default: return ThemeTokens.semanticRemaining
         }
     }
 
@@ -87,64 +101,73 @@ struct PocketGuardianWidgetEntryView: View {
         switch family {
         case .accessoryCircular:
             Gauge(value: Double(entry.payload.batteryPercent), in: 0...100) {
-                Text("🔋")
+                Image(systemName: "chart.bar")
             } currentValueLabel: {
                 Text("$\(entry.payload.todayLeft)")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: 11, weight: .medium).monospacedDigit())
             }
             .gaugeStyle(.accessoryCircular)
 
         case .accessoryRectangular:
             VStack(alignment: .leading, spacing: 3) {
-                HStack {
-                    Text("🔋 今日財力 \(entry.payload.batteryPercent)%")
-                        .font(.system(size: 12, weight: .semibold))
+                HStack(spacing: 4) {
+                    Image(systemName: "chart.bar")
+                        .font(.system(size: 11, weight: .medium))
+                    Text("今日可用 \(entry.payload.batteryPercent)%")
+                        .font(.system(size: 12, weight: .medium))
                     Spacer()
                 }
-                Text("還可花 $\(entry.payload.todayLeft)")
-                    .font(.system(size: 15, weight: .heavy))
+                Text("$\(entry.payload.todayLeft)")
+                    .font(.system(size: 15, weight: .semibold).monospacedDigit())
                 ProgressView(value: Double(entry.payload.batteryPercent), total: 100)
             }
 
         default:
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("🔋 今日安全額度")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.secondary)
+                    Text("今日可用額度")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(ThemeTokens.textSecondary)
                     Spacer()
                     Text("\(entry.payload.batteryPercent)%")
-                        .font(.system(size: 12, weight: .heavy))
+                        .font(.system(size: 12, weight: .medium).monospacedDigit())
                         .foregroundColor(themeColor)
                 }
 
                 Text("$\(entry.payload.todayLeft)")
-                    .font(.system(size: 28, weight: .black))
-                    .foregroundColor(themeColor)
+                    .font(.system(size: 28, weight: .medium).monospacedDigit())
+                    .foregroundColor(ThemeTokens.textPrimary)
 
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.gray.opacity(0.2))
-                            .frame(height: 10)
-                        RoundedRectangle(cornerRadius: 6)
+                        RoundedRectangle(cornerRadius: 999, style: .continuous)
+                            .fill(Color.white.opacity(0.08))
+                            .frame(height: 4)
+                        RoundedRectangle(cornerRadius: 999, style: .continuous)
                             .fill(themeColor)
-                            .frame(width: geo.size.width * CGFloat(entry.payload.batteryPercent) / 100.0, height: 10)
+                            .frame(width: geo.size.width * CGFloat(entry.payload.batteryPercent) / 100.0, height: 4)
                     }
                 }
-                .frame(height: 10)
+                .frame(height: 4)
 
                 HStack {
-                    Text("🏦 $\(Int(entry.payload.bank))")
+                    HStack(spacing: 3) {
+                        Image(systemName: "creditcard")
+                        Text("$\(Int(entry.payload.bank))")
+                    }
                     Spacer()
-                    Text("💵 $\(Int(entry.payload.cash))")
+                    HStack(spacing: 3) {
+                        Image(systemName: "banknote")
+                        Text("$\(Int(entry.payload.cash))")
+                    }
                     Spacer()
-                    Text("更新 \(timeString)")
+                    Text(timeString)
                 }
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.secondary)
+                .font(.system(size: 10, weight: .regular).monospacedDigit())
+                .foregroundColor(ThemeTokens.textTertiary)
             }
-            .padding(12)
+            .padding(14)
+            .background(ThemeTokens.backgroundBase)
             .widgetURL(URL(string: "myledger://dashboard"))
         }
     }

@@ -117,7 +117,7 @@ interface LedgerContextValue {
     splits: Array<{ personName: string; amount: number; accountSuffix?: string | null }>,
   ) => void;
   deleteDebt: (debtId: string) => void;
-  updateSettings: (patch: Partial<Settings>) => void;
+  updateSettings: (patch: Partial<Settings>, options?: { silent?: boolean }) => void;
   updateMeta: (patch: Partial<AppMeta>) => void;
   syncFromCloud: () => Promise<void>;
   pushToCloud: () => Promise<void>;
@@ -143,6 +143,9 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
   const metaRef = useRef<AppMeta>(meta);
   metaRef.current = meta;
   const hydratedRef = useRef<boolean>(false);
+  const mutationSeqRef = useRef<number>(0);
+  const cloudPushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cloudPushInFlightRef = useRef<boolean>(false);
 
   const setLastToast = useCallback((msg: string | null) => {
     setLastToastState(msg);
@@ -152,18 +155,34 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
   const pushStateToCloudSilent = useCallback((payload: LedgerData) => {
     const baseUrl = metaRef.current.workerUrl.replace(/\/+$/, '');
     if (!baseUrl) return;
-    fetch(`${baseUrl}/api/state`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(metaRef.current.ingestToken ? { 'X-Ingest-Token': metaRef.current.ingestToken } : {}),
-      },
-      body: JSON.stringify({ data: payload }),
-    }).catch(() => undefined);
+    if (cloudPushTimerRef.current) {
+      clearTimeout(cloudPushTimerRef.current);
+    }
+    cloudPushInFlightRef.current = true;
+    cloudPushTimerRef.current = setTimeout(() => {
+      cloudPushTimerRef.current = null;
+      const latestPayload = dataRef.current ?? payload;
+      fetch(`${baseUrl}/api/state`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(metaRef.current.ingestToken ? { 'X-Ingest-Token': metaRef.current.ingestToken } : {}),
+        },
+        body: JSON.stringify({ data: latestPayload }),
+      })
+        .catch(() => undefined)
+        .finally(() => {
+          cloudPushInFlightRef.current = false;
+        });
+    }, 350);
   }, []);
 
   const pullAndMergeFromCloud = useCallback(
     async (silent = false) => {
+      if (silent && (cloudPushTimerRef.current !== null || cloudPushInFlightRef.current)) {
+        return;
+      }
+      const seqAtStart = mutationSeqRef.current;
       try {
         const baseUrl = metaRef.current.workerUrl.replace(/\/+$/, '');
         if (!baseUrl) return;
@@ -172,12 +191,29 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = (await res.json()) as { ok?: boolean; data?: LedgerData };
+        if (
+          silent &&
+          (seqAtStart !== mutationSeqRef.current ||
+            cloudPushTimerRef.current !== null ||
+            cloudPushInFlightRef.current)
+        ) {
+          // A local edit occurred while this background poll was in flight; skip stale merge.
+          return;
+        }
         if (json.ok && json.data) {
           const { merged, newlySyncedTxs } = mergeLedgerData(dataRef.current, json.data);
-          dataRef.current = merged;
-          setData(merged);
-          AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(merged)).catch(() => undefined);
-          pushStateToCloudSilent(merged);
+          const prevSerialized = JSON.stringify(dataRef.current);
+          const nextSerialized = JSON.stringify(merged);
+          const hasChanges = prevSerialized !== nextSerialized;
+
+          if (hasChanges || !silent) {
+            dataRef.current = merged;
+            setData(merged);
+            AsyncStorage.setItem(STORAGE_KEY, nextSerialized).catch(() => undefined);
+            if (hasChanges) {
+              pushStateToCloudSilent(merged);
+            }
+          }
           if (!silent) {
             setLastToast(
               newlySyncedTxs.length > 0
@@ -269,6 +305,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
 
   const persist = useCallback(
     (next: LedgerData, syncCloud = true) => {
+      mutationSeqRef.current += 1;
       const sanitized = sanitizeLedgerData(next);
       const clone: LedgerData = {
         settings: { ...sanitized.settings },
@@ -704,12 +741,15 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
   );
 
   const updateSettings = useCallback(
-    (patch: Partial<Settings>) => {
-      persist({ ...data, settings: { ...data.settings, ...patch } });
-      setLastToast('⚙️ 設定已儲存並即時重算安全額度');
-      triggerHaptic('light');
+    (patch: Partial<Settings>, options?: { silent?: boolean }) => {
+      const current = dataRef.current;
+      persist({ ...current, settings: { ...current.settings, ...patch } });
+      if (!options?.silent) {
+        setLastToast('⚙️ 設定已儲存並即時重算安全額度');
+        triggerHaptic('light');
+      }
     },
-    [data, persist, triggerHaptic],
+    [persist, setLastToast, triggerHaptic],
   );
 
   const updateMeta = useCallback((patch: Partial<AppMeta>) => {
