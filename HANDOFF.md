@@ -1,13 +1,13 @@
 # HANDOFF.md — 跨工具／跨模型交接紀錄
 
-> **最後更新時間**：2026-10-31 00:02 (UTC+8)
-> **最後更新 Agent**：Cline (接入 Cloudflare Workers AI 智慧語意辨識 + 新增 `transfer_in` 存摺轉入收入解析 + 修復 7724 回收桶 idempotencyKey 同步吃單 Bug)
+> **最後更新時間**：2026-10-31 00:36 (UTC+8)
+> **最後更新 Agent**：Cline (成功打包最新版 SideStore IPA，Run ID: `41088291431`，Commit `60922e6`)
 > **專案路徑**：`C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger`
-> **Git 分支與最新 Commit**：`main` @ `11058e5`（已觸發 GitHub Actions Run ID: `41078660430` 編譯中）
-> **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `97b827f9-bbc3-418f-bb83-1bdf84de36ba`，前版可 Rollback ID: `4deb2077-229b-4aba-b53d-114b6dafd222`)
-> **最新無簽名 IPA 位置（v3.3.0+，GitHub Actions Run ID: 41078660430 完成後自動更新至以下路徑）**：
-> - `C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger\PocketGuardian-SideStore.ipa`
+> **Git 分支與最新 Commit**：`main` @ `60922e6`（GitHub Actions 打包成功）
+> **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `1e12ae0d-666f-42bd-beb3-d061a3a2e4ec`，前版可 Rollback ID: `845769c7-ceaf-40a6-aa24-5120b363981e`)
+> **最新無簽名 IPA 位置（v3.3.0+，GitHub Actions Run ID: 41088291431，9.9 MB）**：
 > - `C:\Users\mrhai\Downloads\PocketGuardian-SideStore.ipa`
+> - `C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger\PocketGuardian-SideStore.ipa`
 > - `C:\Users\mrhai\.cline\worktrees\d64cd\smart-ledger\PocketGuardian-SideStore.ipa`
 
 ---
