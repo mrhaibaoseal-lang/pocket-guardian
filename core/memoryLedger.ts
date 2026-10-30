@@ -106,14 +106,17 @@ export function messageFor(decision: IngestDecision, tx: Transaction | null, sum
   }
   if (decision.action === 'duplicate') return confirmationText(`↩️ 已略過重複：${decision.reason}`, summary);
   const label = tx ? cleanShortLabel(tx.merchant ?? tx.category, tx.method === 'bank_transfer' ? '轉帳' : '消費') : '';
-  const what = tx ? `${label} $${Math.round(tx.amount)}` : '';
+  const sign = tx?.type === 'income' ? '+$' : '$';
+  const what = tx ? `${label} ${sign}${Math.round(tx.amount)}` : '';
   const prefix = decision.action === 'merge' ? `🔗 已合併 ${what}` : `✅ 已記 ${what}`;
   return confirmationText(prefix, summary);
 }
 
 /**
  * Self-healing sanitizer: repairs or removes corrupted historical transactions/events
- * caused by earlier OCR digit concatenation (> 10,000,000) or lock-screen clock time (10:29 -> $1029).
+ * caused by earlier OCR digit concatenation (> 10,000,000), lock-screen clock time (10:29 -> $1029),
+ * or date-year false positives (2026/10/24 -> $2026). Also clears idempotencyKey on soft-deleted
+ * transactions so deleted items in Trash never block re-scanning a screenshot.
  */
 export function sanitizeLedgerData(data: LedgerData): LedgerData {
   const ownSuffix = data.settings?.ownAccountSuffix ?? '83151';
@@ -121,11 +124,61 @@ export function sanitizeLedgerData(data: LedgerData): LedgerData {
   const seenTransferKeys = new Set<string>();
 
   for (const tx of data.transactions ?? []) {
+    // Never let a soft-deleted transaction hold an idempotencyKey that blocks new scans
+    if (tx.deletedAt) {
+      if (tx.amount === 2026 && tx.method === 'bank_transfer' && tx.merchant === '轉帳') {
+        continue;
+      }
+      repairedTxs.push({ ...tx, idempotencyKey: null });
+      continue;
+    }
+
     // 1. Remove false-positive lock-screen clock capture ("星期一\n晚上10:29" -> $1029)
     if (tx.amount === 1029 && tx.merchant && /星期[一二三四五六日天][\s\S]*10:29/.test(tx.merchant)) {
       continue;
     }
-    // 2. Repair or drop astronomically large OCR digit-concatenation bugs (e.g. 1.032e+42)
+
+    // 2. Repair false-positive $2026 / $2040 capture from 7717 ("網路非約轉帳\n2026/10/24...")
+    if (
+      tx.id === 'b169f5c1-1aae-49b8-b64f-480b75440002' ||
+      tx.id === 'e7441264-5368-4c75-8edf-b5f045b20002' ||
+      (tx.amount === 2026 && tx.method === 'bank_transfer' && tx.merchant === '轉帳')
+    ) {
+      // Soft-delete the old transaction ID so already-installed Apps hide it via ct.deletedAt
+      repairedTxs.push({
+        ...tx,
+        deletedAt: tx.deletedAt ?? '2026-10-30T15:58:00.000Z',
+        idempotencyKey: null,
+      });
+      const matchingEv = (data.events ?? []).find(
+        (e) => e.rawText && /網路非約轉帳[\s\S]*轉帳給此帳號/.test(e.rawText),
+      );
+      if (matchingEv?.rawText) {
+        const reparsed = parseEvent('transfer_page', { text: matchingEv.rawText }, tx.createdAt, ownSuffix);
+        const baseKey = idempotencyKeyFor(reparsed);
+        if (reparsed.kind === 'transfer_in' && reparsed.amount && (!baseKey || !seenTransferKeys.has(baseKey))) {
+          if (baseKey) seenTransferKeys.add(baseKey);
+          repairedTxs.push({
+            ...tx,
+            id: 'tx-7717-income-500',
+            type: 'income',
+            amount: reparsed.amount,
+            method: 'bank_transfer',
+            category: '轉帳收入',
+            merchant: reparsed.merchant ?? '轉帳收入',
+            bankSlot: 'transfer_page',
+            idempotencyKey: baseKey ? `${baseKey}#7717` : null,
+            isLocked: true,
+            deletedAt: null,
+            occurredAt: reparsed.occurredAt,
+            timeSource: reparsed.timeSource,
+          });
+        }
+      }
+      continue;
+    }
+
+    // 3. Repair or drop astronomically large OCR digit-concatenation bugs (e.g. 1.032e+42)
     if (!Number.isFinite(tx.amount) || tx.amount <= 0 || tx.amount > 10_000_000) {
       if (tx.merchant && /(轉帳金額|轉入對象|交易成功)/.test(tx.merchant)) {
         const reparsed = parseEvent('transfer_page', { text: tx.merchant }, tx.createdAt, ownSuffix);
@@ -150,8 +203,57 @@ export function sanitizeLedgerData(data: LedgerData): LedgerData {
       }
       continue;
     }
-    if (tx.idempotencyKey) seenTransferKeys.add(tx.idempotencyKey);
+    if (tx.idempotencyKey) {
+      const baseKey = tx.idempotencyKey.split('#')[0];
+      if (seenTransferKeys.has(baseKey)) continue;
+      seenTransferKeys.add(baseKey);
+      seenTransferKeys.add(tx.idempotencyKey);
+    }
     repairedTxs.push(tx);
+  }
+
+  // 4. Recover any valid 'new_tx' transfer_page event whose transaction was accidentally dropped by the old idempotencyKey bug
+  const activeTxIds = new Set(repairedTxs.map((t) => t.id));
+  for (const ev of data.events ?? []) {
+    if (
+      ev.status === 'new_tx' &&
+      ev.transactionId &&
+      !activeTxIds.has(ev.transactionId) &&
+      ev.parsed?.source === 'transfer_page' &&
+      (ev.parsed.kind === 'transfer_out' || ev.parsed.kind === 'transfer_in') &&
+      ev.parsed.amount &&
+      ev.parsed.amount !== 2026 &&
+      ev.parsed.amount <= 10_000_000
+    ) {
+      const key = idempotencyKeyFor(ev.parsed);
+      if (key && seenTransferKeys.has(key)) continue;
+      if (key) seenTransferKeys.add(key);
+      const label = ev.parsed.payeeSuffix ? `轉帳給 ****${ev.parsed.payeeSuffix}` : '轉帳';
+      repairedTxs.push({
+        id: ev.transactionId,
+        amount: ev.parsed.amount,
+        type: 'expense',
+        method: 'bank_transfer',
+        category: '轉帳',
+        merchant: label,
+        note: null,
+        accountId: 'bank',
+        toAccountId: null,
+        payeeId: null,
+        frontendSlot: null,
+        bankSlot: 'transfer_page',
+        idempotencyKey: key ? `${key}#${ev.id.slice(0, 6)}` : null,
+        isLocked: false,
+        mergedMetadata: null,
+        timeSource: ev.parsed.timeSource,
+        affectsBudget: true,
+        isAdvance: false,
+        deletedAt: null,
+        occurredAt: ev.parsed.occurredAt,
+        createdAt: ev.receivedAt,
+      });
+      activeTxIds.add(ev.transactionId);
+    }
   }
 
   const repairedEvents: StoredEvent[] = [];
@@ -160,6 +262,9 @@ export function sanitizeLedgerData(data: LedgerData): LedgerData {
       continue;
     }
     if (ev.parsed?.amount === 1029 && ev.parsed?.merchant && /星期[一二三四五六日天]/.test(ev.parsed.merchant)) {
+      continue;
+    }
+    if (ev.parsed?.amount === 2026 && ev.parsed?.source === 'efingo' && !ev.parsed?.merchant) {
       continue;
     }
     if (ev.status === 'parse_failed' && ev.reason.length > 60) {
@@ -197,7 +302,7 @@ export function mergeLedgerData(localRaw: LedgerData, cloudRaw: LedgerData): {
   const txByIdemKey = new Set<string>();
   for (const t of local.transactions) {
     txById.set(t.id, t);
-    if (t.idempotencyKey) txByIdemKey.add(t.idempotencyKey);
+    if (!t.deletedAt && t.idempotencyKey) txByIdemKey.add(t.idempotencyKey);
   }
 
   const newlySyncedTxs: Transaction[] = [];
@@ -316,7 +421,11 @@ export class MemoryLedger {
       .filter((e) => e.status !== 'discarded_otp' && e.status !== 'ignored' && e.status !== 'parse_failed')
       .map((e) => ({ id: e.id, source: e.source, fingerprint: e.fingerprint, receivedAt: e.receivedAt, transactionId: e.transactionId }));
     const key = idempotencyKeyFor(parsed);
-    const keyMatch = key ? this.data.transactions.find((t) => t.idempotencyKey === key && !t.deletedAt) ?? null : null;
+    const keyMatch = key
+      ? this.data.transactions.find(
+          (t) => !t.deletedAt && (t.idempotencyKey === key || t.idempotencyKey?.startsWith(`${key}#`)),
+        ) ?? null
+      : null;
 
     const decision = decideIngest({
       event: { id: eventId, parsed, fingerprint, receivedAt: now },
@@ -333,6 +442,9 @@ export class MemoryLedger {
     let debtAutoSettledNote = '';
     if (decision.action === 'create') {
       tx = decision.transaction;
+      if (tx.idempotencyKey) {
+        tx.idempotencyKey = `${tx.idempotencyKey}#${eventId.slice(0, 6)}`;
+      }
       if (parsed.kind === 'card_spend') {
         const m = matchSubscription(this.data.subscriptions, tx.amount, tx.occurredAt);
         if (m) {

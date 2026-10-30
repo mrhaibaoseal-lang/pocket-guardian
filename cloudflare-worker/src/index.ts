@@ -12,7 +12,12 @@
 
 import {
   emptyLedger,
+  guessSource,
   MemoryLedger,
+  mergeLedgerData,
+  normalizeRawInput,
+  normalizeText,
+  parseEvent,
   widgetPayload,
 } from '../../core';
 import type { EventSource, LedgerData, RawInput } from '../../core';
@@ -26,6 +31,13 @@ export interface Env {
       };
     };
   };
+  AI?: {
+    run(
+      model: string,
+      input: Record<string, unknown>,
+    ): Promise<{ response?: string } | string>;
+  };
+  DEFAULT_OWN_ACCOUNT_SUFFIX?: string;
   INGEST_TOKEN?: string;
 }
 
@@ -173,6 +185,72 @@ async function extractRawInput(req: Request, url: URL): Promise<{ source: EventS
   }
 }
 
+/**
+ * Use Cloudflare Workers AI (@cf/meta/llama-3.1-8b-instruct) when deterministic rules
+ * encounter a novel bank/payment layout, low-confidence parse, or unrecognized screenshot.
+ */
+async function enhanceWithWorkersAiIfNeeded(
+  env: Env,
+  sourceHint: EventSource | null,
+  rawInput: RawInput,
+  ownSuffix: string,
+  now: string,
+): Promise<RawInput> {
+  if (!env.AI) return rawInput;
+  const norm = normalizeRawInput(rawInput);
+  const text = normalizeText(norm.text ?? '');
+  if (!text || text.length < 4) return rawInput;
+
+  const guessed = sourceHint ?? guessSource(text) ?? (norm.amount || norm.merchant ? 'wallet' : 'efingo');
+  const prelim = parseEvent(guessed, norm, now, ownSuffix);
+
+  // If deterministic rules already succeeded with high confidence on a known pattern, skip AI latency
+  if (
+    prelim.confidence === 'high' &&
+    (prelim.kind === 'card_spend' ||
+      prelim.kind === 'transfer_out' ||
+      prelim.kind === 'transfer_in' ||
+      prelim.kind === 'otp')
+  ) {
+    return rawInput;
+  }
+
+  const systemPrompt = `你是台灣「錢呢 BROKE AF」記帳 App 的 AI 帳務解析引擎。
+請根據使用者傳入的手機截圖 OCR 文字或推播通知，判斷這是不是一筆真實的金融交易，並只輸出單行 JSON（不要 Markdown、不要任何解釋）：
+{"kind":"transfer_out"|"transfer_in"|"card_spend"|"internal_transfer"|"non_transaction","amount":整數金額或null,"merchant":"店家或對象名稱或null","payeeBankCode":"3碼銀行代碼或null","payeeSuffix":"末4~5碼帳號或null","occurredAt":"YYYY-MM-DD HH:mm:ss或null","reason":"簡短說明"}
+
+嚴格規則：
+1. 絕對不可把「西元年份(如2026)」、「時間(如10:29、11:39)」、「電量(如84)」、「銀行代碼(如808、013、812)」、「帳戶餘額/可用餘額(如2,040)」、「手續費(如15)」誤判為交易金額 amount！
+2. 區分「轉出(transfer_out)」與「轉入(transfer_in)」：
+   - 若畫面有「轉帳給此帳號」按鈕、或顯示「轉入/存入/入帳/+金額」，且沒有「轉入對象」，代表別人轉錢給我，kind 必為 "transfer_in"，merchant 填「轉入：對方姓名或末碼」。
+   - 若畫面有「轉入對象 + 自己帳號」或「轉出/扣款」，代表我轉錢給別人，kind 必為 "transfer_out"。
+   - 若轉入對象的帳號末碼屬於使用者自己的帳號 (${ownSuffix})，kind 必為 "internal_transfer"。
+3. 若是一般刷卡、Apple Pay、LINE Pay、街口、全支付或超商消費，kind 為 "card_spend"，merchant 填商店名稱。
+4. 若畫面只是手機鎖定畫面、主畫面、捷徑設定頁、聊天對話或找不到明確交易金額，kind 必為 "non_transaction"，amount 為 null。`;
+
+  try {
+    const aiCall = env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: text.slice(0, 1500) },
+      ],
+      temperature: 0,
+      max_tokens: 220,
+    });
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000));
+    const aiRes = await Promise.race([aiCall, timeout]);
+    if (!aiRes) return rawInput;
+    const rawResponse = typeof aiRes === 'string' ? aiRes : aiRes.response ?? '';
+    const jsonMatch = rawResponse.match(/\{[\s\S]*?"kind"\s*:[\s\S]*?\}/);
+    if (jsonMatch) {
+      return { text: jsonMatch[0], amount: null, merchant: null };
+    }
+  } catch {
+    // Fallback gracefully to deterministic parser
+  }
+  return rawInput;
+}
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     if (req.method === 'OPTIONS') {
@@ -204,7 +282,15 @@ export default {
         const { source, raw } = await extractRawInput(req, url);
         const ledger = await loadLedger(env);
         ledger.chargeSubscriptions(now);
-        const result = ledger.ingest(source, raw, now);
+        const ownSuffix = ledger.data.settings.ownAccountSuffix || env.DEFAULT_OWN_ACCOUNT_SUFFIX || '83151';
+        const enhancedRaw = await enhanceWithWorkersAiIfNeeded(env, source, raw, ownSuffix, now);
+        const result = ledger.ingest(source, enhancedRaw, now);
+        // Preserve original OCR text in the stored event if AI structured JSON was used
+        const normOrig = normalizeRawInput(raw);
+        if (normOrig.text && ledger.data.events.length > 0) {
+          const lastEv = ledger.data.events[ledger.data.events.length - 1];
+          lastEv.rawText = normOrig.text.slice(0, 2000);
+        }
         await saveLedger(env, ledger, now);
         return jsonResponse({
           ok: true,
@@ -227,10 +313,17 @@ export default {
       }
       if (req.method === 'PUT' || req.method === 'POST') {
         return runSerialized(async () => {
-          const body = (await req.json()) as { data: LedgerData };
-          const ledger = new MemoryLedger(body.data);
+          const body = (await req.json()) as { data: LedgerData; replace?: boolean };
+          if (body.replace || (body.data.transactions.length === 0 && body.data.events.length === 0)) {
+            const ledger = new MemoryLedger(body.data);
+            await saveLedger(env, ledger, now);
+            return jsonResponse({ ok: true, data: ledger.data, summary: ledger.summary(now) });
+          }
+          const existing = await loadLedger(env);
+          const { merged } = mergeLedgerData(body.data, existing.data);
+          const ledger = new MemoryLedger(merged);
           await saveLedger(env, ledger, now);
-          return jsonResponse({ ok: true, summary: ledger.summary(now) });
+          return jsonResponse({ ok: true, data: ledger.data, summary: ledger.summary(now) });
         });
       }
     }

@@ -181,11 +181,12 @@ export function ShortcutsTestBenchScreen() {
 
         <View style={styles.guideStep}>
           <Text style={styles.guideStepTitle}>
-            捷徑三：擷取文字至 BrokeAF（轉帳截圖偵測）
+            捷徑三：擷取文字至 BrokeAF（轉帳出／入截圖 ＋ AI 智慧辨識）
           </Text>
           <Text style={styles.guideStepText}>
             1. 轉帳截圖推薦做法：第一個模塊「拍攝螢幕快照」→ 第二個模塊「從 [螢幕快照] 擷取文字」→ 第三個模塊【🛡️ 智慧入帳】，在「錢包 / Apple Pay 金額 (選填)」與「錢包 / Apple Pay 商家 (選填)」都選取「已擷取的文字」（注意別選到「影像」）。{'\n'}
-            2. 螢幕文字做法：第一個模塊「取得螢幕上的 [文字]」→ 第二個模塊「將 [螢幕上的文字] 拷貝到剪貼板上」→ 第三個模塊【🛡️ 智慧入帳】，在金額與商家欄位選取「螢幕上的文字」。
+            2. 雲端 AI 自動判讀（免改捷徑）：雲端已內建 Cloudflare Workers AI，無論是「轉帳成功（轉出）」或「存摺明細（轉入收款）」、不同銀行與支付排版皆可自動判讀。{'\n'}
+            3. 捷徑內建 AI 進階接法（選配）：也可在「從螢幕快照擷取文字」後插入 iOS 捷徑【使用模型 (Apple Intelligence)】模塊，再傳入【🛡️ 智慧入帳】。
           </Text>
         </View>
       </LiquidGlassCard>

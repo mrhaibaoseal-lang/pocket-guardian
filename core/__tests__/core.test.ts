@@ -8,6 +8,7 @@ import {
   createManualExpense,
   looksLikeOtp,
   MemoryLedger,
+  mergeLedgerData,
   parseEvent,
   budgetCycle,
   DEFAULT_SETTINGS,
@@ -784,5 +785,102 @@ describe('real-device iOS 27 Shortcut screenshot & variable wiring regressions (
       method: 'bank_transfer',
       merchant: '轉帳給 ****24126',
     });
+  });
+
+  it('7717: parses E.SUN passbook incoming transfer detail ("網路非約轉帳 ... 轉帳給此帳號") as +$500 income instead of -$2026 expense', () => {
+    const l = ledger({ openingBank: 1540 });
+    const ocr7717 = [
+      '11:390',
+      '星期六下午4:26',
+      '網路非約轉帳',
+      '2026/10/24 16:23:53',
+      '500',
+      '轉帳留言',
+      '阮*豫',
+      '存摺備註',
+      '銀行代號/',
+      '帳號',
+      '808/',
+      '****88173',
+      '帳戶餘額',
+      '2,040',
+      '轉帳給此帳號',
+      'พิ',
+    ].join('\n');
+
+    const res = l.ingest(null, { text: '', amount: ocr7717, merchant: ocr7717 }, T0);
+    expect(res.status).toBe('new_tx');
+    expect(res.transaction).not.toBeNull();
+    expect(res.transaction?.type).toBe('income');
+    expect(res.transaction?.amount).toBe(500);
+    expect(res.transaction?.merchant).toBe('轉入：阮*豫 ****88173');
+    expect(res.message).toContain('✅ 已記 轉入：阮*豫 ****88173 +$500');
+    expect(computeBalances(l.data.settings, l.data.transactions).bank).toBe(2040);
+  });
+
+  it('7724 sync regression: a soft-deleted transfer in Trash never blocks a newly re-scanned transfer during cloud merge', () => {
+    const local = ledger({ openingBank: 10000 }).data;
+    local.transactions.push({
+      id: 'old-deleted-7724',
+      amount: 100,
+      type: 'expense',
+      method: 'bank_transfer',
+      category: '轉帳',
+      merchant: '轉帳給 ****24126',
+      note: null,
+      accountId: 'bank',
+      toAccountId: null,
+      payeeId: null,
+      frontendSlot: null,
+      bankSlot: 'transfer_page',
+      idempotencyKey: 'tp:2026-10-25T18:07:37.000Z|100|24126',
+      isLocked: false,
+      mergedMetadata: null,
+      timeSource: 'absolute',
+      affectsBudget: true,
+      isAdvance: false,
+      deletedAt: T0,
+      occurredAt: '2026-10-25T18:07:37.000Z',
+      createdAt: T0,
+    });
+
+    const cloudLedger = ledger({ openingBank: 10000 });
+    const ocr7724 = [
+      '交易成功',
+      '2026-10-26 02:07:37',
+      '轉帳金額',
+      '100',
+      '轉入對象',
+      '808玉山商業銀行',
+      '********24126',
+      '自己帳號',
+      '808玉山商業銀行',
+      '********83151',
+    ].join('\n');
+    const ingestRes = cloudLedger.ingest(null, { text: ocr7724 }, plus(T0, 10));
+    expect(ingestRes.status).toBe('new_tx');
+
+    const { merged, newlySyncedTxs } = mergeLedgerData(local, cloudLedger.data);
+    expect(newlySyncedTxs).toHaveLength(1);
+    expect(newlySyncedTxs[0].amount).toBe(100);
+    expect(merged.transactions.filter((t) => !t.deletedAt)).toHaveLength(1);
+  });
+
+  it('parses AI structured JSON output from Workers AI or iOS Shortcuts Use Model action', () => {
+    const l = ledger({ openingBank: 5000 });
+    const aiJson = JSON.stringify({
+      kind: 'transfer_in',
+      amount: 1200,
+      merchant: '轉入：王小明 ****12345',
+      payeeBankCode: '013',
+      payeeSuffix: '12345',
+      occurredAt: '2026-10-27 11:00:00',
+      reason: 'AI 辨識國泰世華轉入',
+    });
+    const res = l.ingest(null, { text: aiJson }, T0);
+    expect(res.status).toBe('new_tx');
+    expect(res.transaction?.type).toBe('income');
+    expect(res.transaction?.amount).toBe(1200);
+    expect(res.transaction?.merchant).toBe('轉入：王小明 ****12345');
   });
 });

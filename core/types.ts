@@ -62,7 +62,7 @@ export interface ParsedSnapshot {
   occurredAt: string;
 }
 
-export type ParsedKind = 'card_spend' | 'transfer_out' | 'otp' | 'ignored' | 'unknown';
+export type ParsedKind = 'card_spend' | 'transfer_out' | 'transfer_in' | 'otp' | 'ignored' | 'unknown';
 
 export interface ParsedEvent {
   kind: ParsedKind;

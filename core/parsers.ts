@@ -347,15 +347,35 @@ function parseEfingo(p: ParsedEvent, text: string): ParsedEvent {
     };
   }
 
+  // Only match single-line notifications with explicit currency/元, never matching across newlines into a date year like 2026/10/24
+  const transferIn = cleaned.match(
+    /(?:轉入|存入|入帳|收到轉帳)[^\d\n]{0,20}?(?:(?:新[台臺]幣|[台臺]幣|NT\$?|TWD|NTD|\$)\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?\s*(?:元)?|(\d{1,3}(?:,\d{3})+|\d+)\s*元)/i,
+  );
+  if (transferIn) {
+    const amt = toNumber(transferIn[1] ?? transferIn[2]);
+    const suffix = cleaned.match(/(?:末[五四]碼|帳號)\s*[:：*]*\s*(\d{4,5})/)?.[1] ?? null;
+    if (amt) {
+      return {
+        ...res,
+        kind: 'transfer_in',
+        amount: amt,
+        payeeSuffix: suffix,
+        confidence: 'high',
+        evidence: transferIn[0],
+        reason: '玉山轉入入帳通知',
+      };
+    }
+  }
+
   const transfer =
     cleaned.match(
-      /(?:轉帳|轉出|匯款)[^\d\n]{0,24}?(?:新[台臺]幣|[台臺]幣|NT\$?|TWD|NTD|\$)?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?\s*(?:元)?/i,
+      /(?:轉帳|轉出|匯款)[^\d\n]{0,20}?(?:(?:新[台臺]幣|[台臺]幣|NT\$?|TWD|NTD|\$)\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?\s*(?:元)?|(\d{1,3}(?:,\d{3})+|\d+)\s*元)/i,
     ) ??
     cleaned.match(
-      /(?:轉帳|轉出|匯款)[\s\S]{0,30}?(?:金額)\s*[:：]?\s*(?:新[台臺]幣|[台臺]幣|NT\$?|TWD|NTD|\$)?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?/i,
+      /(?:轉帳|轉出|匯款)[\s\S]{0,24}?(?:金額)\s*[:：]?\s*(?:新[台臺]幣|[台臺]幣|NT\$?|TWD|NTD|\$)?[ \t]*(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?/i,
     );
   if (transfer) {
-    const amt = toNumber(transfer[1]);
+    const amt = toNumber(transfer[1] ?? transfer[2]);
     const suffix = cleaned.match(/(?:末[五四]碼|帳號)\s*[:：*]*\s*(\d{4,5})/)?.[1] ?? null;
     if (amt) {
       return {
@@ -395,13 +415,16 @@ function parseEfingo(p: ParsedEvent, text: string): ParsedEvent {
 }
 
 const TRANSFER_PAGE_KEYWORDS =
-  /(交易成功|轉帳成功|交易完成|轉帳完成|付款成功|扣款成功|轉出成功|已完成轉帳|轉帳結果|交易結果|轉帳明細|交易明細|轉帳金額|交易金額|付款金額|扣款金額|轉出金額|實付金額|轉入對象|轉入帳號|收款帳號|對方帳號|自己帳號|轉出帳號|扣款帳號)/;
+  /(交易成功|轉帳成功|交易完成|轉帳完成|付款成功|扣款成功|轉出成功|已完成轉帳|轉帳結果|交易結果|轉帳明細|交易明細|網路非約轉帳|約定轉帳|跨行轉帳|行動銀行轉帳|ATM轉帳|轉帳留言|存摺備註|轉帳給此帳號|轉帳金額|交易金額|付款金額|扣款金額|轉出金額|轉入金額|存入金額|實付金額|轉入對象|轉入帳號|收款帳號|對方帳號|自己帳號|轉出帳號|扣款帳號)/;
 
 const TRANSFER_HEADER_ANCHOR =
-  /(交易成功|轉帳成功|交易完成|轉帳完成|付款成功|扣款成功|轉出成功|已完成轉帳|轉帳結果|交易結果|轉帳明細|交易明細)/;
+  /(交易成功|轉帳成功|交易完成|轉帳完成|付款成功|扣款成功|轉出成功|已完成轉帳|轉帳結果|交易結果|轉帳明細|交易明細|網路非約轉帳|約定轉帳|跨行轉帳|行動銀行轉帳|ATM轉帳)/;
 
 const TRANSFER_FIELD_ANCHOR =
-  /(轉帳金額|交易金額|付款金額|扣款金額|轉出金額|實付金額|匯款金額|提款金額|總金額|轉入對象|轉入帳號|收款帳號|對方帳號|自己帳號|轉出帳號|扣款帳號)/;
+  /(轉帳金額|交易金額|付款金額|扣款金額|轉出金額|轉入金額|存入金額|實付金額|匯款金額|提款金額|總金額|轉入對象|轉入帳號|收款帳號|對方帳號|自己帳號|轉出帳號|扣款帳號|轉帳留言|存摺備註|銀行代號)/;
+
+const BALANCE_OR_FEE_LABEL_ONLY =
+  /^(?:手續費|交易手續費|跨行手續費|優惠|手續費優惠|減免|折抵|點數折抵|可用餘額|帳戶餘額|餘額|結餘|交易序號|序號|銀行代號|銀行代號\/?|帳號)\s*[:：/]?$/;
 
 function isBankCodeOrNameLine(line: string): boolean {
   const t = line.trim();
@@ -485,7 +508,7 @@ function parseTransferPage(p: ParsedEvent, text: string, ownSuffix: string): Par
 
   const bankCodes = [
     ...bodyText.matchAll(
-      /(?:^|[^\d])(\d{3})[ \t]*(?!(?:元|轉帳|交易|轉入|自己|收款|扣款|手續費))[\u4e00-\u9fa5A-Za-z]{2,}/g,
+      /(?:^|[^\d])(\d{3})(?:[ \t]*(?!(?:元|轉帳|交易|轉入|自己|收款|扣款|手續費))[\u4e00-\u9fa5A-Za-z]{2,}|[ \t]*\/)/g,
     ),
   ].map((m) => m[1]);
 
@@ -566,8 +589,14 @@ function parseTransferPage(p: ParsedEvent, text: string, ownSuffix: string): Par
 
   if (!amount) {
     for (let i = 0; i < lines.length; i++) {
-      if (isFeeOrOtherLabelLine(lines[i])) continue;
-      const val = parseStandaloneAmountLine(lines[i], lines[i + 1]);
+      // Never scan past "帳戶餘額" / "可用餘額" at the bottom of passbook detail screens
+      if (/^(?:可用餘額|帳戶餘額|餘額|結餘)\b/.test(lines[i])) break;
+      if (isFeeOrOtherLabelLine(lines[i]) || BALANCE_OR_FEE_LABEL_ONLY.test(lines[i])) continue;
+      // Do not pick the number immediately following "手續費" / "銀行代號"
+      if (i > 0 && BALANCE_OR_FEE_LABEL_ONLY.test(lines[i - 1])) continue;
+      if (/^\d{3}\s*\/$/.test(lines[i])) continue;
+      const signedLine = lines[i].replace(/^[+-]\s*/, '');
+      const val = parseStandaloneAmountLine(signedLine, lines[i + 1]);
       if (val !== null) {
         amount = val;
         evidence = lines[i];
@@ -575,6 +604,27 @@ function parseTransferPage(p: ParsedEvent, text: string, ownSuffix: string): Par
       }
     }
   }
+
+  // Detect counterparty name / note in passbook detail layout (e.g. "轉帳留言\n阮*豫\n存摺備註")
+  let counterpartyName: string | null = null;
+  const noteIdx = lines.findIndex((l) => /^(?:轉帳留言|存摺備註|對方戶名|轉入戶名|收款人|匯款人)$/.test(l));
+  if (noteIdx >= 0 && lines[noteIdx + 1]) {
+    const candidate = lines[noteIdx + 1].trim();
+    if (
+      candidate &&
+      !/^(?:轉帳留言|存摺備註|銀行代號|帳號|帳戶餘額|轉帳給此帳號)/.test(candidate) &&
+      !isMaskedAccountLine(candidate)
+    ) {
+      counterpartyName = candidate;
+    }
+  }
+
+  // Determine whether this screen is an incoming transfer (轉入) vs outgoing transfer (轉出)
+  const hasIncomingMarkers =
+    /(轉帳給此帳號|轉入金額|存入金額|收款金額|收到轉帳|轉帳存入)/.test(bodyText) ||
+    lines.some((l) => /^\+\s*(?:NT\$|\$)?\s*\d/.test(l));
+  const hasOutgoingTargetMarkers = /(轉入對象|轉入帳號|收款帳號|扣款金額|轉出金額)/.test(bodyText);
+  const isIncomingTransfer = hasIncomingMarkers && !hasOutgoingTargetMarkers;
 
   if (isSelfTransfer) {
     return {
@@ -594,14 +644,41 @@ function parseTransferPage(p: ParsedEvent, text: string, ownSuffix: string): Par
 
   if (!amount) return { ...res, confidence: 'low', reason: '轉帳畫面中找不到金額' };
 
+  const resolvedBankCode =
+    payeeIdx >= 0 ? bankCodes[payeeIdx] ?? bankCodes[0] ?? null : bankCodes[0] ?? null;
+
+  if (isIncomingTransfer) {
+    const senderLabel = [
+      counterpartyName,
+      payeeSuffix ? `****${payeeSuffix}` : null,
+    ]
+      .filter(Boolean)
+      .join(' ');
+    return {
+      ...res,
+      kind: 'transfer_in',
+      amount,
+      merchant: senderLabel ? `轉入：${senderLabel}` : '轉帳收入',
+      occurredAt: iso ?? p.occurredAt,
+      timeSource: iso ? 'absolute' : 'notification_received',
+      payeeSuffix,
+      payeeBankCode: resolvedBankCode,
+      ownSuffix: ownFound,
+      confidence: 'high',
+      evidence,
+      reason: iso ? '玉山轉入明細畫面' : '轉入畫面（以收到時間入帳）',
+    };
+  }
+
   return {
     ...res,
     kind: 'transfer_out',
     amount,
+    merchant: counterpartyName,
     occurredAt: iso ?? p.occurredAt,
     timeSource: iso ? 'absolute' : 'notification_received',
     payeeSuffix,
-    payeeBankCode: payeeIdx >= 0 ? bankCodes[payeeIdx] ?? bankCodes[0] ?? null : bankCodes[0] ?? null,
+    payeeBankCode: resolvedBankCode,
     ownSuffix: ownFound,
     confidence: 'high',
     evidence,
@@ -609,6 +686,99 @@ function parseTransferPage(p: ParsedEvent, text: string, ownSuffix: string): Par
   };
 }
 
+/**
+ * Parse structured JSON or key-value output produced by iOS 27 Shortcuts "使用模型 (Use Model)"
+ * or Cloudflare Workers AI.
+ */
+export function parseAiStructuredText(
+  p: ParsedEvent,
+  text: string,
+): ParsedEvent | null {
+  const trimmed = text.trim();
+  // 1. JSON block from AI model
+  const jsonMatch = trimmed.match(/\{[\s\S]*?"kind"\s*:[\s\S]*?\}/);
+  if (jsonMatch) {
+    try {
+      const obj = JSON.parse(jsonMatch[0]) as {
+        kind?: string;
+        amount?: number | string | null;
+        merchant?: string | null;
+        payeeBankCode?: string | null;
+        payeeSuffix?: string | null;
+        occurredAt?: string | null;
+        reason?: string | null;
+      };
+      const amt = toNumber(obj.amount ?? null);
+      const iso = obj.occurredAt ? taipeiLocalToIso(obj.occurredAt, p.occurredAt) : null;
+      if (obj.kind === 'non_transaction' || obj.kind === 'unknown') {
+        return {
+          ...p,
+          kind: 'unknown',
+          amount: null,
+          confidence: 'high',
+          reason: obj.reason || '畫面中未偵測到交易或轉帳金額',
+        };
+      }
+      if (obj.kind === 'internal_transfer' || obj.kind === 'ignored') {
+        return {
+          ...p,
+          kind: 'ignored',
+          amount: amt,
+          confidence: 'high',
+          reason: obj.reason || '轉入自己帳戶（內部移轉，不計入支出）',
+        };
+      }
+      if (amt && (obj.kind === 'transfer_in' || obj.kind === 'income')) {
+        return {
+          ...p,
+          kind: 'transfer_in',
+          source: 'transfer_page',
+          amount: amt,
+          merchant: obj.merchant?.trim().replace(/^轉入:/, '轉入：') || null,
+          payeeBankCode: obj.payeeBankCode ?? null,
+          payeeSuffix: obj.payeeSuffix ?? null,
+          occurredAt: iso ?? p.occurredAt,
+          timeSource: iso ? 'absolute' : 'notification_received',
+          confidence: 'high',
+          evidence: `AI:${amt}`,
+          reason: obj.reason || 'AI 辨識轉入入帳',
+        };
+      }
+      if (amt && obj.kind === 'transfer_out') {
+        return {
+          ...p,
+          kind: 'transfer_out',
+          source: 'transfer_page',
+          amount: amt,
+          merchant: obj.merchant?.trim() || null,
+          payeeBankCode: obj.payeeBankCode ?? null,
+          payeeSuffix: obj.payeeSuffix ?? null,
+          occurredAt: iso ?? p.occurredAt,
+          timeSource: iso ? 'absolute' : 'notification_received',
+          confidence: 'high',
+          evidence: `AI:${amt}`,
+          reason: obj.reason || 'AI 辨識轉帳支出',
+        };
+      }
+      if (amt && (obj.kind === 'card_spend' || obj.kind === 'expense')) {
+        return {
+          ...p,
+          kind: 'card_spend',
+          amount: amt,
+          merchant: obj.merchant?.trim() || null,
+          occurredAt: iso ?? p.occurredAt,
+          timeSource: iso ? 'absolute' : 'notification_received',
+          confidence: 'high',
+          evidence: `AI:${amt}`,
+          reason: obj.reason || 'AI 辨識一般消費',
+        };
+      }
+    } catch {
+      // Fall through to normal parser
+    }
+  }
+  return null;
+}
 export function parseEvent(
   source: EventSource,
   rawInput: RawInput,
@@ -619,6 +789,11 @@ export function parseEvent(
   try {
     const raw = normalizeRawInput(rawInput);
     const text = normalizeText(raw.text ?? '');
+
+    if (text) {
+      const aiStructured = parseAiStructuredText(p, text);
+      if (aiStructured) return aiStructured;
+    }
 
     if (/^(影像|圖片|照片|螢幕快照|Image|Photo|Screenshot)$/i.test(text.trim())) {
       return {
@@ -694,7 +869,11 @@ export function parseEvent(
       }
     };
 
-    if (/(轉入對象|轉入帳號|收款帳號|自己帳號|轉出帳號|[*＊•·●]{3,}\s*\d{3,6})/.test(text)) {
+    if (
+      /(轉入對象|轉入帳號|收款帳號|自己帳號|轉出帳號|網路非約轉帳|約定轉帳|轉帳留言|存摺備註|轉帳給此帳號|[*＊•·●]{3,}\s*\d{3,6})/.test(
+        text,
+      )
+    ) {
       const res = runParser('transfer_page');
       if (res.kind === 'ignored' || res.amount !== null) return res;
     }
@@ -758,11 +937,16 @@ export function parseEvent(
  */
 export function guessSource(text: string): EventSource | null {
   const t = normalizeText(text);
-  if (/(轉入對象|轉入帳號|收款帳號|自己帳號|轉出帳號)/.test(t)) return 'transfer_page';
+  const lineCount = t.split('\n').filter(Boolean).length;
+  if (/(轉入對象|轉入帳號|收款帳號|自己帳號|轉出帳號|網路非約轉帳|約定轉帳|轉帳留言|存摺備註|轉帳給此帳號)/.test(t)) {
+    return 'transfer_page';
+  }
   if (/簽帳金融卡|金融卡消費|e\.?Fingo/i.test(t)) return 'efingo';
   if (/(交易成功|轉帳成功|轉帳金額|付款成功|轉帳結果|交易明細)/.test(t)) return 'transfer_page';
-  if (/(?:消費|刷卡|扣款|轉帳|轉出)\s*(?:新[台臺]幣|[台臺]幣|NT\$?)?\s*[\d,]+\s*元/.test(t)) return 'efingo';
-  if (/(?:NT\$|\$)\s*[\d,]+/.test(t)) return 'wallet';
+  if (lineCount <= 4 && /(?:消費|刷卡|扣款|轉帳|轉出)\s*(?:新[台臺]幣|[台臺]幣|NT\$?)?\s*[\d,]+\s*元/.test(t)) {
+    return 'efingo';
+  }
+  if (lineCount <= 4 && /(?:NT\$|\$)\s*[\d,]+/.test(t)) return 'wallet';
   const walletSingle = t.match(
     /^([^\n]+?)\s+(?:NT\$|NTD|TWD|新[台臺]幣|[台臺]幣|\$)?\s*(\d{1,3}(?:,\d{3})+|\d{1,6})(?:\.\d{1,2})?\s*(?:元|TWD|NTD)?$/i,
   );

@@ -8,6 +8,10 @@ binding = "DB"
 database_name = "pocket-guardian-db"
 database_id = "04989ce0-5883-406d-a306-91549540eb8f"
 
+# Cloudflare Workers AI binding for layout-agnostic transaction & screenshot detection
+[ai]
+binding = "AI"
+
 [vars]
 DEFAULT_OWN_ACCOUNT_SUFFIX = "83151"
 # Set INGEST_TOKEN as a secret: npx wrangler secret put INGEST_TOKEN

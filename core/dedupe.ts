@@ -54,7 +54,7 @@ export interface DecideInput {
 
 export function idempotencyKeyFor(p: ParsedEvent): string | null {
   if (p.source === 'transfer_page' && p.timeSource === 'absolute' && p.amount) {
-    return `tp:${p.occurredAt}|${p.amount}|${p.payeeSuffix ?? ''}`;
+    return `tp:${p.kind}:${p.occurredAt}|${p.amount}|${p.payeeSuffix ?? ''}`;
   }
   return null;
 }
@@ -163,12 +163,13 @@ export function decideIngest(input: DecideInput): IngestDecision {
   if (keyMatch) {
     return { action: 'duplicate', reason: '這張轉帳畫面已經記過了', transactionId: keyMatch.id };
   }
-  if (p.kind === 'transfer_out') {
+  if (p.kind === 'transfer_out' || p.kind === 'transfer_in') {
+    const expectedType = p.kind === 'transfer_in' ? 'income' : 'expense';
     const incomingBankSlot = p.source === 'transfer_page' ? 'transfer_page' : 'efingo_push';
     const dupTransfer = candidates.find(
       (t) =>
         !t.deletedAt &&
-        t.type === 'expense' &&
+        t.type === expectedType &&
         t.method === 'bank_transfer' &&
         t.amount === p.amount &&
         minutesBetween(t.occurredAt, p.occurredAt) <= 3 &&
@@ -249,8 +250,36 @@ export function decideIngest(input: DecideInput): IngestDecision {
     return { action: 'create', reason: p.source === 'wallet' ? 'Apple Pay 新消費' : '金融卡新消費', transaction: tx };
   }
 
-  // transfer_out
+  // transfer_in (incoming bank transfer / income)
   const payee = p.payeeSuffix ? payees.find((x) => x.accountSuffix === p.payeeSuffix) ?? null : null;
+  const key = idempotencyKeyFor(p);
+
+  if (p.kind === 'transfer_in') {
+    const inLabel =
+      p.merchant ??
+      (payee ? `轉入：${payee.displayName}` : p.payeeSuffix ? `轉入 (****${p.payeeSuffix})` : '轉帳收入');
+    const tx = blankTx(newTransactionId, now);
+    tx.type = 'income';
+    tx.amount = p.amount;
+    tx.method = 'bank_transfer';
+    tx.accountId = 'bank';
+    tx.bankSlot = p.source === 'transfer_page' ? 'transfer_page' : 'efingo_push';
+    tx.occurredAt = p.occurredAt;
+    tx.timeSource = p.timeSource;
+    tx.idempotencyKey = key;
+    tx.payeeId = payee?.id ?? null;
+    tx.merchant = inLabel;
+    tx.category = '轉帳收入';
+    tx.isLocked = true;
+    tx.mergedMetadata = { bankEvent: snapshotOf(event) };
+    return {
+      action: 'create',
+      reason: inLabel,
+      transaction: tx,
+    };
+  }
+
+  // transfer_out
   const transferMatches = inWindow.filter(
     (t) =>
       t.method === 'bank_transfer' &&
@@ -258,8 +287,16 @@ export function decideIngest(input: DecideInput): IngestDecision {
         (t.bankSlot !== null && t.bankSlot !== (p.source === 'transfer_page' ? 'transfer_page' : 'efingo_push'))),
   );
   const target = closest(event, transferMatches);
-  const key = idempotencyKeyFor(p);
-  const label = payee ? payee.displayName : p.payeeSuffix ? `轉帳給 ****${p.payeeSuffix}` : '轉帳';
+  const label =
+    payee
+      ? payee.displayName
+      : p.merchant && p.payeeSuffix
+      ? `轉帳給 ${p.merchant} (****${p.payeeSuffix})`
+      : p.payeeSuffix
+      ? `轉帳給 ****${p.payeeSuffix}`
+      : p.merchant
+      ? `轉帳給 ${p.merchant}`
+      : '轉帳';
 
   if (target) {
     const meta: MergedMetadata = { ...(target.mergedMetadata ?? {}), bankEvent: snapshotOf(event) };

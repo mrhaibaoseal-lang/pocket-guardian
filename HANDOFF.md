@@ -1,14 +1,14 @@
 # HANDOFF.md — 跨工具／跨模型交接紀錄
 
-> **最後更新時間**：2026-10-30 23:03 (UTC+8)
-> **最後更新 Agent**：Cline (修正實機 7793/7794 轉帳與錯誤截圖解析、防 `1.032e+42` 亂碼、支援捷徑 `文字(商家 數量)` / `通知` / `已擷取的文字` 接法、App 前景自動雲端同步與教學更新)
+> **最後更新時間**：2026-10-31 00:02 (UTC+8)
+> **最後更新 Agent**：Cline (接入 Cloudflare Workers AI 智慧語意辨識 + 新增 `transfer_in` 存摺轉入收入解析 + 修復 7724 回收桶 idempotencyKey 同步吃單 Bug)
 > **專案路徑**：`C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger`
-> **Git 分支與最新 Commit**：`main` @ `2c8bdbf`（同步 GitHub Actions 打包通過）
-> **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `4deb2077-229b-4aba-b53d-114b6dafd222`，前版可 Rollback ID: `0cd6b1db-4365-4113-b071-5cbe8731efff`)
-> **最新無簽名 IPA 位置（v3.3.0，GitHub Actions Run ID: 41064228785）**：
+> **Git 分支與最新 Commit**：`main` @ `11058e5`（已觸發 GitHub Actions Run ID: `41078660430` 編譯中）
+> **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `97b827f9-bbc3-418f-bb83-1bdf84de36ba`，前版可 Rollback ID: `4deb2077-229b-4aba-b53d-114b6dafd222`)
+> **最新無簽名 IPA 位置（v3.3.0+，GitHub Actions Run ID: 41078660430 完成後自動更新至以下路徑）**：
 > - `C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger\PocketGuardian-SideStore.ipa`
 > - `C:\Users\mrhai\Downloads\PocketGuardian-SideStore.ipa`
-> - `C:\Users\mrhai\.cline\worktrees\37c16\smart-ledger\PocketGuardian-SideStore.ipa`
+> - `C:\Users\mrhai\.cline\worktrees\d64cd\smart-ledger\PocketGuardian-SideStore.ipa`
 
 ---
 
@@ -43,8 +43,8 @@
 
 - **Windows 環境注意事項**：本機 Node.js 位於 `C:\Program Files\nodejs`，若在終端機執行 `npx` / `vitest` / `wrangler` 遇到找不到 `node`，請先確保 `$env:PATH = "C:\Program Files\nodejs;$env:PATH"`。
 - **TypeScript 型別檢查 (`npx tsc --noEmit`)**：✅ **通過（0 Errors）**
-- **Vitest 單元測試 (`npx vitest run`)**：✅ **通過（1 Test File, 54/54 Tests Passed）**
-  - 涵蓋實機 7794 正確轉帳截圖（將 `已擷取的文字` 傳入金額與商家欄位時正確解析為 `轉帳給 ****24126 $100`，防 `1.032e+42` 亂碼）、7793 錯誤截圖精簡單行提示（`⚠️ 未入帳：畫面中未偵測到交易或轉帳金額`）、鎖定畫面時間 `星期一 晚上10:29` 防誤判為 `$1029`、截圖 3 錢包 `文字 (商家 數量)` 模塊、截圖 2 玉山通知變數接法、以及 `sanitizeLedgerData` 亂碼自動修復與 `mergeLedgerData` 雙向雲端同步。
+- **Vitest 單元測試 (`npx vitest run`)**：✅ **通過（1 Test File, 57/57 Tests Passed）**
+  - 涵蓋實機 7724/7794 轉出截圖、7717 玉山存摺明細轉入收入（`網路非約轉帳 ... 轉帳給此帳號` -> `轉入：阮*豫 ****88173 +$500`，排除年份 `2026` 與 `帳戶餘額 2,040`）、7793 錯誤截圖精簡提示、刪除舊交易後重掃不吃單（`mergeLedgerData` 忽略已刪除交易的 `idempotencyKey`）、以及 Cloudflare Workers AI / iOS 捷徑 AI 結構化 JSON 解析。
 
 ---
 
