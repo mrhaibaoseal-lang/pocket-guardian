@@ -102,9 +102,9 @@ export function TransactionsScreen() {
       {/* Header & Mode Switcher */}
       <View style={styles.headerRow}>
         <View>
-          <Text style={styles.screenTitle}>帳務明細與雙源配對</Text>
+          <Text style={styles.screenTitle}>帳務明細</Text>
           <Text style={styles.screenSub}>
-            Apple Pay 與玉山通知自動合併為 1 筆；若連買兩次可一鍵拆單
+            Apple Pay 與玉山通知自動配對 · 支援一鍵拆單
           </Text>
         </View>
       </View>

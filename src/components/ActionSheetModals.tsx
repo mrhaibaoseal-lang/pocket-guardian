@@ -189,7 +189,7 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
 
                 {entryMode === 'expense' ? (
                   <>
-                    <Text style={styles.label}>扣款方式（實體卡與轉帳會自動等待玉山通知配對，不重複扣款）</Text>
+                    <Text style={styles.label}>扣款方式</Text>
                     <View style={styles.segmentRow}>
                       {(
                         [
@@ -252,7 +252,6 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
                     placeholder="輸入金額"
                     placeholderTextColor="#64748B"
                     style={styles.amountInput}
-                    autoFocus
                     onSubmitEditing={handleExpenseSubmit}
                   />
                   {amountStr.length > 0 && (
@@ -447,7 +446,7 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
             {active === 'reconcile' && (
               <View style={styles.section}>
                 <Text style={styles.helperText}>
-                  發現錢包或玉山 App 裡的實際金額跟帳本對不上？直接輸入你現在看到的真實數字，系統幫你一鍵柔性抹平！
+                  輸入帳戶實際餘額，系統將自動平帳補差額。
                 </Text>
 
                 <View style={styles.segmentRow}>

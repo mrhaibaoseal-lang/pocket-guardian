@@ -166,29 +166,38 @@ export function DashboardScreen({
           contentStyle={styles.heroCardInner}
         >
           <View style={styles.heroTopLabelRow}>
-            <Text style={styles.heroOverline}>本月總支出 · DESERT TITANIUM</Text>
+            <Text style={styles.heroOverline}>本月剩餘預算 · DESERT TITANIUM</Text>
             <Pressable
               style={styles.cycleCapsule}
               onPress={() => onNavigateTab('settings')}
             >
               <Text style={styles.cycleCapsuleText}>
-                每月 {settings.cycleStartDay} 號結算 · 剩 {safe.daysRemaining} 天
+                剩 {safe.daysRemaining} 天 · 每月 {settings.cycleStartDay} 號結算
               </Text>
             </Pressable>
           </View>
 
           <View style={styles.heroNumberRow}>
             <AnimatedRollingNumber
-              value={safe.spentThisCycle}
+              value={remainingMonthlyBudget}
               style={styles.heroBigAmount}
             />
 
-            <View style={styles.todaySpendGlassPill}>
-              <Text style={styles.todaySpendLabel}>今日花費</Text>
-              <AnimatedRollingNumber
-                value={safe.spentToday}
-                style={styles.todaySpendValue}
-              />
+            <View style={styles.heroSubStatsCol}>
+              <View style={styles.heroSubStatPill}>
+                <Text style={styles.heroSubStatLabel}>本月已花</Text>
+                <AnimatedRollingNumber
+                  value={safe.spentThisCycle}
+                  style={styles.heroSubStatValue}
+                />
+              </View>
+              <View style={styles.heroSubStatPill}>
+                <Text style={styles.heroSubStatLabel}>今日花費</Text>
+                <AnimatedRollingNumber
+                  value={safe.spentToday}
+                  style={styles.heroSubStatValue}
+                />
+              </View>
             </View>
           </View>
 
@@ -205,10 +214,11 @@ export function DashboardScreen({
             </Text>
             <Pressable onPress={() => onNavigateTab('settings')}>
               <Text style={styles.tubeSubText}>
-                本月剩餘預算{' '}
+                總預算{' '}
                 <Text style={styles.amberHighlightText}>
-                  ${remainingMonthlyBudget.toLocaleString()}
-                </Text>
+                  ${settings.monthlyBudget > 0 ? settings.monthlyBudget.toLocaleString() : '自動'}
+                </Text>{' '}
+                ▸
               </Text>
             </Pressable>
           </View>
@@ -290,8 +300,8 @@ export function DashboardScreen({
            ==================================================================== */}
         <View style={styles.controlDeckSection}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionHeaderTitle}>3 秒極速現金分類（點選輸入金額）</Text>
-            <Text style={styles.sectionHeaderMeta}>琥珀 × 大漠鈦金膠囊</Text>
+            <Text style={styles.sectionHeaderTitle}>快速記帳</Text>
+            <Text style={styles.sectionHeaderMeta}>現金常用</Text>
           </View>
 
           {/* 4 Same-Family Metallic Glass Capsules */}
@@ -349,7 +359,7 @@ export function DashboardScreen({
                   </View>
                   <View style={styles.actionCardTextCol}>
                     <Text style={styles.actionCardTitle}>記收支 / 轉帳</Text>
-                    <Text style={styles.actionCardSub}>現金 · 玉山 · 簡寫</Text>
+                    <Text style={styles.actionCardSub}>自訂記帳</Text>
                   </View>
                 </LiquidGlassCard>
               </TactilePressable>
@@ -373,7 +383,7 @@ export function DashboardScreen({
                   </View>
                   <View style={styles.actionCardTextCol}>
                     <Text style={styles.actionCardTitle}>ATM 存提同步</Text>
-                    <Text style={styles.actionCardSub}>內部互轉不算花費</Text>
+                    <Text style={styles.actionCardSub}>帳戶互轉</Text>
                   </View>
                 </LiquidGlassCard>
               </TactilePressable>
@@ -399,7 +409,7 @@ export function DashboardScreen({
                   </View>
                   <View style={styles.actionCardTextCol}>
                     <Text style={styles.actionCardTitle}>罵醒我</Text>
-                    <Text style={styles.actionCardSub}>換算時薪與便當</Text>
+                    <Text style={styles.actionCardSub}>防衝動消費</Text>
                   </View>
                 </LiquidGlassCard>
               </TactilePressable>
@@ -423,7 +433,7 @@ export function DashboardScreen({
                   </View>
                   <View style={styles.actionCardTextCol}>
                     <Text style={styles.actionCardTitle}>魔術平帳</Text>
-                    <Text style={styles.actionCardSub}>對齊真實帳戶餘額</Text>
+                    <Text style={styles.actionCardSub}>校正餘額</Text>
                   </View>
                 </LiquidGlassCard>
               </TactilePressable>
@@ -459,9 +469,9 @@ export function DashboardScreen({
            ==================================================================== */}
         <View style={styles.transactionsSection}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionHeaderTitle}>Apple Pay 與近期帳務明細</Text>
+            <Text style={styles.sectionHeaderTitle}>近期明細</Text>
             <Pressable onPress={() => onNavigateTab('transactions')}>
-              <Text style={styles.sectionHeaderAction}>全部明細 / 回收桶 ▸</Text>
+              <Text style={styles.sectionHeaderAction}>完整紀錄 ▸</Text>
             </Pressable>
           </View>
 
@@ -477,7 +487,7 @@ export function DashboardScreen({
               </View>
               <Text style={styles.emptyTitle}>尚無消費紀錄</Text>
               <Text style={styles.emptySubtitle}>
-                點選上方「超商 / 食物 / 飲料 / 車費」極速記帳，或由 iOS 26/27 錢包與玉山通知自動匯入
+                可由上方快速記帳，或透過 iOS 捷徑自動入帳
               </Text>
             </LiquidGlassCard>
           ) : (
@@ -637,29 +647,33 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     letterSpacing: -1,
   },
-  todaySpendGlassPill: {
+  heroSubStatsCol: {
+    gap: 4.5,
+    alignItems: 'flex-end',
+    marginBottom: 4,
+  },
+  heroSubStatPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4.5,
     borderRadius: 999,
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
+    backgroundColor: 'rgba(214, 195, 165, 0.12)',
     borderWidth: 0.8,
-    borderColor: 'rgba(251, 191, 36, 0.3)',
-    marginBottom: 4,
+    borderColor: 'rgba(230, 213, 184, 0.22)',
   },
-  todaySpendLabel: {
-    color: 'rgba(235, 225, 210, 0.5)',
-    fontSize: 11,
+  heroSubStatLabel: {
+    color: 'rgba(235, 225, 210, 0.55)',
+    fontSize: 10.5,
     fontWeight: '600',
   },
-  todaySpendValue: {
+  heroSubStatValue: {
     color: '#FAF6F0',
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
   },
   lightTubeTrack: {
     height: 8,

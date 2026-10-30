@@ -862,7 +862,7 @@ export function parseEvent(
         ...p,
         kind: 'ignored',
         confidence: 'low',
-        reason: '未收到文字內容（轉帳截圖請用「拍攝螢幕快照 → 從影像擷取文字」）',
+        reason: '未收到文字內容',
       };
     }
 

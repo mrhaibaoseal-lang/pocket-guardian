@@ -520,9 +520,9 @@ export function DebtsScreen() {
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <View>
-          <Text style={styles.screenTitle}>人情欠款與代墊拆帳</Text>
+          <Text style={styles.screenTitle}>欠款與代墊</Text>
           <Text style={styles.screenSub}>
-            支援同人雙向自動互抵、分次還款進度、AA 拆帳保護個人預算與轉帳末 5 碼沖銷
+            代墊不吃個人預算 · 支援一鍵互抵與 AA 拆帳
           </Text>
         </View>
       </View>

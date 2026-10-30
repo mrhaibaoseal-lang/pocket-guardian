@@ -15,6 +15,8 @@ export function ShortcutsTestBenchScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftAmount, setDraftAmount] = useState<string>('');
   const [draftMerchant, setDraftMerchant] = useState<string>('');
+  const [inboxExpanded, setInboxExpanded] = useState(false);
+  const [guideExpanded, setGuideExpanded] = useState(false);
 
   const inboxEvents = useMemo(
     () =>
@@ -38,9 +40,9 @@ export function ShortcutsTestBenchScreen() {
     >
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.screenTitle}>iOS 27 捷徑與未入帳收件匣</Text>
+          <Text style={styles.screenTitle}>iOS 捷徑與收件匣</Text>
           <Text style={styles.screenSub}>
-            支援 iOS 27 新版「錢包」自動化、AI 提示詞建模與漏記補救
+            捷徑雲端接收、未入帳收件匣與自動化指南
           </Text>
         </View>
         <Pressable
@@ -55,140 +57,169 @@ export function ShortcutsTestBenchScreen() {
 
       {/* Cloud Endpoint Status Card */}
       <LiquidGlassCard shape="card" elevated contentStyle={styles.endpointCard}>
-        <Text style={styles.endpointLabel}>目前綁定的 Cloudflare 捷徑接收網址</Text>
+        <Text style={styles.endpointLabel}>雲端捷徑接收網址</Text>
         <Text style={styles.endpointUrl} selectable>
           {meta.workerUrl.replace(/\/+$/, '')}/api/ingest
         </Text>
       </LiquidGlassCard>
 
-      {/* Unbooked / Skipped Inbox (30-day retention, masked account numbers) */}
+      {/* Unbooked / Skipped Inbox (Collapsible Drawer) */}
       <LiquidGlassCard shape="card" elevated contentStyle={styles.sectionCard}>
-        <Text style={styles.sectionTitle}>
-          📥 未入帳／已略過收件匣 ({inboxEvents.length})
-        </Text>
-        <Text style={styles.screenSub}>
-          外幣消費、缺金額或被判定為行銷／重複的事件會保留於此 30 天（帳號已遮罩），可一鍵補記或刪除。
-        </Text>
-        {inboxEvents.length === 0 ? (
-          <Text style={styles.emptyText}>目前沒有待確認或未入帳的事件 🎉</Text>
-        ) : (
-          inboxEvents.map((ev) => {
-            const isEditing = editingId === ev.id;
-            return (
-              <View key={ev.id} style={styles.eventRow}>
-                <View style={styles.inboxTopRow}>
-                  <Text style={styles.eventMeta}>
-                    [{ev.source}] {ev.status === 'duplicate' ? '重複略過' : ev.status === 'ignored' ? '已略過' : '待確認'}
-                    {ev.parsed.amount !== null ? ` · $${ev.parsed.amount}` : ''}
-                  </Text>
-                  <View style={styles.inboxBtnGroup}>
-                    <Pressable
-                      style={styles.inboxActionBtn}
-                      onPress={() => {
-                        if (isEditing) {
-                          setEditingId(null);
-                        } else {
-                          setEditingId(ev.id);
-                          setDraftAmount(ev.parsed.amount ? String(ev.parsed.amount) : '');
-                          setDraftMerchant(
-                            ev.parsed.merchant ??
-                              (ev.parsed.payeeSuffix ? `轉帳給 ****${ev.parsed.payeeSuffix}` : ''),
-                          );
-                        }
-                      }}
-                    >
-                      <Text style={styles.inboxActionText}>
-                        {isEditing ? '取消' : '✍️ 手動補記'}
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      style={styles.inboxDeleteBtn}
-                      onPress={() => deleteInboxEvent(ev.id)}
-                    >
-                      <Text style={styles.inboxDeleteText}>🗑️</Text>
-                    </Pressable>
+        <Pressable
+          style={styles.collapsibleHeaderRow}
+          onPress={() => setInboxExpanded((prev) => !prev)}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={styles.sectionTitle}>
+              📥 未入帳收件匣 ({inboxEvents.length})
+            </Text>
+            <Text style={styles.screenSub}>
+              {inboxExpanded ? '點選收起' : '外幣、缺金額或略過事件 · 點選展開'}
+            </Text>
+          </View>
+          <View style={styles.collapseChevronBtn}>
+            <Text style={styles.collapseChevron}>{inboxExpanded ? '▴' : '▾'}</Text>
+          </View>
+        </Pressable>
+
+        {inboxExpanded && (
+          inboxEvents.length === 0 ? (
+            <Text style={styles.emptyText}>目前沒有待確認或未入帳的事件 🎉</Text>
+          ) : (
+            inboxEvents.map((ev) => {
+              const isEditing = editingId === ev.id;
+              return (
+                <View key={ev.id} style={styles.eventRow}>
+                  <View style={styles.inboxTopRow}>
+                    <Text style={styles.eventMeta}>
+                      [{ev.source}] {ev.status === 'duplicate' ? '重複略過' : ev.status === 'ignored' ? '已略過' : '待確認'}
+                      {ev.parsed.amount !== null ? ` · $${ev.parsed.amount}` : ''}
+                    </Text>
+                    <View style={styles.inboxBtnGroup}>
+                      <Pressable
+                        style={styles.inboxActionBtn}
+                        onPress={() => {
+                          if (isEditing) {
+                            setEditingId(null);
+                          } else {
+                            setEditingId(ev.id);
+                            setDraftAmount(ev.parsed.amount ? String(ev.parsed.amount) : '');
+                            setDraftMerchant(
+                              ev.parsed.merchant ??
+                                (ev.parsed.payeeSuffix ? `轉帳給 ****${ev.parsed.payeeSuffix}` : ''),
+                            );
+                          }
+                        }}
+                      >
+                        <Text style={styles.inboxActionText}>
+                          {isEditing ? '取消' : '✍️ 補記'}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        style={styles.inboxDeleteBtn}
+                        onPress={() => deleteInboxEvent(ev.id)}
+                      >
+                        <Text style={styles.inboxDeleteText}>🗑️</Text>
+                      </Pressable>
+                    </View>
                   </View>
+                  <Text style={styles.eventReason}>{ev.reason}</Text>
+                  {ev.rawText ? (
+                    <Text style={styles.rawPreview} numberOfLines={2}>
+                      原文：{ev.rawText}
+                    </Text>
+                  ) : null}
+                  {isEditing ? (
+                    <View style={styles.inlineEditor}>
+                      <TextInput
+                        style={[styles.inlineInput, { width: 95 }]}
+                        placeholder="台幣金額"
+                        placeholderTextColor="rgba(235,225,210,0.4)"
+                        keyboardType="numeric"
+                        value={draftAmount}
+                        onChangeText={setDraftAmount}
+                      />
+                      <TextInput
+                        style={[styles.inlineInput, { flex: 1 }]}
+                        placeholder="商家或備註"
+                        placeholderTextColor="rgba(235,225,210,0.4)"
+                        value={draftMerchant}
+                        onChangeText={setDraftMerchant}
+                      />
+                      <Pressable
+                        style={styles.confirmBookBtn}
+                        onPress={() => {
+                          const amt = Number(draftAmount);
+                          if (Number.isFinite(amt) && amt > 0) {
+                            resolveInboxEvent(ev.id, amt, draftMerchant);
+                            setEditingId(null);
+                          }
+                        }}
+                      >
+                        <Text style={styles.confirmBookText}>入帳</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
                 </View>
-                <Text style={styles.eventReason}>{ev.reason}</Text>
-                {ev.rawText ? (
-                  <Text style={styles.rawPreview} numberOfLines={2}>
-                    原文：{ev.rawText}
-                  </Text>
-                ) : null}
-                {isEditing ? (
-                  <View style={styles.inlineEditor}>
-                    <TextInput
-                      style={[styles.inlineInput, { width: 95 }]}
-                      placeholder="台幣金額"
-                      placeholderTextColor="rgba(235,225,210,0.4)"
-                      keyboardType="numeric"
-                      value={draftAmount}
-                      onChangeText={setDraftAmount}
-                    />
-                    <TextInput
-                      style={[styles.inlineInput, { flex: 1 }]}
-                      placeholder="商家或備註"
-                      placeholderTextColor="rgba(235,225,210,0.4)"
-                      value={draftMerchant}
-                      onChangeText={setDraftMerchant}
-                    />
-                    <Pressable
-                      style={styles.confirmBookBtn}
-                      onPress={() => {
-                        const amt = Number(draftAmount);
-                        if (Number.isFinite(amt) && amt > 0) {
-                          resolveInboxEvent(ev.id, amt, draftMerchant);
-                          setEditingId(null);
-                        }
-                      }}
-                    >
-                      <Text style={styles.confirmBookText}>入帳</Text>
-                    </Pressable>
-                  </View>
-                ) : null}
-              </View>
-            );
-          })
+              );
+            })
+          )
         )}
       </LiquidGlassCard>
 
-      {/* iOS 27 Native AppIntents + AI Prompt Setup Guide */}
+      {/* iOS Shortcuts Setup Guide (Collapsible Drawer) */}
       <LiquidGlassCard shape="card" contentStyle={styles.sectionCard}>
-        <Text style={styles.sectionTitle}>
-          iOS 27 捷徑模塊設定指南（完全對應實機截圖）
-        </Text>
+        <Pressable
+          style={styles.collapsibleHeaderRow}
+          onPress={() => setGuideExpanded((prev) => !prev)}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={styles.sectionTitle}>
+              📖 捷徑設定指南
+            </Text>
+            <Text style={styles.screenSub}>
+              {guideExpanded ? '點選收起' : 'Apple Pay、銀行通知與截圖捷徑 · 點選展開'}
+            </Text>
+          </View>
+          <View style={styles.collapseChevronBtn}>
+            <Text style={styles.collapseChevron}>{guideExpanded ? '▴' : '▾'}</Text>
+          </View>
+        </Pressable>
 
-        <View style={styles.guideStep}>
-          <Text style={styles.guideStepTitle}>
-            捷徑一：錢包交易智慧入帳（感應 Apple Pay）
-          </Text>
-          <Text style={styles.guideStepText}>
-            1. 第一個模塊：「感應 [玉山 Pi 拍兔簽帳金融卡] 時」（不需按立即執行，也沒有新增空白模塊）。{'\n'}
-            2. 第二個模塊：加入【文字】模塊，在文字框內點選捷徑輸入的「商家」與「數量」。{'\n'}
-            3. 第三個模塊：加入【🛡️ 智慧入帳】，在「錢包 / Apple Pay 金額 (選填)」與「錢包 / Apple Pay 商家 (選填)」都選取上一步的「文字」。
-          </Text>
-        </View>
+        {guideExpanded && (
+          <>
+            <View style={styles.guideStep}>
+              <Text style={styles.guideStepTitle}>
+                Apple Pay 感應自動記帳
+              </Text>
+              <Text style={styles.guideStepText}>
+                1. 自動化觸發：「感應卡片時」{'\n'}
+                2. 加入【文字】模塊，選取捷徑輸入的「商家」與「數量」{'\n'}
+                3. 加入【🛡️ 智慧入帳】，傳入該文字
+              </Text>
+            </View>
 
-        <View style={styles.guideStep}>
-          <Text style={styles.guideStepTitle}>
-            捷徑二：玉山銀行通知智慧入帳（收到銀行通知時）
-          </Text>
-          <Text style={styles.guideStepText}>
-            1. 第一個模塊：「當我收到來自 [玉山銀行] 的通知時」。{'\n'}
-            2. 第二個模塊：加入【🛡️ 智慧入帳】，在「錢包 / Apple Pay 金額 (選填)」與「錢包 / Apple Pay 商家 (選填)」都選取「通知」。
-          </Text>
-        </View>
+            <View style={styles.guideStep}>
+              <Text style={styles.guideStepTitle}>
+                玉山銀行推播自動記帳
+              </Text>
+              <Text style={styles.guideStepText}>
+                1. 自動化觸發：「收到玉山銀行通知時」{'\n'}
+                2. 加入【🛡️ 智慧入帳】，選取「通知」
+              </Text>
+            </View>
 
-        <View style={styles.guideStep}>
-          <Text style={styles.guideStepTitle}>
-            捷徑三：擷取畫面至 BrokeAF（只需 2 個模塊，直接看截圖原圖！）
-          </Text>
-          <Text style={styles.guideStepText}>
-            1. 第一個模塊：加入「拍攝螢幕快照」（不需要再加「從螢幕快照擷取文字」！）。{'\n'}
-            2. 第二個模塊：加入【🛡️ 智慧入帳】，在第一個欄位「畫面截圖影像」直接選取「螢幕快照」原圖。{'\n'}
-            3. 原理：直接將原圖交給視覺引擎與雲端 AI 辨識（包含直接看圖辨識玉山存摺明細的青色「存」字圓圈與橘色「提」字圓圈），不會因為先擷取文字而漏字！
-          </Text>
-        </View>
+            <View style={styles.guideStep}>
+              <Text style={styles.guideStepTitle}>
+                轉帳／存摺截圖記帳（動作按鈕／捷徑）
+              </Text>
+              <Text style={styles.guideStepText}>
+                1. 加入「拍攝螢幕快照」{'\n'}
+                2. 加入【🛡️ 智慧入帳】，在「畫面截圖影像」選取「螢幕快照」原圖
+              </Text>
+            </View>
+          </>
+        )}
       </LiquidGlassCard>
 
       {/* Recent Raw Event Log */}
@@ -280,6 +311,25 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: '#FAF6F0',
     fontSize: 15,
+    fontWeight: '700',
+  },
+  collapsibleHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 2,
+  },
+  collapseChevronBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 999,
+    backgroundColor: 'rgba(214, 195, 165, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  collapseChevron: {
+    color: '#E6D5B8',
+    fontSize: 13,
     fontWeight: '700',
   },
   guideStep: {

@@ -22,19 +22,19 @@ enum ShortcutSourceOption: String, AppEnum {
 
 @available(iOS 17.0, *)
 struct IngestNotificationIntent: AppIntent {
-    static var title: LocalizedStringResource = "🛡️ 智慧入帳（接收錢包、通知或轉帳截圖）"
-    static var description = IntentDescription("支援直接傳入「螢幕快照」圖片（AI 直接看圖辨識青色存字/橘色提字圓圈與各家排版）、iOS 27「錢包」自動化與玉山銀行通知。")
+    static var title: LocalizedStringResource = "🛡️ 智慧入帳"
+    static var description = IntentDescription("接收錢包、銀行通知或螢幕快照截圖自動記帳。")
     static var openAppWhenRun: Bool = false
 
     @Parameter(
-        title: "畫面截圖影像（直接選取「螢幕快照」）",
-        description: "推薦：截圖後直接選取「螢幕快照」原圖（不需先擷取文字），自動看圖辨識青色「存」或橘色「提」圓圈與金額"
+        title: "畫面截圖影像",
+        description: "選填：螢幕快照原圖"
     )
     var screenshot: IntentFile?
 
     @Parameter(
         title: "通知或畫面文字",
-        description: "選填：可傳入文字、通知或已擷取的文字",
+        description: "選填：通知或畫面文字",
         default: ""
     )
     var rawText: String
