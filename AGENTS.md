@@ -40,6 +40,10 @@
    - **單回合平行批次化**：嚴禁「讀一個檔 → 回覆 → 再讀下一個檔」。凡已知需讀取、搜尋或修改的檔案，必須合併在同一個回合（Single Turn）內平行呼叫，避免在 60 秒內重複傳送對話歷史觸發 Vertex AI `429 Resource exhausted`。
    - **大檔案區間讀取**：超過 250 行的檔案（如 `App.tsx`、`DashboardScreen.tsx`），優先使用 `start_line` / `end_line` 讀取與修改邏輯相關的完整段落，保持上下文精煉且不失準確度。
    - **驗證指令合併**：執行驗證時，將 `tsc --noEmit` 與 `vitest run` 合併於同一條指令執行；單次 `editor` 替換文字保持在 4,500 字元以內，避免因超限重試浪費請求配額。
+5. **全域省 Token 瀏覽器、iOS 實圖視覺檢查與 GitHub 打包鐵律（呼叫 `$env:USERPROFILE\.local\bin\ai-tools.ps1`）**：
+   - **查技術資料（禁讀原始 HTML）**：優先用 `google:search`、`fetch_web_content` 或 `/llms.txt`；若需抓取外部網頁，一律使用 `& "$env:USERPROFILE\.local\bin\ai-tools.ps1" fetch "<URL>" "<關鍵字>" 45`（免費透過 `r.jina.ai` 轉 Markdown 並硬性鎖死最多 45 行）。
+   - **測 iOS / 網頁排版（強制看 `393×852` 實圖、禁印 DOM 原始碼）**：不印幾千行 HTML，但**必須親眼看實際畫面**以確保視覺品質。一律執行 `& "$env:USERPROFILE\.local\bin\ai-tools.ps1" ios-shot "http://localhost:8081" ".tmp/ios-preview.png"` 截取 iPhone 16 Pro (`393×852`) 實圖，並呼叫 `read_files` 讀取該 PNG 圖片親眼檢視排版、毛玻璃質感、對比度與文字溢位（單張僅約 300~500 Tokens）。
+   - **GitHub 打包 IPA / CI 狀態（0 瀏覽器、純 CLI）**：嚴禁開瀏覽器看 GitHub Actions 或印出整份編譯 Log。一律使用 `& "$env:USERPROFILE\.local\bin\ai-tools.ps1" gh-status` 查狀態（1 行 JSON），失敗時用 `gh-failed-log <RunID>` 只抓最後 35 行錯誤，成功時用 `gh run download <RunID>` 直接下載。
 
 ---
 

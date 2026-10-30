@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { Transaction } from '../../core';
+import { StaggeredItem, triggerHaptic } from '../components/iosAnimations';
 import { LiquidGlassCard } from '../components/LiquidGlassView';
 import { SafeConfirmButton } from '../components/SafeConfirmButton';
 import { useLedger } from '../store/useLedger';
@@ -111,7 +112,10 @@ export function TransactionsScreen() {
       <View style={styles.segmentRow}>
         <Pressable
           style={[styles.segmentBtn, viewMode === 'active' && styles.segmentBtnActive]}
-          onPress={() => setViewMode('active')}
+          onPress={() => {
+            triggerHaptic('selection');
+            setViewMode('active');
+          }}
         >
           <Text
             style={[
@@ -125,7 +129,10 @@ export function TransactionsScreen() {
 
         <Pressable
           style={[styles.segmentBtn, viewMode === 'trash' && styles.segmentBtnActive]}
-          onPress={() => setViewMode('trash')}
+          onPress={() => {
+            triggerHaptic('selection');
+            setViewMode('trash');
+          }}
         >
           <Text
             style={[
@@ -158,7 +165,7 @@ export function TransactionsScreen() {
             </Text>
           </LiquidGlassCard>
         ) : (
-          list.map((tx) => {
+          list.map((tx, idx) => {
             const isMerged = Boolean(
               tx.frontendSlot &&
                 tx.bankSlot &&
@@ -182,12 +189,12 @@ export function TransactionsScreen() {
               : '-';
 
             return (
-              <LiquidGlassCard
-                key={tx.id}
-                shape="card"
-                elevated={isMerged}
-                contentStyle={styles.txCard}
-              >
+              <StaggeredItem key={tx.id} index={idx}>
+                <LiquidGlassCard
+                  shape="card"
+                  elevated={isMerged}
+                  contentStyle={styles.txCard}
+                >
                 {/* Top Row: Title + Amount */}
                 <View style={styles.txTopRow}>
                   <View style={styles.txTitleWrap}>
@@ -370,7 +377,8 @@ export function TransactionsScreen() {
                     </Pressable>
                   </View>
                 )}
-              </LiquidGlassCard>
+                </LiquidGlassCard>
+              </StaggeredItem>
             );
           })
         )}

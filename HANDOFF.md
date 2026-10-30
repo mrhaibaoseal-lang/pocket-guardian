@@ -1,7 +1,7 @@
 # HANDOFF.md — 跨工具／跨模型交接紀錄
 
-> **最後更新時間**：2026-10-31 00:36 (UTC+8)
-> **最後更新 Agent**：Cline (成功打包最新版 SideStore IPA，Run ID: `41088291431`，Commit `60922e6`)
+> **最後更新時間**：2026-10-31 01:50 (UTC+8)
+> **最後更新 Agent**：Cline (完成全站 6 大 iOS 26 頂級流體物理動畫升級：`src/components/iosAnimations.tsx`、`App.tsx`、`DashboardScreen.tsx`、`TransactionsScreen.tsx`、`DebtsScreen.tsx`、`MorphingCategoryPill.tsx`)
 > **專案路徑**：`C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger`
 > **Git 分支與最新 Commit**：`main` @ `60922e6`（GitHub Actions 打包成功）
 > **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `1e12ae0d-666f-42bd-beb3-d061a3a2e4ec`，前版可 Rollback ID: `845769c7-ceaf-40a6-aa24-5120b363981e`)
@@ -12,7 +12,15 @@
 
 ---
 
-## 1. 已完成工作摘要（截至 `v3.2.3` + 「🤝 欠款」新功能欄）
+## 1. 已完成工作摘要（截至 `v3.3.0+` + 「🤝 欠款」新功能欄 + iOS 26 頂級流體物理動畫系統）
+
+0. **全站 6 大 iOS 26 頂級流體物理動畫系統（`src/components/iosAnimations.tsx`, `App.tsx`, `src/screens/DashboardScreen.tsx`, `src/screens/TransactionsScreen.tsx`, `src/screens/DebtsScreen.tsx`, `src/components/MorphingCategoryPill.tsx`）**：
+   - **方案一（動態島級頂部毛玻璃橫幅）**：`DismissibleBanner` 改為從頂部動態島以 iOS 阻尼彈簧（`damping: 15, stiffness: 230`）伴隨縮放（`0.84 → 1.0`）彈落並觸發輕觸覺震動；手指按住暫停時微幅膨脹（`scale: 1.025`），上滑時即時跟手並加速收合回動態島。
+   - **方案二（Apple Wallet 級平滑滾動金額 + 香檳光管刀鋒流光）**：建立 `<AnimatedRollingNumber>` 以 iOS 五次減速曲線平滑滾動金額並帶微幅彈性脈衝；建立 `<LiquidLightTube>` 讓預算光管以 `withSpring` 彈性伸縮並循環掠過香檳金高光折射（Shimmer Sweep）。
+   - **方案三（底部流體滑動膠囊導覽列 + 分頁微轉場）**：底部 5 欄導覽列改為共用 `<Animated.View>` 流體滑動琥珀膠囊（Fluid Sliding Pill）平滑滑移至選中分頁，搭配圖示 Q 彈跳動與 `<ScreenTransitionView>` `180ms` 微上浮轉場。
+   - **方案四（3D 觸感果凍回彈 `<TactilePressable>`）**：首頁 3 秒極速現金膠囊、2x2 行動矩陣、晚間結算與欠款操作鈕全面支援按壓微縮（`0.92~0.95`）、高光疊加與低阻尼回彈，搭配 `expo-haptics` 觸覺回饋。
+   - **方案五（瀑布流進場與自動彈性補位 `<StaggeredItem>`）**：首頁近期明細、明細頁與欠款清單支援依序微延遲瀑布流浮現（`FadeInDown.springify()`）與 `LinearTransition.springify()` 自動補位重排。
+   - **方案六（底層大漠鈦金環境光球慢速呼吸律動）**：`AmbientLightCanvas` 左上古銅琥珀與右下大漠金光球以 7.8s / 9.6s 週期於 UI 執行緒慢速呼吸漂移。
 
 1. **全新「🤝 欠款」獨立功能欄與五大進階點子（`core/types.ts`, `core/ledger.ts`, `core/memoryLedger.ts`, `src/store/useLedger.tsx`, `src/screens/DebtsScreen.tsx`, `src/screens/TransactionsScreen.tsx`, `App.tsx`）**：
    - **底部導覽列第 5 分頁「🤝 欠款」**：頂部顯示「🟢 別人欠我」與「🔴 我欠別人」雙生液態玻璃卡、雙向相抵淨額、便當數 🍱 與白打工時數 ⏱️ 換算。

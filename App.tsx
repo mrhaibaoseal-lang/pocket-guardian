@@ -3,15 +3,20 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
 import { PanResponder, Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import Animated, {
+  Easing,
   useAnimatedStyle,
   useSharedValue,
+  withRepeat,
+  withSequence,
   withSpring,
+  withTiming,
 } from 'react-native-reanimated';
 import {
   SafeAreaProvider,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import { ActionSheetModals, type ActiveModal } from './src/components/ActionSheetModals';
+import { ScreenTransitionView, triggerHaptic } from './src/components/iosAnimations';
 import { LiquidGlassCard } from './src/components/LiquidGlassView';
 import { SafeConfirmButton } from './src/components/SafeConfirmButton';
 import { DashboardScreen } from './src/screens/DashboardScreen';
@@ -58,27 +63,61 @@ function useHardwareSafeInsets() {
  * - 上方覆蓋全螢幕 BlurView (intensity={95}, tint="dark")，呈現溫潤暗金微光
  */
 function AmbientLightCanvas() {
+  const orb1Progress = useSharedValue(0);
+  const orb2Progress = useSharedValue(0);
+
+  useEffect(() => {
+    orb1Progress.value = withRepeat(
+      withTiming(1, { duration: 7800, easing: Easing.inOut(Easing.sin) }),
+      -1,
+      true,
+    );
+    orb2Progress.value = withRepeat(
+      withTiming(1, { duration: 9600, easing: Easing.inOut(Easing.sin) }),
+      -1,
+      true,
+    );
+  }, [orb1Progress, orb2Progress]);
+
+  const orb1AnimStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: orb1Progress.value * 28 },
+      { translateY: orb1Progress.value * 20 },
+      { scale: 1 + orb1Progress.value * 0.16 },
+    ],
+  }));
+
+  const orb2AnimStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: -orb2Progress.value * 30 },
+      { translateY: -orb2Progress.value * 24 },
+      { scale: 1 + orb2Progress.value * 0.18 },
+    ],
+  }));
+
   return (
     <View style={styles.ambientCanvas} pointerEvents="none">
-      {/* Top-Left: Bronze Warm Amber (#422B18) 380x380 Orb (opacity: 0.5) */}
-      <View
+      {/* Top-Left: Bronze Warm Amber (#422B18) 380x380 Breathing Orb */}
+      <Animated.View
         style={[
           styles.orbBronzeAmber,
           Platform.OS === 'web' ? styles.webOrbBlur : null,
+          orb1AnimStyle,
         ]}
       >
         <View style={styles.orbBronzeAmberCore} />
-      </View>
+      </Animated.View>
 
-      {/* Bottom-Right: Deep Desert Titanium Gold (#2E2318) 380x380 Orb (opacity: 0.55) */}
-      <View
+      {/* Bottom-Right: Deep Desert Titanium Gold (#2E2318) 380x380 Breathing Orb */}
+      <Animated.View
         style={[
           styles.orbDesertGold,
           Platform.OS === 'web' ? styles.webOrbBlur : null,
+          orb2AnimStyle,
         ]}
       >
         <View style={styles.orbDesertGoldCore} />
-      </View>
+      </Animated.View>
 
       {/* Full-Screen Frosted Diffusion Layer (intensity={95}, tint="dark") */}
       <BlurView
@@ -94,56 +133,101 @@ function AmbientLightCanvas() {
 }
 
 function DismissibleBanner({
+  bannerKey,
   onDismiss,
   onPauseChange,
   style,
   children,
 }: {
+  bannerKey?: string;
   onDismiss: () => void;
   onPauseChange?: (paused: boolean) => void;
   style?: ViewStyle;
   children: React.ReactNode;
 }) {
   const touchStartYRef = useRef<number | null>(null);
+  const dropY = useSharedValue(-36);
+  const scale = useSharedValue(0.84);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    dropY.value = -36;
+    scale.value = 0.84;
+    opacity.value = 0;
+    dropY.value = withSpring(0, { damping: 15, stiffness: 230, mass: 0.75 });
+    scale.value = withSpring(1, { damping: 14, stiffness: 240, mass: 0.75 });
+    opacity.value = withTiming(1, { duration: 160 });
+    triggerHaptic('light');
+  }, [bannerKey, dropY, scale, opacity]);
+
+  const animateOutAndDismiss = () => {
+    triggerHaptic('selection');
+    dropY.value = withTiming(-38, { duration: 150, easing: Easing.in(Easing.quad) });
+    scale.value = withTiming(0.86, { duration: 150 });
+    opacity.value = withTiming(0, { duration: 140 });
+    setTimeout(onDismiss, 140);
+  };
+
   // Only allow upward swipe (dy < -10) and ✕ button to dismiss, avoiding iOS left-edge back gesture conflict.
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => g.dy < -8 && Math.abs(g.dy) > Math.abs(g.dx),
-      onPanResponderGrant: () => onPauseChange?.(true),
+      onMoveShouldSetPanResponder: (_, g) => g.dy < -6 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderGrant: () => {
+        onPauseChange?.(true);
+        scale.value = withSpring(1.025, { damping: 16, stiffness: 300 });
+      },
+      onPanResponderMove: (_, g) => {
+        dropY.value = g.dy < 0 ? g.dy : g.dy * 0.22;
+      },
       onPanResponderRelease: (_, g) => {
         onPauseChange?.(false);
         if (g.dy < -10) {
-          onDismiss();
+          animateOutAndDismiss();
+        } else {
+          dropY.value = withSpring(0, { damping: 15, stiffness: 240 });
+          scale.value = withSpring(1, { damping: 15, stiffness: 240 });
         }
       },
-      onPanResponderTerminate: () => onPauseChange?.(false),
+      onPanResponderTerminate: () => {
+        onPauseChange?.(false);
+        dropY.value = withSpring(0, { damping: 15, stiffness: 240 });
+        scale.value = withSpring(1, { damping: 15, stiffness: 240 });
+      },
     }),
   ).current;
 
+  const bannerAnimStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: dropY.value }, { scale: scale.value }],
+  }));
+
   return (
-    <View
-      style={style}
+    <Animated.View
+      style={[style, bannerAnimStyle]}
       {...panResponder.panHandlers}
       onTouchStart={(e) => {
         onPauseChange?.(true);
+        scale.value = withSpring(1.022, { damping: 16, stiffness: 300 });
         touchStartYRef.current = e.nativeEvent.pageY;
       }}
       onTouchEnd={(e) => {
         onPauseChange?.(false);
+        scale.value = withSpring(1, { damping: 15, stiffness: 260 });
         if (touchStartYRef.current === null) return;
         const dy = e.nativeEvent.pageY - touchStartYRef.current;
         touchStartYRef.current = null;
         if (dy < -10) {
-          onDismiss();
+          animateOutAndDismiss();
         }
       }}
       onTouchCancel={() => {
         onPauseChange?.(false);
+        scale.value = withSpring(1, { damping: 15, stiffness: 260 });
         touchStartYRef.current = null;
       }}
     >
       {children}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -154,8 +238,12 @@ function MainShell() {
   const [activeModal, setActiveModal] = useState<ActiveModal>('none');
   const [presetCategory, setPresetCategory] = useState<string>('超商');
   const [navShrunk, setNavShrunk] = useState(false);
+  const [tabLayouts, setTabLayouts] = useState<Partial<Record<TabKey, { x: number; width: number }>>>({});
 
   const shrinkProgress = useSharedValue(0);
+  const pillX = useSharedValue(6);
+  const pillW = useSharedValue(68);
+  const activeIconBounce = useSharedValue(1);
 
   useEffect(() => {
     shrinkProgress.value = withSpring(navShrunk ? 1 : 0, {
@@ -164,12 +252,50 @@ function MainShell() {
     });
   }, [navShrunk, shrinkProgress]);
 
+  useEffect(() => {
+    const layout = tabLayouts[activeTab];
+    if (layout && layout.width > 0) {
+      pillX.value = withSpring(layout.x, {
+        damping: 18,
+        stiffness: 250,
+        mass: 0.72,
+      });
+      pillW.value = withSpring(layout.width, {
+        damping: 18,
+        stiffness: 250,
+        mass: 0.72,
+      });
+    }
+  }, [activeTab, tabLayouts, pillX, pillW]);
+
+  const handleSelectTab = (tab: TabKey) => {
+    if (tab !== activeTab) {
+      triggerHaptic('selection');
+      activeIconBounce.value = withSequence(
+        withTiming(0.82, { duration: 65 }),
+        withSpring(1.16, { damping: 10, stiffness: 320 }),
+        withSpring(1, { damping: 14, stiffness: 260 }),
+      );
+    }
+    setNavShrunk(false);
+    setActiveTab(tab);
+  };
+
   const floatingBarAnimStyle = useAnimatedStyle(() => {
     return {
       transform: [{ scale: 1 - shrinkProgress.value * 0.14 }],
       opacity: 1 - shrinkProgress.value * 0.1,
     };
   });
+
+  const slidingPillStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: pillX.value }],
+    width: pillW.value,
+  }));
+
+  const activeGlyphBounceStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: activeIconBounce.value }],
+  }));
 
   // Inject iOS-accurate CSS resets when running inside the PC Web Simulator
   useEffect(() => {
@@ -222,7 +348,7 @@ function MainShell() {
         <StatusBar style="light" />
 
         {/* Main Screen Content (Scrolls over the Ambient Light Canvas) */}
-        <View style={styles.screenBody}>
+        <ScreenTransitionView tabKey={activeTab} style={styles.screenBody}>
           {activeTab === 'dashboard' && (
             <DashboardScreen
               topInsetPadding={headerTotalHeight + 10}
@@ -231,10 +357,7 @@ function MainShell() {
                 if (cat) setPresetCategory(cat);
                 setActiveModal(m);
               }}
-              onNavigateTab={(t) => {
-                setNavShrunk(false);
-                setActiveTab(t);
-              }}
+              onNavigateTab={(t) => handleSelectTab(t)}
               onScrollShrinkChange={(shrunk) => setNavShrunk(shrunk)}
             />
           )}
@@ -290,7 +413,7 @@ function MainShell() {
               <SettingsAndSubsScreen />
             </View>
           )}
-        </View>
+        </ScreenTransitionView>
 
         {/* ====================================================================
             STICKY FROSTED BLUR HEADER (浮動毛玻璃頂部列 — 自動避開動態島 59pt)
@@ -320,6 +443,7 @@ function MainShell() {
           {/* Unified Liquid Glass Notification & Undo Banner (Auto-hides in 4.5s/8s, pauses on hold, swipe up or tap ✕ to dismiss) */}
           {lastToast || lastUndoableTx ? (
             <DismissibleBanner
+              bannerKey={`${lastToast ?? ''}_${lastUndoableTx?.id ?? ''}`}
               style={styles.toastWrap}
               onPauseChange={setBannerPaused}
               onDismiss={() => {
@@ -390,29 +514,48 @@ function MainShell() {
                 navShrunk && styles.floatingBarInnerShrunk,
               ]}
             >
+              {/* Fluid Sliding Amber Indicator Pill */}
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.fluidSlidingPill,
+                  navShrunk && styles.fluidSlidingPillShrunk,
+                  slidingPillStyle,
+                ]}
+              />
+
               {TABS.map((tab) => {
                 const isFocused = activeTab === tab.key;
                 return (
                   <Pressable
                     key={tab.key}
+                    onLayout={(e) => {
+                      const { x, width } = e.nativeEvent.layout;
+                      setTabLayouts((prev) => {
+                        const cur = prev[tab.key];
+                        if (cur && Math.abs(cur.x - x) < 0.5 && Math.abs(cur.width - width) < 0.5) {
+                          return prev;
+                        }
+                        return { ...prev, [tab.key]: { x, width } };
+                      });
+                    }}
                     style={[
                       styles.tabPillItem,
                       navShrunk && styles.tabPillItemShrunk,
-                      isFocused && styles.tabPillItemActive,
+                      !tabLayouts[activeTab] && isFocused && styles.tabPillItemActive,
                     ]}
-                    onPress={() => {
-                      setNavShrunk(false);
-                      setActiveTab(tab.key);
-                    }}
+                    onPress={() => handleSelectTab(tab.key)}
                   >
-                    <Text
-                      style={[
-                        styles.tabGlyph,
-                        isFocused && styles.tabGlyphActive,
-                      ]}
-                    >
-                      {tab.glyph}
-                    </Text>
+                    <Animated.View style={isFocused ? activeGlyphBounceStyle : undefined}>
+                      <Text
+                        style={[
+                          styles.tabGlyph,
+                          isFocused && styles.tabGlyphActive,
+                        ]}
+                      >
+                        {tab.glyph}
+                      </Text>
+                    </Animated.View>
                     {!navShrunk && (
                       <Text
                         style={[
@@ -790,11 +933,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 6,
     gap: 4,
+    position: 'relative',
   },
   floatingBarInnerShrunk: {
     paddingHorizontal: 5,
     paddingVertical: 4,
     gap: 3,
+  },
+  fluidSlidingPill: {
+    position: 'absolute',
+    left: 0,
+    top: 6,
+    bottom: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(245, 158, 11, 0.18)',
+    borderWidth: 0.8,
+    borderColor: 'rgba(251, 191, 36, 0.38)',
+  },
+  fluidSlidingPillShrunk: {
+    top: 4,
+    bottom: 4,
   },
   tabPillItem: {
     flexDirection: 'row',
@@ -804,6 +962,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999,
     gap: 4,
+    zIndex: 2,
   },
   tabPillItemShrunk: {
     paddingHorizontal: 11,

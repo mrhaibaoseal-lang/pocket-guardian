@@ -12,6 +12,12 @@ import {
 import { taipeiDate } from '../../core';
 import type { Transaction } from '../../core';
 import type { ActiveModal } from '../components/ActionSheetModals';
+import {
+  AnimatedRollingNumber,
+  LiquidLightTube,
+  StaggeredItem,
+  TactilePressable,
+} from '../components/iosAnimations';
 import { LiquidGlassCard } from '../components/LiquidGlassView';
 import {
   getCategoryGlassTint,
@@ -172,36 +178,22 @@ export function DashboardScreen({
           </View>
 
           <View style={styles.heroNumberRow}>
-            <Text style={styles.heroBigAmount}>
-              ${safe.spentThisCycle.toLocaleString()}
-            </Text>
+            <AnimatedRollingNumber
+              value={safe.spentThisCycle}
+              style={styles.heroBigAmount}
+            />
 
             <View style={styles.todaySpendGlassPill}>
               <Text style={styles.todaySpendLabel}>今日花費</Text>
-              <Text style={styles.todaySpendValue}>
-                ${safe.spentToday.toLocaleString()}
-              </Text>
+              <AnimatedRollingNumber
+                value={safe.spentToday}
+                style={styles.todaySpendValue}
+              />
             </View>
           </View>
 
-          {/* 琥珀香檳光管進度條 (Warm Amber -> Champagne Gold Light Tube) */}
-          <View style={styles.lightTubeTrack}>
-            {budgetProgressPercent > 0 && (
-              <View
-                style={[
-                  styles.lightTubeGlowWrap,
-                  { width: `${budgetProgressPercent}%` },
-                ]}
-              >
-                <LinearGradient
-                  colors={['#D97706', '#FDE68A']}
-                  start={{ x: 0, y: 0.5 }}
-                  end={{ x: 1, y: 0.5 }}
-                  style={styles.lightTubeGradient}
-                />
-              </View>
-            )}
-          </View>
+          {/* 琥珀香檳光管進度條 (Warm Amber -> Champagne Gold Light Tube + Shimmer) */}
+          <LiquidLightTube percent={budgetProgressPercent} />
 
           <View style={styles.tubeSubRow}>
             <Text style={styles.tubeSubText}>
@@ -229,27 +221,30 @@ export function DashboardScreen({
               <Text style={styles.balanceCellLabel}>
                 玉山 ({settings.ownAccountSuffix})
               </Text>
-              <Text style={styles.balanceCellValue}>
-                ${balances.bank.toLocaleString()}
-              </Text>
+              <AnimatedRollingNumber
+                value={balances.bank}
+                style={styles.balanceCellValue}
+              />
             </View>
 
             <View style={styles.verticalHairline} />
 
             <View style={styles.balanceCell}>
               <Text style={styles.balanceCellLabel}>現金錢包</Text>
-              <Text style={styles.balanceCellValue}>
-                ${balances.cash.toLocaleString()}
-              </Text>
+              <AnimatedRollingNumber
+                value={balances.cash}
+                style={styles.balanceCellValue}
+              />
             </View>
 
             <View style={styles.verticalHairline} />
 
             <View style={styles.balanceCell}>
               <Text style={styles.balanceCellLabel}>真正總可用</Text>
-              <Text style={[styles.balanceCellValue, styles.amberHighlightText]}>
-                ${Math.floor(safe.trueAvailable).toLocaleString()}
-              </Text>
+              <AnimatedRollingNumber
+                value={Math.floor(safe.trueAvailable)}
+                style={[styles.balanceCellValue, styles.amberHighlightText]}
+              />
             </View>
           </View>
 
@@ -273,12 +268,12 @@ export function DashboardScreen({
               </Text>
             </View>
 
-            <Pressable
+            <TactilePressable
               onPress={settleEveningPiggy}
-              style={({ pressed }) => [
+              haptic="medium"
+              contentStyle={[
                 styles.settleGlassPill,
                 todaySettled && styles.settleGlassPillDisabled,
-                pressed && styles.pressedScale,
               ]}
             >
               <Text style={styles.settleGlassPillText}>
@@ -286,7 +281,7 @@ export function DashboardScreen({
                   ? '今日已結算'
                   : `晚間結算 +$${Math.max(0, Math.floor(safe.todayLeft))}`}
               </Text>
-            </Pressable>
+            </TactilePressable>
           </View>
         </LiquidGlassCard>
 
@@ -304,12 +299,11 @@ export function DashboardScreen({
             {QUICK_CASH_CHIPS.map((chip) => {
               const tint = getCategoryGlassTint(chip.category);
               return (
-                <Pressable
+                <TactilePressable
                   key={chip.category}
-                  style={({ pressed }) => [
-                    styles.quickPillWrapper,
-                    pressed && styles.pressedScale,
-                  ]}
+                  style={styles.quickPillWrapper}
+                  activeScale={0.92}
+                  haptic="light"
                   onPress={() => onOpenModal('expense', chip.category)}
                 >
                   <View
@@ -328,7 +322,7 @@ export function DashboardScreen({
                       {chip.label}
                     </Text>
                   </View>
-                </Pressable>
+                </TactilePressable>
               );
             })}
           </View>
@@ -336,11 +330,10 @@ export function DashboardScreen({
           {/* 2x2 Liquid Glass Action Grid */}
           <View style={styles.actionGrid}>
             <View style={styles.actionGridRow}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.actionCardWrap,
-                  pressed && styles.pressedScale,
-                ]}
+              <TactilePressable
+                style={styles.actionCardWrap}
+                activeScale={0.95}
+                haptic="light"
                 onPress={() => onOpenModal('expense')}
               >
                 <LiquidGlassCard
@@ -359,13 +352,12 @@ export function DashboardScreen({
                     <Text style={styles.actionCardSub}>現金 · 玉山 · 簡寫</Text>
                   </View>
                 </LiquidGlassCard>
-              </Pressable>
+              </TactilePressable>
 
-              <Pressable
-                style={({ pressed }) => [
-                  styles.actionCardWrap,
-                  pressed && styles.pressedScale,
-                ]}
+              <TactilePressable
+                style={styles.actionCardWrap}
+                activeScale={0.95}
+                haptic="light"
                 onPress={() => onOpenModal('atm')}
               >
                 <LiquidGlassCard
@@ -384,15 +376,14 @@ export function DashboardScreen({
                     <Text style={styles.actionCardSub}>內部互轉不算花費</Text>
                   </View>
                 </LiquidGlassCard>
-              </Pressable>
+              </TactilePressable>
             </View>
 
             <View style={styles.actionGridRow}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.actionCardWrap,
-                  pressed && styles.pressedScale,
-                ]}
+              <TactilePressable
+                style={styles.actionCardWrap}
+                activeScale={0.95}
+                haptic="medium"
                 onPress={() => onOpenModal('scold')}
               >
                 <LiquidGlassCard
@@ -411,13 +402,12 @@ export function DashboardScreen({
                     <Text style={styles.actionCardSub}>換算時薪與便當</Text>
                   </View>
                 </LiquidGlassCard>
-              </Pressable>
+              </TactilePressable>
 
-              <Pressable
-                style={({ pressed }) => [
-                  styles.actionCardWrap,
-                  pressed && styles.pressedScale,
-                ]}
+              <TactilePressable
+                style={styles.actionCardWrap}
+                activeScale={0.95}
+                haptic="light"
                 onPress={() => onOpenModal('reconcile')}
               >
                 <LiquidGlassCard
@@ -436,7 +426,7 @@ export function DashboardScreen({
                     <Text style={styles.actionCardSub}>對齊真實帳戶餘額</Text>
                   </View>
                 </LiquidGlassCard>
-              </Pressable>
+              </TactilePressable>
             </View>
           </View>
         </View>
@@ -491,8 +481,8 @@ export function DashboardScreen({
               </Text>
             </LiquidGlassCard>
           ) : (
-            groupedTransactions.map((group) => (
-              <View key={group.date} style={styles.dateGroupBlock}>
+            groupedTransactions.map((group, groupIdx) => (
+              <StaggeredItem key={group.date} index={groupIdx} style={styles.dateGroupBlock}>
                 <Text style={styles.dateGroupHeader}>{group.title}</Text>
 
                 <LiquidGlassCard shape="card" elevated intensity={55}>
@@ -514,7 +504,7 @@ export function DashboardScreen({
                       : '-';
 
                     return (
-                      <View key={tx.id}>
+                      <StaggeredItem key={tx.id} index={idx}>
                         <View style={styles.txRow}>
                           {/* Left Desert Titanium Circle Icon */}
                           <View style={styles.txIconCircle}>
@@ -579,11 +569,11 @@ export function DashboardScreen({
 
                         {/* Inset Hairline Divider aligned with text column */}
                         {!isLast && <View style={styles.insetDivider} />}
-                      </View>
+                      </StaggeredItem>
                     );
                   })}
                 </LiquidGlassCard>
-              </View>
+              </StaggeredItem>
             ))
           )}
         </View>

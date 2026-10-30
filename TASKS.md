@@ -75,5 +75,12 @@
     4. 支援 BROKE AF 帳齡溫度計（`🌱 剛發生` / `⏳ 有點涼了` / `🧊 呆帳警報` / `🔥 快還錢！`）與便當／白打工時數換算。
     5. 支援部分還款（分期進度條與歷次還款紀錄）及三選一連動（玉山銀行／現金錢包／僅勾銷狀態）。
     6. 支援綁定對方銀行帳號末 5 碼，當 iOS 轉帳截圖捷徑入帳時自動比對沖銷「我欠別人」欠款且不重複扣除個人預算。
+- [x] **T2.15：iOS 26 頂級流體物理動畫全套升級 (`src/components/iosAnimations.tsx`)**
+  - **關聯檔案**：`src/components/iosAnimations.tsx`, `App.tsx`, `src/screens/DashboardScreen.tsx`, `src/screens/TransactionsScreen.tsx`, `src/screens/DebtsScreen.tsx`, `src/components/MorphingCategoryPill.tsx`
+  - **驗收條件**：
+    1. 頂部通知膠囊支援動態島彈簧墜落、按住微膨脹與上滑跟手阻尼收合。
+    2. 首頁與欠款頁大金額支援 Apple Wallet 級平滑滾動跳字與香檳光管刀鋒流光（Shimmer Sweep）。
+    3. 底部導覽列支援流體滑動選中膠囊（Fluid Sliding Pill）、圖示彈跳與分頁 `180ms` 絲滑微轉場。
+    4. 快捷鍵與行動卡片支援 `<TactilePressable>` 3D 果凍按壓回彈與 Haptics 觸覺回饋；清單支援 `<StaggeredItem>` 瀑布流與自動補位重排；底層環境光球支援慢速呼吸律動。
 - [ ] **T2.2：更多行動支付（LINE Pay / 街口支付 / 全支付）專用通知模板細化**
 - [ ] **T3.1：財政部電子發票載具明細補完（選配）**

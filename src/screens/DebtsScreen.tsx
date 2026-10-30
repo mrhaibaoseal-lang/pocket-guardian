@@ -14,6 +14,11 @@ import {
   type DebtDirection,
   type DebtRecord,
 } from '../../core';
+import {
+  AnimatedRollingNumber,
+  StaggeredItem,
+  TactilePressable,
+} from '../components/iosAnimations';
 import { LiquidGlassCard } from '../components/LiquidGlassView';
 import { SafeConfirmButton } from '../components/SafeConfirmButton';
 import { useLedger } from '../store/useLedger';
@@ -531,7 +536,7 @@ export function DebtsScreen() {
         <View style={styles.summaryTwinRow}>
           <LiquidGlassCard style={styles.summaryHalfCard} contentStyle={styles.summaryHalfInner}>
             <Text style={styles.summaryTagGreen}>🟢 別人欠我（待收回）</Text>
-            <Text style={styles.summaryBigGreen}>${totals.owedToMe.toLocaleString()}</Text>
+            <AnimatedRollingNumber value={totals.owedToMe} style={styles.summaryBigGreen} />
             <Text style={styles.summarySubText}>
               {totals.owedToMeCount} 人未結清 · 約 {owedFeelings.bentos} 個便當 🍱
             </Text>
@@ -539,7 +544,7 @@ export function DebtsScreen() {
 
           <LiquidGlassCard style={styles.summaryHalfCard} contentStyle={styles.summaryHalfInner}>
             <Text style={styles.summaryTagCoral}>🔴 我欠別人（待歸還）</Text>
-            <Text style={styles.summaryBigCoral}>${totals.iOwe.toLocaleString()}</Text>
+            <AnimatedRollingNumber value={totals.iOwe} style={styles.summaryBigCoral} />
             <Text style={styles.summarySubText}>
               {totals.iOweCount} 人待還 · 約 {iOweFeelings.hours} 小時工時 ⏱️
             </Text>
@@ -569,33 +574,45 @@ export function DebtsScreen() {
           </View>
 
           <View style={styles.composerTriggerRow}>
-            <Pressable
-              style={[
-                styles.composerBtnPrimary,
-                composerMode === 'single' && styles.composerBtnActive,
-              ]}
+            <TactilePressable
+              style={{ flex: 1 }}
+              activeScale={0.95}
+              haptic="light"
               onPress={() =>
                 setComposerMode(composerMode === 'single' ? 'none' : 'single')
               }
             >
-              <Text style={styles.composerBtnPrimaryText}>
-                {composerMode === 'single' ? '✕ 收起新增' : '＋ 新增欠款（誰欠誰）'}
-              </Text>
-            </Pressable>
+              <View
+                style={[
+                  styles.composerBtnPrimary,
+                  composerMode === 'single' && styles.composerBtnActive,
+                ]}
+              >
+                <Text style={styles.composerBtnPrimaryText}>
+                  {composerMode === 'single' ? '✕ 收起新增' : '＋ 新增欠款（誰欠誰）'}
+                </Text>
+              </View>
+            </TactilePressable>
 
-            <Pressable
-              style={[
-                styles.composerBtnSecondary,
-                composerMode === 'aa_split' && styles.composerBtnActive,
-              ]}
+            <TactilePressable
+              style={{ flex: 1 }}
+              activeScale={0.95}
+              haptic="light"
               onPress={() =>
                 setComposerMode(composerMode === 'aa_split' ? 'none' : 'aa_split')
               }
             >
-              <Text style={styles.composerBtnSecondaryText}>
-                {composerMode === 'aa_split' ? '✕ 收起拆帳' : '🧮 聚餐 AA 拆帳'}
-              </Text>
-            </Pressable>
+              <View
+                style={[
+                  styles.composerBtnSecondary,
+                  composerMode === 'aa_split' && styles.composerBtnActive,
+                ]}
+              >
+                <Text style={styles.composerBtnSecondaryText}>
+                  {composerMode === 'aa_split' ? '✕ 收起拆帳' : '🧮 聚餐 AA 拆帳'}
+                </Text>
+              </View>
+            </TactilePressable>
           </View>
         </LiquidGlassCard>
 
@@ -909,21 +926,22 @@ export function DebtsScreen() {
                 </Text>
               </LiquidGlassCard>
             ) : (
-              peopleGroups.map((g) => {
+              peopleGroups.map((g, idx) => {
                 const isExpanded =
                   expandedPerson === g.personName || peopleGroups.length <= 2;
                 const overlap = Math.min(g.owedToMeOpen, g.iOweOpen);
 
                 return (
-                  <LiquidGlassCard key={g.personName} contentStyle={styles.personCard}>
-                    <Pressable
-                      style={styles.personHeaderRow}
-                      onPress={() =>
-                        setExpandedPerson(
-                          expandedPerson === g.personName ? null : g.personName,
-                        )
-                      }
-                    >
+                  <StaggeredItem key={g.personName} index={idx}>
+                    <LiquidGlassCard contentStyle={styles.personCard}>
+                      <Pressable
+                        style={styles.personHeaderRow}
+                        onPress={() =>
+                          setExpandedPerson(
+                            expandedPerson === g.personName ? null : g.personName,
+                          )
+                        }
+                      >
                       <View style={styles.personLeft}>
                         <View style={styles.personAvatar}>
                           <Text style={styles.personAvatarText}>
@@ -1004,7 +1022,8 @@ export function DebtsScreen() {
                         )}
                       </View>
                     )}
-                  </LiquidGlassCard>
+                    </LiquidGlassCard>
+                  </StaggeredItem>
                 );
               })
             )}
@@ -1020,10 +1039,12 @@ export function DebtsScreen() {
                 <Text style={styles.emptyDesc}>所有往來帳目都已結清囉。</Text>
               </LiquidGlassCard>
             ) : (
-              openDebts.map((d) => (
-                <LiquidGlassCard key={d.id} contentStyle={styles.singleRecordCardWrap}>
-                  {renderDebtRecordCard(d, false)}
-                </LiquidGlassCard>
+              openDebts.map((d, idx) => (
+                <StaggeredItem key={d.id} index={idx}>
+                  <LiquidGlassCard contentStyle={styles.singleRecordCardWrap}>
+                    {renderDebtRecordCard(d, false)}
+                  </LiquidGlassCard>
+                </StaggeredItem>
               ))
             )}
           </View>
@@ -1038,10 +1059,12 @@ export function DebtsScreen() {
                 <Text style={styles.emptyDesc}>結清或自動互抵後的欠款會保存在這裡供日後查帳。</Text>
               </LiquidGlassCard>
             ) : (
-              settledDebts.map((d) => (
-                <LiquidGlassCard key={d.id} contentStyle={styles.singleRecordCardWrap}>
-                  {renderDebtRecordCard(d, false)}
-                </LiquidGlassCard>
+              settledDebts.map((d, idx) => (
+                <StaggeredItem key={d.id} index={idx}>
+                  <LiquidGlassCard contentStyle={styles.singleRecordCardWrap}>
+                    {renderDebtRecordCard(d, false)}
+                  </LiquidGlassCard>
+                </StaggeredItem>
               ))
             )}
           </View>

@@ -5,6 +5,7 @@ import Animated, {
   FadeOut,
   LinearTransition,
 } from 'react-native-reanimated';
+import { triggerHaptic } from './iosAnimations';
 
 const CATEGORY_OPTIONS = ['超商', '食物', '飲料', '車費', '日用品', '娛樂', '轉帳'] as const;
 
@@ -71,7 +72,10 @@ export function MorphingCategoryPill({
           exiting={FadeOut.duration(100)}
         >
           <Pressable
-            onPress={() => setExpanded(true)}
+            onPress={() => {
+              triggerHaptic('selection');
+              setExpanded(true);
+            }}
             style={styles.collapsedBtn}
             hitSlop={6}
           >
@@ -93,6 +97,7 @@ export function MorphingCategoryPill({
               <Pressable
                 key={cat}
                 onPress={() => {
+                  triggerHaptic('light');
                   onSelectCategory(cat);
                   setExpanded(false);
                 }}
@@ -116,7 +121,10 @@ export function MorphingCategoryPill({
             );
           })}
           <Pressable
-            onPress={() => setExpanded(false)}
+            onPress={() => {
+              triggerHaptic('selection');
+              setExpanded(false);
+            }}
             style={styles.closeMiniBtn}
             hitSlop={6}
           >
