@@ -1,14 +1,14 @@
 # HANDOFF.md — 跨工具／跨模型交接紀錄
 
-> **最後更新時間**：2026-10-31 01:50 (UTC+8)
-> **最後更新 Agent**：Cline (完成全站 6 大 iOS 26 頂級流體物理動畫升級：`src/components/iosAnimations.tsx`、`App.tsx`、`DashboardScreen.tsx`、`TransactionsScreen.tsx`、`DebtsScreen.tsx`、`MorphingCategoryPill.tsx`)
+> **最後更新時間**：2026-10-31 02:15 (UTC+8)
+> **最後更新 Agent**：Cline (成功打包最新全套 iOS 26 流體動畫版 SideStore IPA，Run ID: `41102071008`，Commit `e70462a`)
 > **專案路徑**：`C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger`
-> **Git 分支與最新 Commit**：`main` @ `60922e6`（GitHub Actions 打包成功）
+> **Git 分支與最新 Commit**：`main` @ `e70462a`（GitHub Actions 打包成功）
 > **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `1e12ae0d-666f-42bd-beb3-d061a3a2e4ec`，前版可 Rollback ID: `845769c7-ceaf-40a6-aa24-5120b363981e`)
-> **最新無簽名 IPA 位置（v3.3.0+，GitHub Actions Run ID: 41088291431，9.9 MB）**：
+> **最新無簽名 IPA 位置（v3.3.0+ 全套 iOS 流體動畫版，GitHub Actions Run ID: 41102071008，9.9 MB）**：
 > - `C:\Users\mrhai\Downloads\PocketGuardian-SideStore.ipa`
 > - `C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger\PocketGuardian-SideStore.ipa`
-> - `C:\Users\mrhai\.cline\worktrees\d64cd\smart-ledger\PocketGuardian-SideStore.ipa`
+> - `C:\Users\mrhai\.cline\worktrees\d3c7b\smart-ledger\PocketGuardian-SideStore.ipa`
 
 ---
 
