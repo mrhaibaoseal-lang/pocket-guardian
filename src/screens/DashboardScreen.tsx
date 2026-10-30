@@ -216,7 +216,9 @@ export function DashboardScreen({
               <Text style={styles.tubeSubText}>
                 總預算{' '}
                 <Text style={styles.amberHighlightText}>
-                  ${settings.monthlyBudget > 0 ? settings.monthlyBudget.toLocaleString() : '自動'}
+                  {settings.monthlyBudget > 0
+                    ? `$${settings.monthlyBudget.toLocaleString()}`
+                    : '依餘額'}
                 </Text>{' '}
                 ▸
               </Text>

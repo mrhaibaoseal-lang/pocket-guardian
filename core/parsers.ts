@@ -239,7 +239,7 @@ function parseWallet(p: ParsedEvent, text: string, raw: RawInput): ParsedEvent {
         kind: 'unknown',
         merchant: null,
         confidence: 'low',
-        reason: '收到「影像」而非文字，請在捷徑變數選取「已擷取的文字」',
+        reason: '未收到文字內容',
       };
     }
     const shortMerchant = mTrim.replace(/\s+/g, ' ').slice(0, 18);
@@ -248,7 +248,7 @@ function parseWallet(p: ParsedEvent, text: string, raw: RawInput): ParsedEvent {
       kind: 'unknown',
       merchant: shortMerchant,
       confidence: 'low',
-      reason: `錢包自動化僅收到商家「${shortMerchant}」但缺少金額，已存入收件匣待補記`,
+      reason: `僅收到商家「${shortMerchant}」，待補記金額`,
     };
   }
 
@@ -830,18 +830,18 @@ export function parseEvent(
         ...p,
         kind: 'unknown',
         confidence: 'low',
-        reason: '收到「影像」而非文字，請在捷徑變數選取「已擷取的文字」',
+        reason: '未收到文字內容',
       };
     }
 
     if (text && looksLikeOtp(text)) {
-      return { ...p, kind: 'otp', reason: '疑似驗證碼，已丟棄且不保存內容' };
+      return { ...p, kind: 'otp', reason: '驗證碼已略過' };
     }
     if (text && REFUND.test(text)) {
-      return { ...p, reason: '偵測到退款／取消交易，請在 App 內手動處理' };
+      return { ...p, reason: '退款或取消交易，請手動確認' };
     }
     if (source === 'manual') {
-      return { ...p, reason: '手動來源不經過解析器' };
+      return { ...p, reason: '手動記帳' };
     }
 
     const foreignInRaw = detectForeignCurrency(raw.amount ?? null);
@@ -871,7 +871,7 @@ export function parseEvent(
         ...p,
         kind: 'ignored',
         confidence: 'high',
-        reason: '偵測到行銷或回饋活動訊息，已自動略過',
+        reason: '行銷活動訊息，已略過',
       };
     }
 
@@ -882,7 +882,7 @@ export function parseEvent(
         kind: 'unknown',
         confidence: 'low',
         evidence: foreignInText,
-        reason: `偵測到外幣交易（${foreignInText}），請於收件匣確認折合台幣金額後補記`,
+        reason: `外幣交易（${foreignInText}），待補記台幣金額`,
       };
     }
 
@@ -937,7 +937,7 @@ export function parseEvent(
         ...p,
         kind: 'ignored',
         confidence: 'low',
-        reason: '只收到卡片名稱「玉山銀行」，請加入「文字 (商家 數量)」模塊後傳入智慧入帳',
+        reason: '僅收到卡片名稱，未收到金額',
       };
     }
 

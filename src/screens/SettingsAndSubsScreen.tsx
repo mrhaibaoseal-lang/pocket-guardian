@@ -103,9 +103,9 @@ export function SettingsAndSubsScreen() {
 
       {/* 1. Subscriptions (Fixed Recurring Charges) */}
       <LiquidGlassCard shape="card" contentStyle={styles.card}>
-        <Text style={styles.cardTitle}>固定扣款幽靈預警（月初即預留，不虛胖日額）</Text>
+        <Text style={styles.cardTitle}>固定扣款預留</Text>
         <Text style={styles.cardDesc}>
-          設定後，系統會在月初直接從「今日安全額度」預先凍結該筆金額；當玉山簽帳卡推播相同金額時，自動標記為此訂閱，絕不重複扣第二次！
+          月初預先從安全額度扣除，收到銀行扣款推播時自動配對不重複扣款。
         </Text>
 
         {data.subscriptions.map((sub) => (
@@ -178,9 +178,9 @@ export function SettingsAndSubsScreen() {
 
       {/* 2. Payee Dictionary */}
       <LiquidGlassCard shape="card" contentStyle={styles.card}>
-        <Text style={styles.cardTitle}>常用轉帳對象字典（OCR 自動對應名稱）</Text>
+        <Text style={styles.cardTitle}>常用轉帳對象字典</Text>
         <Text style={styles.cardDesc}>
-          當你在玉山轉帳成功頁按下「動作按鈕」截圖時，系統會比對轉入帳號末五碼並自動帶入對象名稱。
+          轉帳截圖入帳時，自動比對帳號末五碼並帶入對象名稱。
         </Text>
 
         {data.payees.map((p) => (
@@ -233,10 +233,9 @@ export function SettingsAndSubsScreen() {
 
       {/* 3. Budget, Safety Floor & Feelings Parameters */}
       <LiquidGlassCard shape="card" contentStyle={styles.card}>
-        <Text style={styles.cardTitle}>雙軌安全額度與「罵醒我」體感參數</Text>
+        <Text style={styles.cardTitle}>預算與體感參數</Text>
         <Text style={styles.cardDesc}>
-          • 每月預算上限：設為 0 時，本月剩餘預算與每日預算會自動根據「目前帳戶餘額」計算；若有設定金額，則依設定金額計算。{'\n'}
-          • 安全水位底線：帳戶裡「絕對不能花掉的保命底線」，計算餘額日額時會先預留此金額，一旦跌破立即亮紅燈並觸發強烈勸退。
+          每月預算設為 0 時自動依帳戶餘額（扣除安全底線）計算可用額度。
         </Text>
 
         <View style={styles.fieldGrid}>

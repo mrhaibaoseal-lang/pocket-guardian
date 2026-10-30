@@ -162,8 +162,9 @@ export function AnimatedRollingNumber({
   return (
     <Animated.View style={pulseStyle}>
       <Text style={style}>
+        {displayVal < 0 ? '-' : ''}
         {prefix}
-        {displayVal.toLocaleString()}
+        {Math.abs(displayVal).toLocaleString()}
         {suffix}
       </Text>
     </Animated.View>
