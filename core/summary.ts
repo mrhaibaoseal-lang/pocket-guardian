@@ -39,7 +39,8 @@ export function buildSummary(
 export function confirmationText(prefix: string, summary: DashboardSummary): string {
   const s = summary.safe;
   const icon = s.weather === 'green' ? '🟢' : s.weather === 'yellow' ? '🟡' : '🔴';
-  return `${prefix}｜${icon} 今天還能花 $${Math.floor(s.todayLeft)}`;
+  const safeLeft = Number.isFinite(s.todayLeft) && Math.abs(s.todayLeft) <= 100_000_000 ? Math.floor(s.todayLeft) : 0;
+  return `${prefix}｜${icon} 今天還能花 $${safeLeft.toLocaleString('en-US')}`;
 }
 
 /** Compact payload for the iOS widget. */

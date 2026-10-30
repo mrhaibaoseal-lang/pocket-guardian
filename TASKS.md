@@ -22,7 +22,8 @@
     3. 30 分鐘跨通道雙插槽自動合體並標記 `is_locked = true`；同源連發必新增第 2 筆交易；支援一鍵拆單還原；支援轉帳 `±3 分鐘` 重複觸發攔截與自己轉自己（多組末碼）排除。
     4. `monthlyBudget === 0` 時，本月剩餘預算與每日預算自動根據「目前帳戶餘額（扣除安全水位底線）」計算；`monthlyBudget > 0` 時根據設定金額計算。
     5. 外幣交易（如 `US$10.00`、`¥1,000`）與缺金額輸入自動進入「📥 未入帳／已略過收件匣」（保留 30 天、自動遮罩完整銀行帳號），支援一鍵補記與刪除。
-    6. `core/__tests__/core.test.ts` 43 項單元測試 100% 通過（無 Lookbehind Regex，100% 相容 Hermes 與 V8）。
+    6. 支援實機捷徑將「`文字 (商家 數量)` / `通知` / `已擷取的文字` / `螢幕上的文字`」直接傳入金額與商家選填欄位，防止多行 OCR 數字串接為 `1.032e+42` 亂碼，並精簡非交易畫面（7793）未入帳提示。
+    7. `core/__tests__/core.test.ts` 54 項單元測試 100% 通過（無 Lookbehind Regex，100% 相容 Hermes 與 V8）。
 
 - [x] **T0.2：Cloudflare Workers + D1 後端 (`cloudflare-worker/`)**
   - **關聯檔案**：`cloudflare-worker/schema.sql`, `cloudflare-worker/src/index.ts`, `cloudflare-worker/wrangler.toml`

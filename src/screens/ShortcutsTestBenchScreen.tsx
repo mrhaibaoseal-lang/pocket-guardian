@@ -155,35 +155,37 @@ export function ShortcutsTestBenchScreen() {
       {/* iOS 27 Native AppIntents + AI Prompt Setup Guide */}
       <LiquidGlassCard shape="card" contentStyle={styles.sectionCard}>
         <Text style={styles.sectionTitle}>
-          iOS 27 捷徑設定指南（AI 提示詞 ＋ 手動雙模式）
+          iOS 27 捷徑模塊設定指南（完全對應實機截圖）
         </Text>
 
         <View style={styles.guideStep}>
           <Text style={styles.guideStepTitle}>
-            捷徑一（全自動）：iOS 27「錢包 (Wallet)」感應入帳
+            捷徑一：錢包交易智慧入帳（感應 Apple Pay）
           </Text>
           <Text style={styles.guideStepText}>
-            1. 捷徑 App → 自動化 → 選「錢包 (Wallet)」（iOS 27 已由舊版「交易」改名）→ 勾選玉山簽帳卡 → 選「立即執行」→ 新增空白自動化。{'\n'}
-            2. 【AI 提示詞建置】：在頂部 AI 提示詞框輸入：「將錢包交易的金額與商家傳給錢呢的智慧入帳」。{'\n'}
-            3. 【手動拉模塊】：搜尋加入【🛡️ 智慧入帳】，在「錢包 / Apple Pay 金額」選取捷徑輸入的「金額 (Amount)」，在「錢包 / Apple Pay 商家」選取「商家 (Merchant)」。
+            1. 第一個模塊：「感應 [玉山 Pi 拍兔簽帳金融卡] 時」（不需按立即執行，也沒有新增空白模塊）。{'\n'}
+            2. 第二個模塊：加入【文字】模塊，在文字框內點選捷徑輸入的「商家」與「數量」。{'\n'}
+            3. 第三個模塊：加入【🛡️ 智慧入帳】，在「錢包 / Apple Pay 金額 (選填)」與「錢包 / Apple Pay 商家 (選填)」都選取上一步的「文字」。
           </Text>
         </View>
 
         <View style={styles.guideStep}>
           <Text style={styles.guideStepTitle}>
-            捷徑二（全自動）：收到玉山銀行通知時
+            捷徑二：玉山銀行通知智慧入帳（收到銀行通知時）
           </Text>
           <Text style={styles.guideStepText}>
-            捷徑 App → 自動化 → 「當我收到來自 [玉山銀行] 的通知」→ 立即執行 → 加入【🛡️ 智慧入帳】（或用 AI 提示詞輸入：「把收到的通知文字傳給錢呢的智慧入帳」），將「捷徑輸入（通知內容）」傳入「通知或畫面文字」。
+            1. 第一個模塊：「當我收到來自 [玉山銀行] 的通知時」。{'\n'}
+            2. 第二個模塊：加入【🛡️ 智慧入帳】，在「錢包 / Apple Pay 金額 (選填)」與「錢包 / Apple Pay 商家 (選填)」都選取「通知」。
           </Text>
         </View>
 
         <View style={styles.guideStep}>
           <Text style={styles.guideStepTitle}>
-            捷徑三（動作按鈕 1 秒觸發）：轉帳成功頁截圖
+            捷徑三：擷取文字至 BrokeAF（轉帳截圖偵測）
           </Text>
           <Text style={styles.guideStepText}>
-            設定 → 「動作按鈕 (Action Button)」→ 綁定捷徑「擷取螢幕畫面 → 從影像擷取文字 → 傳給【🛡️ 智慧入帳】的『通知或畫面文字』」（AI 提示詞：「擷取螢幕畫面文字並傳給錢呢的智慧入帳」）。
+            1. 轉帳截圖推薦做法：第一個模塊「拍攝螢幕快照」→ 第二個模塊「從 [螢幕快照] 擷取文字」→ 第三個模塊【🛡️ 智慧入帳】，在「錢包 / Apple Pay 金額 (選填)」與「錢包 / Apple Pay 商家 (選填)」都選取「已擷取的文字」（注意別選到「影像」）。{'\n'}
+            2. 螢幕文字做法：第一個模塊「取得螢幕上的 [文字]」→ 第二個模塊「將 [螢幕上的文字] 拷貝到剪貼板上」→ 第三個模塊【🛡️ 智慧入帳】，在金額與商家欄位選取「螢幕上的文字」。
           </Text>
         </View>
       </LiquidGlassCard>

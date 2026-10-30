@@ -40,19 +40,78 @@ export function detectForeignCurrency(input: string | number | null | undefined)
   return m ? m[0].trim() : null;
 }
 
-/** Convert a numeric or TWD string to an integer amount in TWD, avoiding float drift. */
+/** Convert a numeric or standalone TWD string to an integer amount in TWD, avoiding float drift or multi-line OCR digit concatenation. */
 function toNumber(s: string | number | null | undefined): number | null {
   if (s === null || s === undefined) return null;
   if (typeof s === 'number') {
     const rounded = Math.round(s);
-    return Number.isFinite(rounded) && rounded > 0 ? rounded : null;
+    return Number.isFinite(rounded) && rounded > 0 && rounded <= 10_000_000 ? rounded : null;
   }
-  const str = normalizeText(String(s));
+  const str = normalizeText(String(s)).trim();
+  if (!str || str.includes('\n')) return null;
   if (detectForeignCurrency(str)) return null;
-  const cleaned = str.replace(/[^\d.]/g, '');
-  if (!cleaned) return null;
-  const n = Math.round(Number(cleaned));
-  return Number.isFinite(n) && n > 0 ? n : null;
+  // Match only a standalone amount / TWD currency token, never clock times (10:29) or full sentences
+  const m = str.match(
+    /^(?:NT\$|NTD|TWD|新[台臺]幣|[台臺]幣|\$)?\s*(\d{1,3}(?:,\d{3})+|\d{1,7})(?:\.\d{1,2})?\s*(?:元|TWD|NTD)?$/i,
+  );
+  if (!m) return null;
+  const n = Math.round(Number(m[1].replace(/,/g, '')));
+  return Number.isFinite(n) && n > 0 && n <= 10_000_000 ? n : null;
+}
+
+/**
+ * True when a string passed into `merchant` is actually full OCR text, a bank notification,
+ * or a combined "商家 數量" block rather than a bare store name.
+ */
+function looksLikeFullTextPayload(s: string): boolean {
+  if (!s) return false;
+  if (s.includes('\n') || s.length > 24) return true;
+  if (
+    /(交易成功|轉帳|消費|扣款|付款|通知|擷取|螢幕|快照|智慧入帳|Cloudflare|Webhook|執行時顯示|搜尋|自己帳號|轉入對象|玉山|星期[一二三四五六日天]|上午|下午|晚上|凌晨|\d{1,2}:\d{2})/i.test(
+      s,
+    )
+  ) {
+    return true;
+  }
+  if (/^(.+?)\s+(?:NT\$|NTD|TWD|新[台臺]幣|[台臺]幣|\$)?\s*(\d{1,3}(?:,\d{3})+|\d{1,7})(?:\.\d{1,2})?\s*元?$/i.test(s)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Normalise Shortcut inputs so that even if the user passes `螢幕上的文字`, `已擷取的文字`,
+ * `通知`, or `文字 (商家 數量)` into `amount` and/or `merchant` while leaving `text` empty,
+ * the parser routes the full text accurately without concatenating OCR digits.
+ */
+export function normalizeRawInput(raw: RawInput): RawInput {
+  const t = normalizeText(raw.text ?? '');
+  const amtStr =
+    raw.amount !== null && raw.amount !== undefined ? normalizeText(String(raw.amount)) : '';
+  const merchStr = normalizeText(raw.merchant ?? '');
+
+  if (!t) {
+    // 1. User selected the exact same variable (e.g. 已擷取的文字 / 通知 / 文字) in both amount & merchant
+    if (amtStr && merchStr && amtStr === merchStr) {
+      return { text: amtStr, amount: null, merchant: null };
+    }
+    // 2. User passed full text / "商家 數量" into `amount` (not a standalone number)
+    if (amtStr && toNumber(raw.amount) === null && !detectForeignCurrency(amtStr)) {
+      const keepMerchant =
+        merchStr && merchStr !== amtStr && !looksLikeFullTextPayload(merchStr) ? merchStr : null;
+      return { text: amtStr, amount: null, merchant: keepMerchant };
+    }
+    // 3. User passed full OCR / notification / "商家 數量" into `merchant` while `amount` is empty
+    if (!amtStr && merchStr && looksLikeFullTextPayload(merchStr)) {
+      return { text: merchStr, amount: null, merchant: null };
+    }
+  }
+
+  return {
+    text: t || null,
+    amount: raw.amount ?? null,
+    merchant: merchStr || null,
+  };
 }
 
 const OTP_KEYWORDS = /(驗證碼|認證碼|動態密碼|一次性密碼|OTP|交易密碼|安全碼)/i;
@@ -107,10 +166,25 @@ function base(source: EventSource, receivedAt: string): ParsedEvent {
   };
 }
 
+function isInvalidMerchantCandidate(s: string): boolean {
+  const t = s.trim();
+  if (!t || t.length > 28) return true;
+  if (/(銀行|BANK|Apple\s*Pay|Wallet|錢包|智慧入帳|擷取|螢幕|快照|通知|Cloudflare|Webhook|執行時顯示|搜尋)/i.test(t)) {
+    return true;
+  }
+  if (/(?:^|\s)(?:星期[一二三四五六日天]|週[一二三四五六日天]|上午|下午|晚上|凌晨|充電中)(?:\s|$)/.test(t)) {
+    return true;
+  }
+  if (/\d{1,2}:\d{2}/.test(t) || /^\d+$/.test(t)) return true;
+  return false;
+}
+
 /**
  * Wallet (Apple Pay / iOS 27 "錢包" automation) notification or Shortcut input.
- * Strict whitelist: accepts structured fields (merchant + amount) or currency-prefixed
- * lines ($81.00 / NT$81), never loose "N 元" free text.
+ * Supports:
+ * 1. Structured fields (`amount` + `merchant`)
+ * 2. Combined "文字" block containing `商家 數量` on 1 or 2 lines (e.g. "7-ELEVEN 85", "全家 NT$85")
+ * 3. Currency-prefixed lines ($81.00 / NT$81)
  */
 function parseWallet(p: ParsedEvent, text: string, raw: RawInput): ParsedEvent {
   const res: ParsedEvent = { ...p, source: 'wallet' };
@@ -120,7 +194,7 @@ function parseWallet(p: ParsedEvent, text: string, raw: RawInput): ParsedEvent {
     return {
       ...res,
       kind: 'unknown',
-      merchant: raw.merchant?.trim() || null,
+      merchant: raw.merchant?.trim() ? raw.merchant.trim().slice(0, 24) : null,
       confidence: 'low',
       evidence: foreignToken,
       reason: `偵測到外幣交易（${foreignToken}），請於收件匣確認折合台幣金額後補記`,
@@ -129,11 +203,15 @@ function parseWallet(p: ParsedEvent, text: string, raw: RawInput): ParsedEvent {
 
   const structuredAmount = toNumber(raw.amount ?? null);
   if (structuredAmount) {
+    const cleanMerch =
+      raw.merchant?.trim() && !isInvalidMerchantCandidate(raw.merchant)
+        ? raw.merchant.trim()
+        : null;
     return {
       ...res,
       kind: 'card_spend',
       amount: structuredAmount,
-      merchant: raw.merchant?.trim() || null,
+      merchant: cleanMerch,
       confidence: 'high',
       evidence: String(raw.amount),
       reason: '錢包交易（結構化欄位）',
@@ -141,60 +219,91 @@ function parseWallet(p: ParsedEvent, text: string, raw: RawInput): ParsedEvent {
   }
 
   if (raw.merchant?.trim() && !text.trim()) {
+    const mTrim = raw.merchant.trim();
+    if (/^(影像|圖片|照片|螢幕快照|Image|Photo|Screenshot)$/i.test(mTrim)) {
+      return {
+        ...res,
+        kind: 'unknown',
+        merchant: null,
+        confidence: 'low',
+        reason: '收到「影像」而非文字，請在捷徑變數選取「已擷取的文字」',
+      };
+    }
+    const shortMerchant = mTrim.replace(/\s+/g, ' ').slice(0, 18);
     return {
       ...res,
       kind: 'unknown',
-      merchant: raw.merchant.trim(),
+      merchant: shortMerchant,
       confidence: 'low',
-      reason: `錢包自動化僅收到商家「${raw.merchant.trim()}」但缺少金額，已存入收件匣待補記`,
+      reason: `錢包自動化僅收到商家「${shortMerchant}」但缺少金額，已存入收件匣待補記`,
     };
   }
 
   const cleaned = stripShortcutDialogNoise(text);
-  const amountMatch =
-    cleaned.match(/(?:NT\$|NTD|TWD|新[台臺]幣|[台臺]幣|\$)\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?/i) ??
-    cleaned.match(/(?:消費|付款|扣款|金額)\s*[:：]?\s*(?:NT\$|\$)\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?/i);
 
-  let amount = toNumber(amountMatch?.[1]);
-  let matchedToken = amountMatch?.[0] ?? null;
-
-  // Fallback for iOS 27 "錢包 (Wallet)" automation where user or AI passed "商家 金額"
-  if (!amount) {
-    const tailNum = cleaned.match(/^([^\d\n]+?)\s+(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?$/);
-    if (tailNum) {
-      amount = toNumber(tailNum[2]);
-      matchedToken = tailNum[2];
-      if (!raw.merchant && tailNum[1]) {
-        const candidate = tailNum[1].trim();
-        if (!/(銀行|BANK)/i.test(candidate)) {
-          return {
-            ...res,
-            kind: 'card_spend',
-            amount,
-            merchant: candidate,
-            confidence: 'high',
-            evidence: matchedToken,
-            reason: '錢包通知',
-          };
-        }
-      }
+  // 1. Single-line "商家 數量" from iOS 27 Wallet "文字 (商家 數量)" block (supports store names with digits like 7-ELEVEN, 85度C)
+  const singleLineWallet = cleaned.match(
+    /^([^\n]+?)\s+(?:NT\$|NTD|TWD|新[台臺]幣|[台臺]幣|\$)?\s*(\d{1,3}(?:,\d{3})+|\d{1,6})(?:\.\d{1,2})?\s*(?:元|TWD|NTD)?$/i,
+  );
+  if (singleLineWallet) {
+    const candidateMerchant = singleLineWallet[1].trim();
+    const candidateAmount = toNumber(singleLineWallet[2]);
+    if (candidateAmount && !isInvalidMerchantCandidate(candidateMerchant)) {
+      return {
+        ...res,
+        kind: 'card_spend',
+        amount: candidateAmount,
+        merchant: raw.merchant?.trim() || candidateMerchant,
+        confidence: 'high',
+        evidence: singleLineWallet[0],
+        reason: '錢包交易（商家＋數量）',
+      };
     }
   }
 
-  if (!amount) return { ...res, confidence: 'low', reason: '錢包通知中找不到金額' };
-
-  const lines = cleaned
+  // 2. Two-line "商家\n數量" from iOS 27 Wallet "文字" block
+  const rawLines = cleaned
     .split('\n')
     .map((l) => l.trim())
-    .filter(Boolean)
+    .filter(Boolean);
+  if (rawLines.length === 2) {
+    const line1Merchant = rawLines[0];
+    const line2Amount = toNumber(rawLines[1]);
+    if (line2Amount && !isInvalidMerchantCandidate(line1Merchant)) {
+      return {
+        ...res,
+        kind: 'card_spend',
+        amount: line2Amount,
+        merchant: raw.merchant?.trim() || line1Merchant,
+        confidence: 'high',
+        evidence: rawLines[1],
+        reason: '錢包交易（商家＋數量）',
+      };
+    }
+  }
+
+  const amountMatch =
+    cleaned.match(/(?:NT\$|NTD|TWD|新[台臺]幣|[台臺]幣|\$)\s*(\d{1,3}(?:,\d{3})+|\d{1,7})(?:\.\d{1,2})?/i) ??
+    cleaned.match(/(?:消費|付款|扣款|金額)\s*[:：]?\s*(?:NT\$|\$)\s*(\d{1,3}(?:,\d{3})+|\d{1,7})(?:\.\d{1,2})?/i);
+
+  const amount = toNumber(amountMatch?.[1]);
+  const matchedToken = amountMatch?.[0] ?? null;
+
+  if (!amount) return { ...res, confidence: 'low', reason: '畫面中未偵測到交易或轉帳金額' };
+
+  const lines = rawLines
     .filter((l) => !/(銀行|BANK|Apple\s*Pay|Wallet|錢包)/i.test(l))
-    .filter((l) => !matchedToken || !l.includes(matchedToken));
+    .map((l) => (matchedToken && l.includes(matchedToken) ? l.replace(matchedToken, '').trim() : l))
+    .filter(Boolean);
   let merchant: string | null = raw.merchant?.trim() || null;
   let location: string | null = null;
   if (!merchant && lines.length > 0) {
     const [head, ...rest] = lines[0].split(',');
-    merchant = head.trim() || null;
-    location = rest.join(',').trim() || null;
+    const candidate = head.trim();
+    if (candidate && !isInvalidMerchantCandidate(candidate)) {
+      merchant = candidate;
+      location = rest.join(',').trim() || null;
+    }
   }
   return {
     ...res,
@@ -502,13 +611,23 @@ function parseTransferPage(p: ParsedEvent, text: string, ownSuffix: string): Par
 
 export function parseEvent(
   source: EventSource,
-  raw: RawInput,
+  rawInput: RawInput,
   receivedAt: string,
   ownSuffix: string,
 ): ParsedEvent {
   const p = base(source, receivedAt);
   try {
+    const raw = normalizeRawInput(rawInput);
     const text = normalizeText(raw.text ?? '');
+
+    if (/^(影像|圖片|照片|螢幕快照|Image|Photo|Screenshot)$/i.test(text.trim())) {
+      return {
+        ...p,
+        kind: 'unknown',
+        confidence: 'low',
+        reason: '收到「影像」而非文字，請在捷徑變數選取「已擷取的文字」',
+      };
+    }
 
     if (text && looksLikeOtp(text)) {
       return { ...p, kind: 'otp', reason: '疑似驗證碼，已丟棄且不保存內容' };
@@ -538,7 +657,7 @@ export function parseEvent(
         ...p,
         kind: 'ignored',
         confidence: 'low',
-        reason: '未收到文字內容（請確認捷徑「通知或畫面文字」已選取變數）',
+        reason: '未收到文字內容（轉帳截圖請用「拍攝螢幕快照 → 從影像擷取文字」）',
       };
     }
 
@@ -591,7 +710,7 @@ export function parseEvent(
     if (primaryRes.amount !== null && primaryRes.kind !== 'unknown' && primaryRes.kind !== 'ignored') {
       return primaryRes;
     }
-    if (primary === 'efingo' && primaryRes.kind === 'ignored' && !/(?:NT\$|\$)\s*\d/.test(text)) {
+    if (primary === 'efingo' && primaryRes.kind === 'ignored' && detected === 'efingo' && !/(?:NT\$|\$)\s*\d/.test(text)) {
       return primaryRes;
     }
 
@@ -609,11 +728,21 @@ export function parseEvent(
         ...p,
         kind: 'ignored',
         confidence: 'low',
-        reason: '只收到卡片名稱「玉山銀行」，請在 iOS 27 捷徑「錢包」自動化傳入「商家」與「金額」',
+        reason: '只收到卡片名稱「玉山銀行」，請加入「文字 (商家 數量)」模塊後傳入智慧入帳',
       };
     }
 
-    return primaryRes ?? { ...p, confidence: 'low', reason: '無法辨識通知或畫面金額' };
+    // If it was a multi-line screenshot or unrecognized screen, return a concise 1-line reason
+    if (text.includes('\n') || source === 'transfer_page') {
+      return {
+        ...p,
+        kind: 'unknown',
+        confidence: 'low',
+        reason: '畫面中未偵測到交易或轉帳金額',
+      };
+    }
+
+    return primaryRes ?? { ...p, confidence: 'low', reason: '畫面中未偵測到交易或轉帳金額' };
   } catch (err) {
     return {
       ...p,
@@ -632,7 +761,13 @@ export function guessSource(text: string): EventSource | null {
   if (/(轉入對象|轉入帳號|收款帳號|自己帳號|轉出帳號)/.test(t)) return 'transfer_page';
   if (/簽帳金融卡|金融卡消費|e\.?Fingo/i.test(t)) return 'efingo';
   if (/(交易成功|轉帳成功|轉帳金額|付款成功|轉帳結果|交易明細)/.test(t)) return 'transfer_page';
-  if (/(?:NT\$|\$)\s*[\d,]+/.test(t)) return 'wallet';
   if (/(?:消費|刷卡|扣款|轉帳|轉出)\s*(?:新[台臺]幣|[台臺]幣|NT\$?)?\s*[\d,]+\s*元/.test(t)) return 'efingo';
+  if (/(?:NT\$|\$)\s*[\d,]+/.test(t)) return 'wallet';
+  const walletSingle = t.match(
+    /^([^\n]+?)\s+(?:NT\$|NTD|TWD|新[台臺]幣|[台臺]幣|\$)?\s*(\d{1,3}(?:,\d{3})+|\d{1,6})(?:\.\d{1,2})?\s*(?:元|TWD|NTD)?$/i,
+  );
+  if (walletSingle && !isInvalidMerchantCandidate(walletSingle[1]) && toNumber(walletSingle[2]) !== null) {
+    return 'wallet';
+  }
   return null;
 }

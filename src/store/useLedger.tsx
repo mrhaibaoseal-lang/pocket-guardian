@@ -1,4 +1,5 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import {
@@ -8,6 +9,8 @@ import {
   createManualExpense,
   DEFAULT_SETTINGS,
   MemoryLedger,
+  mergeLedgerData,
+  sanitizeLedgerData,
   scold,
   taipeiDate,
   uuid,
@@ -135,10 +138,66 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
   const [toastSeq, setToastSeq] = useState<number>(0);
   const [bannerPaused, setBannerPaused] = useState<boolean>(false);
 
+  const dataRef = useRef<LedgerData>(data);
+  dataRef.current = data;
+  const metaRef = useRef<AppMeta>(meta);
+  metaRef.current = meta;
+  const hydratedRef = useRef<boolean>(false);
+
   const setLastToast = useCallback((msg: string | null) => {
     setLastToastState(msg);
     if (msg) setToastSeq((n) => n + 1);
   }, []);
+
+  const pushStateToCloudSilent = useCallback((payload: LedgerData) => {
+    const baseUrl = metaRef.current.workerUrl.replace(/\/+$/, '');
+    if (!baseUrl) return;
+    fetch(`${baseUrl}/api/state`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(metaRef.current.ingestToken ? { 'X-Ingest-Token': metaRef.current.ingestToken } : {}),
+      },
+      body: JSON.stringify({ data: payload }),
+    }).catch(() => undefined);
+  }, []);
+
+  const pullAndMergeFromCloud = useCallback(
+    async (silent = false) => {
+      try {
+        const baseUrl = metaRef.current.workerUrl.replace(/\/+$/, '');
+        if (!baseUrl) return;
+        const res = await fetch(`${baseUrl}/api/state`, {
+          headers: metaRef.current.ingestToken ? { 'X-Ingest-Token': metaRef.current.ingestToken } : {},
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = (await res.json()) as { ok?: boolean; data?: LedgerData };
+        if (json.ok && json.data) {
+          const { merged, newlySyncedTxs } = mergeLedgerData(dataRef.current, json.data);
+          dataRef.current = merged;
+          setData(merged);
+          AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(merged)).catch(() => undefined);
+          pushStateToCloudSilent(merged);
+          if (!silent) {
+            setLastToast(
+              newlySyncedTxs.length > 0
+                ? `☁️ 已同步 ${newlySyncedTxs.length} 筆捷徑新入帳`
+                : '☁️ 已與 Cloudflare D1 同步最新帳務',
+            );
+          } else if (newlySyncedTxs.length > 0) {
+            const latest = newlySyncedTxs[newlySyncedTxs.length - 1];
+            const label = latest.merchant ?? latest.category ?? '消費';
+            setLastToast(`☁️ 已自動同步捷徑入帳：${label} $${Math.round(latest.amount)}`);
+          }
+        }
+      } catch {
+        if (!silent) {
+          setLastToast('⚠️ 雲端連線失敗（目前使用本機離線帳本）');
+        }
+      }
+    },
+    [pushStateToCloudSilent, setLastToast],
+  );
 
   useEffect(() => {
     if (!lastToast || bannerPaused) return;
@@ -165,32 +224,69 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(STORAGE_KEY),
           AsyncStorage.getItem(META_KEY),
         ]);
-        if (savedData) {
-          const parsed = JSON.parse(savedData) as LedgerData;
-          setData({
-            ...parsed,
-            debts: Array.isArray(parsed.debts) ? parsed.debts : [],
+        if (savedMeta) {
+          const parsedMeta = JSON.parse(savedMeta) as Partial<AppMeta>;
+          setMeta((prev) => {
+            const nextMeta = { ...prev, ...parsedMeta };
+            metaRef.current = nextMeta;
+            return nextMeta;
           });
         }
-        if (savedMeta) setMeta((prev) => ({ ...prev, ...(JSON.parse(savedMeta) as Partial<AppMeta>) }));
+        if (savedData) {
+          const parsed = sanitizeLedgerData(JSON.parse(savedData) as LedgerData);
+          const nextData = {
+            ...parsed,
+            debts: Array.isArray(parsed.debts) ? parsed.debts : [],
+          };
+          dataRef.current = nextData;
+          setData(nextData);
+        }
       } catch {
         // Keep initial state on storage read failure
+      } finally {
+        hydratedRef.current = true;
+        pullAndMergeFromCloud(true).catch(() => undefined);
       }
     })();
-  }, []);
+  }, [pullAndMergeFromCloud]);
 
-  const persist = useCallback((next: LedgerData) => {
-    const clone: LedgerData = {
-      settings: { ...next.settings },
-      transactions: [...next.transactions],
-      events: [...next.events],
-      payees: [...next.payees],
-      subscriptions: [...next.subscriptions],
-      debts: [...(next.debts ?? [])],
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active' && hydratedRef.current) {
+        pullAndMergeFromCloud(true).catch(() => undefined);
+      }
+    });
+    const timer = setInterval(() => {
+      if (AppState.currentState === 'active' && hydratedRef.current) {
+        pullAndMergeFromCloud(true).catch(() => undefined);
+      }
+    }, 8000);
+    return () => {
+      sub.remove();
+      clearInterval(timer);
     };
-    setData(clone);
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(clone)).catch(() => undefined);
-  }, []);
+  }, [pullAndMergeFromCloud]);
+
+  const persist = useCallback(
+    (next: LedgerData, syncCloud = true) => {
+      const sanitized = sanitizeLedgerData(next);
+      const clone: LedgerData = {
+        settings: { ...sanitized.settings },
+        transactions: [...sanitized.transactions],
+        events: [...sanitized.events],
+        payees: [...sanitized.payees],
+        subscriptions: [...sanitized.subscriptions],
+        debts: [...(sanitized.debts ?? [])],
+      };
+      dataRef.current = clone;
+      setData(clone);
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(clone)).catch(() => undefined);
+      if (syncCloud) {
+        pushStateToCloudSilent(clone);
+      }
+    },
+    [pushStateToCloudSilent],
+  );
 
   const triggerHaptic = useCallback((type: 'success' | 'warning' | 'light' = 'light') => {
     try {
@@ -625,17 +721,9 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const syncFromCloud = useCallback(async () => {
-    const baseUrl = meta.workerUrl.replace(/\/+$/, '');
-    const res = await fetch(`${baseUrl}/api/state`, {
-      headers: meta.ingestToken ? { 'X-Ingest-Token': meta.ingestToken } : {},
-    });
-    const json = (await res.json()) as { ok?: boolean; data?: LedgerData };
-    if (json.ok && json.data) {
-      persist(json.data);
-      setLastToast('☁️ 已從 Cloudflare D1 同步最新帳本');
-      triggerHaptic('success');
-    }
-  }, [meta.ingestToken, meta.workerUrl, persist, triggerHaptic]);
+    await pullAndMergeFromCloud(false);
+    triggerHaptic('success');
+  }, [pullAndMergeFromCloud, triggerHaptic]);
 
   const pushToCloud = useCallback(async () => {
     const baseUrl = meta.workerUrl.replace(/\/+$/, '');

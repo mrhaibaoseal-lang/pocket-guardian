@@ -640,3 +640,149 @@ describe('debts (who owes whom, auto-netting, AA split, partial repayment & tran
     expect(computeSafeToSpend(l.data.settings, l.data.transactions, [], T0).spentToday).toBe(0);
   });
 });
+
+describe('real-device iOS 27 Shortcut screenshot & variable wiring regressions (7793 / 7794)', () => {
+  it('7794: parses transfer screenshot when OCR text is passed into amount & merchant fields without 1.032e+42 bug', () => {
+    const l = ledger({ openingBank: 5000, monthlyBudget: 0 });
+    const ocr7794 = [
+      '10:32 ₩',
+      '•分16分',
+      '星期一',
+      'PS_E 10:29',
+      '交易成功',
+      '2026-10-26 02:07:37',
+      '轉帳金額',
+      '轉入對象',
+      '自己帳號',
+      '100',
+      '808玉山商業銀行',
+      '********24126',
+      '808玉山商業銀行',
+      '********83151',
+      'พิ',
+    ].join('\n');
+
+    const res = l.ingest(null, { text: '', amount: ocr7794, merchant: ocr7794 }, T0);
+    expect(res.status).toBe('new_tx');
+    expect(res.transaction).not.toBeNull();
+    expect(res.transaction?.amount).toBe(100);
+    expect(res.transaction?.method).toBe('bank_transfer');
+    expect(res.transaction?.merchant).toBe('轉帳給 ****24126');
+    expect(res.message).toContain('✅ 已記 轉帳給 ****24126 $100');
+    expect(res.message).not.toContain('e+');
+    expect(res.message).not.toContain('交易成功');
+  });
+
+  it('7793: returns a clean, short 1-line warning when an invalid screenshot is passed into merchant/amount', () => {
+    const l = ledger();
+    const ocr7793 = [
+      '10:32M',
+      '16+',
+      '擷取文字至 BrokeAF （',
+      '拍攝螢幕快照',
+      '從回截圖',
+      '擷取 文字',
+      '智慧入帳（接收錢包、通知或',
+      '轉帳文字）',
+      '通知或畫面文字',
+      'Cloudflare Webhook',
+      '網址 https://pocket-guardi...',
+      '執行時顯示',
+      'Q搜尋',
+    ].join('\n');
+
+    const res = l.ingest(null, { text: '', amount: null, merchant: ocr7793 }, T0);
+    expect(res.status).toBe('parse_failed');
+    expect(res.transaction).toBeNull();
+    expect(res.message).toBe('⚠️ 未入帳：畫面中未偵測到交易或轉帳金額');
+  });
+
+  it('does not book lock-screen clock time ("星期一\\n晚上10:29") as a $1029 expense', () => {
+    const l = ledger();
+    const lockScreenOcr = '星期一\n晚上10:29';
+    const res = l.ingest(null, { text: '', amount: lockScreenOcr, merchant: lockScreenOcr }, T0);
+    expect(res.transaction).toBeNull();
+    expect(res.message).toBe('⚠️ 未入帳：畫面中未偵測到交易或轉帳金額');
+  });
+
+  it('Screenshot 3: parses Wallet "文字" block containing "商家 數量" passed into amount & merchant', () => {
+    const l = ledger({ openingBank: 5000 });
+    const walletText = '7-ELEVEN 85';
+    const res = l.ingest(null, { text: '', amount: walletText, merchant: walletText }, T0);
+    expect(res.status).toBe('new_tx');
+    expect(res.transaction?.method).toBe('apple_pay');
+    expect(res.transaction?.merchant).toBe('7-ELEVEN');
+    expect(res.transaction?.amount).toBe(85);
+  });
+
+  it('Screenshot 2: parses E.SUN notification passed into amount & merchant fields', () => {
+    const l = ledger({ openingBank: 5000 });
+    const notif = '【玉山銀行】您於2026/10/27 12:00簽帳金融卡消費新臺幣150元。';
+    const res = l.ingest(null, { text: '', amount: notif, merchant: notif }, T0);
+    expect(res.status).toBe('new_tx');
+    expect(res.transaction?.method).toBe('debit_card');
+    expect(res.transaction?.amount).toBe(150);
+  });
+
+  it('auto-heals corrupted 1.032e+42 and lock-screen $1029 transactions in MemoryLedger', () => {
+    const rawCorrupted = ledger({ openingBank: 5000 }).data;
+    rawCorrupted.transactions.push(
+      {
+        id: 'bad-clock',
+        amount: 1029,
+        type: 'expense',
+        method: 'apple_pay',
+        category: null,
+        merchant: '星期一\n晚上10:29',
+        note: null,
+        accountId: 'bank',
+        toAccountId: null,
+        payeeId: null,
+        frontendSlot: 'apple_pay',
+        bankSlot: null,
+        idempotencyKey: null,
+        isLocked: false,
+        mergedMetadata: null,
+        timeSource: 'notification_received',
+        affectsBudget: true,
+        isAdvance: false,
+        deletedAt: null,
+        occurredAt: T0,
+        createdAt: T0,
+      },
+      {
+        id: 'bad-7794',
+        amount: 1.0321610292026102e42,
+        type: 'expense',
+        method: 'apple_pay',
+        category: null,
+        merchant:
+          '10:32 ₩\n•分16分\n星期一\nPS_E 10:29\n交易成功\n2026-10-26 02:07:37\n轉帳金額\n轉入對象\n自己帳號\n100\n808玉山商業銀行\n********24126\n808玉山商業銀行\n********83151\nพิ',
+        note: null,
+        accountId: 'bank',
+        toAccountId: null,
+        payeeId: null,
+        frontendSlot: 'apple_pay',
+        bankSlot: null,
+        idempotencyKey: null,
+        isLocked: false,
+        mergedMetadata: null,
+        timeSource: 'notification_received',
+        affectsBudget: true,
+        isAdvance: false,
+        deletedAt: null,
+        occurredAt: T0,
+        createdAt: T0,
+      },
+    );
+
+    const healed = new MemoryLedger(rawCorrupted);
+    expect(healed.data.transactions).toHaveLength(1);
+    expect(healed.data.transactions[0]).toMatchObject({
+      id: 'bad-7794',
+      amount: 100,
+      method: 'bank_transfer',
+      merchant: '轉帳給 ****24126',
+    });
+  });
+});

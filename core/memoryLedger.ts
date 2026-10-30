@@ -1,7 +1,7 @@
 import { createAdjustment, createIncome, createManualExpense, decideIngest, idempotencyKeyFor, PAIR_WINDOW_MIN, splitTransaction } from './dedupe';
 import type { IngestDecision, RecentEvent } from './dedupe';
 import { computeBalances, dueSubscriptions, matchSubscription } from './ledger';
-import { guessSource, maskSensitiveText, normalizeText, parseEvent } from './parsers';
+import { guessSource, maskSensitiveText, normalizeRawInput, normalizeText, parseEvent } from './parsers';
 import type { RawInput } from './parsers';
 import { buildSummary, confirmationText } from './summary';
 import type { DashboardSummary } from './summary';
@@ -71,7 +71,8 @@ export function uuid(): string {
     .padStart(4, '0')}`;
 }
 
-export function fingerprintOf(raw: RawInput): string {
+export function fingerprintOf(rawInput: RawInput): string {
+  const raw = normalizeRawInput(rawInput);
   const t = normalizeText(raw.text ?? '');
   return t || `${raw.merchant ?? ''}|${raw.amount ?? ''}`;
 }
@@ -91,12 +92,189 @@ export function statusOf(decision: IngestDecision, parsed: ParsedEvent): StoredE
   }
 }
 
+function cleanShortLabel(label: string | null | undefined, fallback: string): string {
+  if (!label) return fallback;
+  const oneLine = label.replace(/\s+/g, ' ').trim();
+  if (!oneLine) return fallback;
+  return oneLine.length > 18 ? `${oneLine.slice(0, 18)}…` : oneLine;
+}
+
 export function messageFor(decision: IngestDecision, tx: Transaction | null, summary: DashboardSummary): string {
-  if (decision.action === 'discard') return `⚠️ 未入帳：${decision.reason}`;
+  if (decision.action === 'discard') {
+    const cleanReason = decision.reason.replace(/\s+/g, ' ').trim().slice(0, 48);
+    return `⚠️ 未入帳：${cleanReason}`;
+  }
   if (decision.action === 'duplicate') return confirmationText(`↩️ 已略過重複：${decision.reason}`, summary);
-  const what = tx ? `${tx.merchant ?? tx.category ?? '消費'} $${tx.amount}` : '';
+  const label = tx ? cleanShortLabel(tx.merchant ?? tx.category, tx.method === 'bank_transfer' ? '轉帳' : '消費') : '';
+  const what = tx ? `${label} $${Math.round(tx.amount)}` : '';
   const prefix = decision.action === 'merge' ? `🔗 已合併 ${what}` : `✅ 已記 ${what}`;
   return confirmationText(prefix, summary);
+}
+
+/**
+ * Self-healing sanitizer: repairs or removes corrupted historical transactions/events
+ * caused by earlier OCR digit concatenation (> 10,000,000) or lock-screen clock time (10:29 -> $1029).
+ */
+export function sanitizeLedgerData(data: LedgerData): LedgerData {
+  const ownSuffix = data.settings?.ownAccountSuffix ?? '83151';
+  const repairedTxs: Transaction[] = [];
+  const seenTransferKeys = new Set<string>();
+
+  for (const tx of data.transactions ?? []) {
+    // 1. Remove false-positive lock-screen clock capture ("星期一\n晚上10:29" -> $1029)
+    if (tx.amount === 1029 && tx.merchant && /星期[一二三四五六日天][\s\S]*10:29/.test(tx.merchant)) {
+      continue;
+    }
+    // 2. Repair or drop astronomically large OCR digit-concatenation bugs (e.g. 1.032e+42)
+    if (!Number.isFinite(tx.amount) || tx.amount <= 0 || tx.amount > 10_000_000) {
+      if (tx.merchant && /(轉帳金額|轉入對象|交易成功)/.test(tx.merchant)) {
+        const reparsed = parseEvent('transfer_page', { text: tx.merchant }, tx.createdAt, ownSuffix);
+        if (reparsed.kind === 'transfer_out' && reparsed.amount && reparsed.amount <= 10_000_000) {
+          const key = idempotencyKeyFor(reparsed) ?? `${reparsed.amount}|${reparsed.payeeSuffix ?? ''}`;
+          if (seenTransferKeys.has(key)) continue;
+          seenTransferKeys.add(key);
+          const label = reparsed.payeeSuffix ? `轉帳給 ****${reparsed.payeeSuffix}` : '轉帳';
+          repairedTxs.push({
+            ...tx,
+            amount: reparsed.amount,
+            method: 'bank_transfer',
+            category: '轉帳',
+            merchant: label,
+            frontendSlot: null,
+            bankSlot: 'transfer_page',
+            idempotencyKey: idempotencyKeyFor(reparsed),
+            occurredAt: reparsed.occurredAt,
+            timeSource: reparsed.timeSource,
+          });
+        }
+      }
+      continue;
+    }
+    if (tx.idempotencyKey) seenTransferKeys.add(tx.idempotencyKey);
+    repairedTxs.push(tx);
+  }
+
+  const repairedEvents: StoredEvent[] = [];
+  for (const ev of data.events ?? []) {
+    if (ev.parsed?.amount && (!Number.isFinite(ev.parsed.amount) || ev.parsed.amount > 10_000_000)) {
+      continue;
+    }
+    if (ev.parsed?.amount === 1029 && ev.parsed?.merchant && /星期[一二三四五六日天]/.test(ev.parsed.merchant)) {
+      continue;
+    }
+    if (ev.status === 'parse_failed' && ev.reason.length > 60) {
+      repairedEvents.push({
+        ...ev,
+        parsed: { ...ev.parsed, merchant: null, reason: '畫面中未偵測到交易或轉帳金額' },
+        reason: '畫面中未偵測到交易或轉帳金額',
+      });
+      continue;
+    }
+    repairedEvents.push(ev);
+  }
+
+  return {
+    ...data,
+    transactions: repairedTxs,
+    events: repairedEvents,
+    debts: Array.isArray(data.debts) ? data.debts : [],
+  };
+}
+
+/**
+ * Intelligently merge local App LedgerData with Cloud D1 LedgerData so that
+ * Shortcut ingests on the Cloud automatically appear in the App without losing
+ * local manual edits, settings, or debt records.
+ */
+export function mergeLedgerData(localRaw: LedgerData, cloudRaw: LedgerData): {
+  merged: LedgerData;
+  newlySyncedTxs: Transaction[];
+} {
+  const local = sanitizeLedgerData(localRaw);
+  const cloud = sanitizeLedgerData(cloudRaw);
+
+  const txById = new Map<string, Transaction>();
+  const txByIdemKey = new Set<string>();
+  for (const t of local.transactions) {
+    txById.set(t.id, t);
+    if (t.idempotencyKey) txByIdemKey.add(t.idempotencyKey);
+  }
+
+  const newlySyncedTxs: Transaction[] = [];
+  for (const ct of cloud.transactions) {
+    const existing = txById.get(ct.id);
+    if (existing) {
+      // Preserve soft-delete or locked merge state from whichever side is further along
+      txById.set(ct.id, {
+        ...ct,
+        ...existing,
+        deletedAt: existing.deletedAt ?? ct.deletedAt,
+        isLocked: existing.isLocked || ct.isLocked,
+        isAdvance: existing.isAdvance || ct.isAdvance,
+        mergedMetadata: existing.mergedMetadata ?? ct.mergedMetadata,
+      });
+    } else if (ct.idempotencyKey && txByIdemKey.has(ct.idempotencyKey)) {
+      continue;
+    } else {
+      txById.set(ct.id, ct);
+      if (ct.idempotencyKey) txByIdemKey.add(ct.idempotencyKey);
+      if (!ct.deletedAt) newlySyncedTxs.push(ct);
+    }
+  }
+
+  const eventById = new Map<string, StoredEvent>();
+  for (const ev of cloud.events) {
+    eventById.set(ev.id, ev);
+  }
+  for (const lev of local.events) {
+    const cev = eventById.get(lev.id);
+    if (!cev || (lev.status === 'new_tx' && cev.status !== 'new_tx')) {
+      eventById.set(lev.id, lev);
+    }
+  }
+
+  const mergeById = <T extends { id: string }>(a: T[] = [], b: T[] = []): T[] => {
+    const m = new Map<string, T>();
+    for (const item of b) m.set(item.id, item);
+    for (const item of a) m.set(item.id, item);
+    return Array.from(m.values());
+  };
+
+  const debtMap = new Map<string, DebtRecord>();
+  for (const d of cloud.debts ?? []) debtMap.set(d.id, d);
+  for (const ld of local.debts ?? []) {
+    const cd = debtMap.get(ld.id);
+    if (!cd || (ld.settlements?.length ?? 0) >= (cd.settlements?.length ?? 0)) {
+      debtMap.set(ld.id, ld);
+    }
+  }
+
+  const ls = local.settings;
+  const cs = cloud.settings;
+  const mergedSettings: Settings = {
+    ...cs,
+    ...ls,
+    openingBank: ls.openingBank !== 0 ? ls.openingBank : cs.openingBank,
+    openingCash: ls.openingCash !== 0 ? ls.openingCash : cs.openingCash,
+    monthlyBudget: ls.monthlyBudget !== 0 ? ls.monthlyBudget : cs.monthlyBudget,
+    safetyFloor: ls.safetyFloor !== 0 ? ls.safetyFloor : cs.safetyFloor,
+    hourlyWage: ls.hourlyWage !== 0 ? ls.hourlyWage : cs.hourlyWage,
+    bentoPrice: ls.bentoPrice !== 0 ? ls.bentoPrice : cs.bentoPrice,
+    ownAccountSuffix: ls.ownAccountSuffix || cs.ownAccountSuffix || '83151',
+    piggyBankSaved: Math.max(ls.piggyBankSaved ?? 0, cs.piggyBankSaved ?? 0),
+    resistedImpulseTotal: Math.max(ls.resistedImpulseTotal ?? 0, cs.resistedImpulseTotal ?? 0),
+  };
+
+  const merged: LedgerData = sanitizeLedgerData({
+    settings: mergedSettings,
+    transactions: Array.from(txById.values()),
+    events: Array.from(eventById.values()).slice(-120),
+    payees: mergeById(local.payees, cloud.payees),
+    subscriptions: mergeById(local.subscriptions, cloud.subscriptions),
+    debts: Array.from(debtMap.values()),
+  });
+
+  return { merged, newlySyncedTxs };
 }
 
 /**
@@ -105,9 +283,7 @@ export function messageFor(decision: IngestDecision, tx: Transaction | null, sum
  */
 export class MemoryLedger {
   constructor(public data: LedgerData = emptyLedger()) {
-    if (!Array.isArray(this.data.debts)) {
-      this.data.debts = [];
-    }
+    this.data = sanitizeLedgerData(this.data);
   }
 
   get debts(): DebtRecord[] {
@@ -121,8 +297,12 @@ export class MemoryLedger {
     return buildSummary(this.data.settings, this.data.transactions, this.data.subscriptions, now);
   }
 
-  ingest(sourceHint: EventSource | null, raw: RawInput, now: string): IngestResult {
-    const source = sourceHint ?? guessSource(raw.text ?? '') ?? (raw.amount ? 'wallet' : 'efingo');
+  ingest(sourceHint: EventSource | null, rawInput: RawInput, now: string): IngestResult {
+    const raw = normalizeRawInput(rawInput);
+    const source =
+      sourceHint ??
+      guessSource(raw.text ?? '') ??
+      (raw.amount || raw.merchant ? 'wallet' : 'efingo');
     const parsed = parseEvent(source, raw, now, this.data.settings.ownAccountSuffix);
     const fingerprint = fingerprintOf(raw);
     const eventId = uuid();
@@ -218,8 +398,9 @@ export class MemoryLedger {
     }
 
     const status = statusOf(decision, parsed);
+    const rawPreviewSource = (raw.text && raw.text.trim()) ? raw.text : fingerprint;
     const maskedRaw =
-      parsed.kind === 'otp' ? null : maskSensitiveText((raw.text ?? fingerprint).slice(0, 2000));
+      parsed.kind === 'otp' ? null : maskSensitiveText(rawPreviewSource.slice(0, 2000));
     this.data.events.push({
       id: eventId,
       source: parsed.source,

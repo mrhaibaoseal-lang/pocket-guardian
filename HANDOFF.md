@@ -1,7 +1,7 @@
 # HANDOFF.md — 跨工具／跨模型交接紀錄
 
-> **最後更新時間**：2026-10-30 21:58 (UTC+8)
-> **最後更新 Agent**：Cline (新增「🤝 欠款」獨立功能欄、AA 拆帳引擎與成功打包 v3.3.0 SideStore IPA)
+> **最後更新時間**：2026-10-30 23:03 (UTC+8)
+> **最後更新 Agent**：Cline (修正實機 7793/7794 轉帳與錯誤截圖解析、防 `1.032e+42` 亂碼、支援捷徑 `文字(商家 數量)` / `通知` / `已擷取的文字` 接法、App 前景自動雲端同步與教學更新)
 > **專案路徑**：`C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger`
 > **Git 分支與最新 Commit**：`main` @ `2c8bdbf`（同步 GitHub Actions 打包通過）
 > **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `4deb2077-229b-4aba-b53d-114b6dafd222`，前版可 Rollback ID: `0cd6b1db-4365-4113-b071-5cbe8731efff`)
@@ -43,8 +43,8 @@
 
 - **Windows 環境注意事項**：本機 Node.js 位於 `C:\Program Files\nodejs`，若在終端機執行 `npx` / `vitest` / `wrangler` 遇到找不到 `node`，請先確保 `$env:PATH = "C:\Program Files\nodejs;$env:PATH"`。
 - **TypeScript 型別檢查 (`npx tsc --noEmit`)**：✅ **通過（0 Errors）**
-- **Vitest 單元測試 (`npx vitest run`)**：✅ **通過（1 Test File, 43/43 Tests Passed）**
-  - 涵蓋轉帳 20/100/1,000 單雙欄排版、狀態列 10:50 與電量 100 過濾、手續費 15 元排除、西元／民國年／短日期解析與防誤抓、自己轉自己排除、滿千送百略過與享 1% 回饋正常入帳、外幣與空字串進收件匣、收件匣完整帳號遮罩，以及 `monthlyBudget = 0` vs `> 0` 雙模式測試。
+- **Vitest 單元測試 (`npx vitest run`)**：✅ **通過（1 Test File, 54/54 Tests Passed）**
+  - 涵蓋實機 7794 正確轉帳截圖（將 `已擷取的文字` 傳入金額與商家欄位時正確解析為 `轉帳給 ****24126 $100`，防 `1.032e+42` 亂碼）、7793 錯誤截圖精簡單行提示（`⚠️ 未入帳：畫面中未偵測到交易或轉帳金額`）、鎖定畫面時間 `星期一 晚上10:29` 防誤判為 `$1029`、截圖 3 錢包 `文字 (商家 數量)` 模塊、截圖 2 玉山通知變數接法、以及 `sanitizeLedgerData` 亂碼自動修復與 `mergeLedgerData` 雙向雲端同步。
 
 ---
 

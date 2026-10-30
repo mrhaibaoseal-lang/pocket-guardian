@@ -78,7 +78,12 @@ async function loadLedger(env: Env): Promise<MemoryLedger> {
   }
   try {
     const parsed = JSON.parse(row.data_json) as LedgerData;
-    return new MemoryLedger(parsed);
+    const ledger = new MemoryLedger(parsed);
+    const cleanedJson = JSON.stringify(ledger.data);
+    if (cleanedJson !== row.data_json) {
+      await saveLedger(env, ledger, new Date().toISOString());
+    }
+    return ledger;
   } catch {
     return new MemoryLedger(emptyLedger());
   }

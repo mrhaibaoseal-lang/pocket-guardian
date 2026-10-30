@@ -25,20 +25,20 @@ struct IngestNotificationIntent: AppIntent {
 
     @Parameter(
         title: "通知或畫面文字",
-        description: "可傳入銀行通知內容、螢幕截圖擷取文字，或 iOS 27 錢包交易資訊",
+        description: "選填：可傳入文字、通知或已擷取的文字",
         default: ""
     )
     var rawText: String
 
     @Parameter(
         title: "錢包 / Apple Pay 金額（選填）",
-        description: "對應 iOS 27「錢包 (Wallet)」自動化輸入中的「金額 (Amount)」"
+        description: "可選取「文字 (商家 數量)」、「通知」或「已擷取的文字」"
     )
     var amount: String?
 
     @Parameter(
         title: "錢包 / Apple Pay 商家（選填）",
-        description: "對應 iOS 27「錢包 (Wallet)」自動化輸入中的「商家 (Merchant)」或「名稱 (Name)」"
+        description: "可選取「文字 (商家 數量)」、「通知」或「已擷取的文字」"
     )
     var merchant: String?
 
