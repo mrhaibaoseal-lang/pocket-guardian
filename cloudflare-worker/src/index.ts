@@ -257,23 +257,40 @@ async function enhanceWithWorkersAiIfNeeded(
 4. 若畫面只是手機鎖定畫面、主畫面、捷徑設定頁、聊天對話或找不到明確交易金額，kind 必為 "non_transaction"，amount 為 null。`;
 
   try {
-    // 1. If screenshot image bytes are available, run Vision AI to read visual badges ("存" vs "提" circle) & layout
+    // 1. If screenshot image bytes are available, run Vision AI to read visual badges ("存" vs "提" circle) & layout directly from the image
     if (norm.imageBase64) {
       const imageBytes = decodeBase64ToBytes(norm.imageBase64);
       if (imageBytes && imageBytes.length > 100) {
-        const visionPrompt = `${systemPrompt}\n\n畫面 OCR 輔助文字：\n${text.slice(0, 1000)}\n請特別注意圖片中金額左側圓圈內的字是青色「存」(transfer_in) 還是橘色「提」(transfer_out)，只輸出 JSON：`;
-        const visionCall = env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
-          image: imageBytes,
-          prompt: visionPrompt,
-          max_tokens: 220,
-        }).catch(() =>
+        const ocrContext = text ? `\n\n畫面 OCR 輔助文字：\n${text.slice(0, 1000)}` : '';
+        const visionPrompt = `${systemPrompt}${ocrContext}\n請直接觀看這張截圖畫面（特別注意金額左側圓圈是青色「存」(transfer_in) 還是橘色「提」(transfer_out)，以及交易金額、日期與帳號末碼），只輸出單行 JSON：`;
+        const runLlamaVision = async () => {
+          try {
+            return await env.AI!.run('@cf/meta/llama-3.2-11b-vision-instruct', {
+              image: imageBytes,
+              prompt: visionPrompt,
+              max_tokens: 220,
+            });
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (/agree|license/i.test(msg)) {
+              await env.AI!.run('@cf/meta/llama-3.2-11b-vision-instruct', { prompt: 'agree' }).catch(() => undefined);
+              return await env.AI!.run('@cf/meta/llama-3.2-11b-vision-instruct', {
+                image: imageBytes,
+                prompt: visionPrompt,
+                max_tokens: 220,
+              });
+            }
+            throw err;
+          }
+        };
+        const visionCall = runLlamaVision().catch(() =>
           env.AI!.run('@cf/llava-hf/llava-1.5-7b-hf', {
             image: imageBytes,
             prompt: visionPrompt,
             max_tokens: 220,
           }),
         );
-        const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5500));
+        const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000));
         const visionRes = await Promise.race([visionCall, timeout]);
         if (visionRes) {
           const rawVision =
@@ -288,6 +305,7 @@ async function enhanceWithWorkersAiIfNeeded(
           }
         }
       }
+      if (!text) return rawInput;
     }
 
     // 2. Text LLM semantic analysis
