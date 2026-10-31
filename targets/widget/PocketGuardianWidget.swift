@@ -158,7 +158,7 @@ struct PocketGuardianWidget: Widget {
         StaticConfiguration(kind: kind, provider: PocketProvider()) { entry in
             PocketGuardianWidgetEntryView(entry: entry)
         }
-        .configurationDisplayName("守財靈・財力電量")
+        .configurationDisplayName("靠北我錢呢・財力電量")
         .description("一眼看懂今天還能花多少錢與銀行/現金餘額")
         .supportedFamilies([
             .systemSmall,

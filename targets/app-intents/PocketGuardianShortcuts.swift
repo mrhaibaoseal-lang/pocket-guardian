@@ -1,8 +1,22 @@
 import AppIntents
 import CoreGraphics
 import Foundation
+import SwiftUI
 import UIKit
+import UserNotifications
 import Vision
+
+@available(iOS 17.0, *)
+enum ShortcutBannerMode: String, AppEnum {
+    case richSnippet = "rich_snippet"
+    case nativeNotification = "native_notification"
+
+    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "頂部通知樣式")
+    static var caseDisplayRepresentations: [ShortcutBannerMode: DisplayRepresentation] = [
+        .richSnippet: "✨ 黑曜毛玻璃字卡（捷徑預設）",
+        .nativeNotification: "🔔 iOS 原生橫幅推播（免按完成・4秒自動收起）"
+    ]
+}
 
 @available(iOS 17.0, *)
 enum ShortcutSourceOption: String, AppEnum {
@@ -53,6 +67,9 @@ struct IngestNotificationIntent: AppIntent {
 
     @Parameter(title: "來源通道", default: .auto)
     var source: ShortcutSourceOption
+
+    @Parameter(title: "頂部通知樣式", default: .richSnippet)
+    var bannerMode: ShortcutBannerMode
 
     @Parameter(title: "Cloudflare Webhook 網址", default: "https://pocket-guardian-api.mr-haibaoseal.workers.dev/api/ingest")
     var webhookUrl: String
@@ -168,9 +185,42 @@ struct IngestNotificationIntent: AppIntent {
         return (lines.joined(separator: "\n"), base64Jpeg)
     }
 
-    func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<String> {
+    private func sendNativeBanner(title: String, subtitle: String, body: String) async {
+        let center = UNUserNotificationCenter.current()
+        _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
+        let content = UNMutableNotificationContent()
+        content.title = title
+        if !subtitle.isEmpty {
+            content.subtitle = subtitle
+        }
+        content.body = body
+        content.sound = .default
+        let req = UNNotificationRequest(
+            identifier: "imbrokeaf.ingest.\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        try? await center.add(req)
+    }
+
+    func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<String> & ShowsSnippetView {
         guard let url = URL(string: webhookUrl) else {
-            return .result(value: "網址格式錯誤", dialog: "⚠️ Webhook 網址格式錯誤")
+            let errModel = IngestSnippetModel(
+                status: "error",
+                badgeText: "設定錯誤",
+                merchant: "Webhook 網址格式錯誤",
+                category: "請檢查捷徑網址設定",
+                amountText: "--",
+                isIncome: false,
+                todayLeft: nil,
+                batteryPercent: nil,
+                bankBalance: nil
+            )
+            return .result(
+                value: "網址格式錯誤",
+                dialog: IntentDialog(stringLiteral: "靠北我錢呢 · 設定錯誤"),
+                view: IngestResultSnippetView(model: errModel)
+            )
         }
 
         var request = URLRequest(url: url)
@@ -204,16 +254,318 @@ struct IngestNotificationIntent: AppIntent {
         request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
 
         let (data, _) = try await URLSession.shared.data(for: request)
-        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let message = json["message"] as? String {
-            return .result(value: message, dialog: IntentDialog(stringLiteral: message))
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            let message = (json["message"] as? String) ?? "✅ 已傳送至靠北我錢呢"
+            let model = IngestSnippetModel.from(json: json, fallbackMessage: message)
+
+            if bannerMode == .nativeNotification {
+                await sendNativeBanner(
+                    title: model.notificationTitle,
+                    subtitle: model.notificationSubtitle,
+                    body: model.notificationBody
+                )
+            }
+
+            return .result(
+                value: message,
+                dialog: IntentDialog(stringLiteral: model.compactDialogHeader),
+                view: IngestResultSnippetView(model: model)
+            )
         }
-        return .result(value: "✅ 已傳送至錢呢[BROKE AF]", dialog: "✅ 已傳送至錢呢[BROKE AF]")
+
+        let fallback = IngestSnippetModel(
+            status: "new_tx",
+            badgeText: "已連線",
+            merchant: "已傳送至靠北我錢呢",
+            category: "雲端同步完成",
+            amountText: "OK",
+            isIncome: false,
+            todayLeft: nil,
+            batteryPercent: nil,
+            bankBalance: nil
+        )
+        return .result(
+            value: "✅ 已傳送至靠北我錢呢[ImbrokeAF]",
+            dialog: IntentDialog(stringLiteral: "靠北我錢呢 · ImbrokeAF"),
+            view: IngestResultSnippetView(model: fallback)
+        )
+    }
+}
+
+@available(iOS 17.0, *)
+struct IngestSnippetModel {
+    let status: String
+    let badgeText: String
+    let merchant: String
+    let category: String
+    let amountText: String
+    let isIncome: Bool
+    let todayLeft: Int?
+    let batteryPercent: Int?
+    let bankBalance: Int?
+
+    var compactDialogHeader: String {
+        switch status {
+        case "new_tx":
+            return isIncome ? "靠北我錢呢 · 入帳成功" : "靠北我錢呢 · 已記一筆"
+        case "merged_tx":
+            return "靠北我錢呢 · 雙通道合體"
+        case "duplicate":
+            return "靠北我錢呢 · 已攔截重複"
+        case "ignored":
+            return "靠北我錢呢 · 已略過非消費"
+        case "parse_failed":
+            return "靠北我錢呢 · 未偵測到交易"
+        default:
+            return "靠北我錢呢 · ImbrokeAF"
+        }
+    }
+
+    var notificationTitle: String {
+        switch status {
+        case "new_tx", "merged_tx":
+            return "\(merchant)  \(amountText)"
+        case "duplicate":
+            return "🛡️ 已自動攔截重複觸發"
+        case "ignored":
+            return "🛡️ 已略過非消費通知"
+        default:
+            return "⚠️ 未偵測到交易或轉帳金額"
+        }
+    }
+
+    var notificationSubtitle: String {
+        switch status {
+        case "new_tx":
+            return "✓ 自動入帳 · \(category)"
+        case "merged_tx":
+            return "⚡ Apple Pay + 銀行推播自動合體"
+        default:
+            return ""
+        }
+    }
+
+    var notificationBody: String {
+        if let left = todayLeft, let bat = batteryPercent, let bank = bankBalance {
+            return "🔋 今日還可花 $\(left)（\(bat)%）｜🏦 銀行 $\(bank)"
+        }
+        return category
+    }
+
+    static func from(json: [String: Any], fallbackMessage: String) -> IngestSnippetModel {
+        let status = (json["status"] as? String) ?? "new_tx"
+        let widget = json["widget"] as? [String: Any]
+        let todayLeft = widget?["todayLeft"] as? Int
+        let battery = widget?["batteryPercent"] as? Int
+        let bankVal = (widget?["bank"] as? Double).map { Int($0) } ?? (widget?["bank"] as? Int)
+
+        if let tx = json["transaction"] as? [String: Any] {
+            let rawAmount = (tx["amount"] as? Int) ?? Int((tx["amount"] as? Double) ?? 0)
+            let txType = (tx["type"] as? String) ?? "expense"
+            let isInc = (txType == "income")
+            let merch = (tx["merchant"] as? String) ?? "一般消費"
+            let cat = (tx["category"] as? String) ?? "自動分類"
+            let method = (tx["method"] as? String) ?? ""
+
+            let methodLabel: String
+            switch method {
+            case "apple_pay": methodLabel = "Apple Pay · \(cat)"
+            case "debit_card": methodLabel = "金融卡 · \(cat)"
+            case "bank_transfer": methodLabel = isInc ? "銀行轉入 · \(cat)" : "網銀轉帳 · \(cat)"
+            default: methodLabel = cat
+            }
+
+            let badge = (status == "merged_tx") ? "雙通道合體" : (isInc ? "收入入帳" : "自動入帳")
+            let formattedAmt = isInc ? "+$\(rawAmount)" : "-$\(rawAmount)"
+
+            return IngestSnippetModel(
+                status: status,
+                badgeText: badge,
+                merchant: merch,
+                category: methodLabel,
+                amountText: formattedAmt,
+                isIncome: isInc,
+                todayLeft: todayLeft,
+                batteryPercent: battery,
+                bankBalance: bankVal
+            )
+        }
+
+        if status == "duplicate" {
+            return IngestSnippetModel(
+                status: status,
+                badgeText: "防重扣保護",
+                merchant: "已攔截重複交易通知",
+                category: "3 分鐘內相同交易不會重複扣款",
+                amountText: "PASS",
+                isIncome: false,
+                todayLeft: todayLeft,
+                batteryPercent: battery,
+                bankBalance: bankVal
+            )
+        }
+
+        if status == "ignored" {
+            return IngestSnippetModel(
+                status: status,
+                badgeText: "智慧過濾",
+                merchant: "已略過非消費或自己轉帳",
+                category: "促銷廣告、驗證碼或內部轉帳不計支出",
+                amountText: "SKIP",
+                isIncome: false,
+                todayLeft: todayLeft,
+                batteryPercent: battery,
+                bankBalance: bankVal
+            )
+        }
+
+        if status == "parse_failed" {
+            return IngestSnippetModel(
+                status: status,
+                badgeText: "未偵測到金額",
+                merchant: "畫面中無交易或轉帳金額",
+                category: "請在轉帳成功頁、存摺明細或通知觸發",
+                amountText: "!",
+                isIncome: false,
+                todayLeft: todayLeft,
+                batteryPercent: battery,
+                bankBalance: bankVal
+            )
+        }
+
+        return IngestSnippetModel(
+            status: status,
+            badgeText: "系統通知",
+            merchant: fallbackMessage,
+            category: "靠北我錢呢 · ImbrokeAF",
+            amountText: "",
+            isIncome: false,
+            todayLeft: todayLeft,
+            batteryPercent: battery,
+            bankBalance: bankVal
+        )
+    }
+}
+@available(iOS 17.0, *)
+struct IngestResultSnippetView: View {
+    let model: IngestSnippetModel
+
+    private var accentColor: Color {
+        switch model.status {
+        case "new_tx":
+            return model.isIncome ? Color(red: 0.20, green: 0.83, blue: 0.60) : Color(red: 0.37, green: 0.92, blue: 0.83)
+        case "merged_tx":
+            return Color(red: 0.58, green: 0.77, blue: 0.99)
+        case "duplicate", "ignored":
+            return Color(red: 0.66, green: 0.55, blue: 0.98)
+        default:
+            return Color(red: 0.98, green: 0.75, blue: 0.14)
+        }
+    }
+
+    private var iconName: String {
+        switch model.status {
+        case "new_tx": return model.isIncome ? "arrow.down.left.circle.fill" : "checkmark.circle.fill"
+        case "merged_tx": return "bolt.horizontal.circle.fill"
+        case "duplicate", "ignored": return "shield.lefthalf.filled.badge.checkmark"
+        default: return "viewfinder.trianglebadge.exclamationmark"
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                HStack(spacing: 5) {
+                    Image(systemName: iconName)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(accentColor)
+                    Text(model.badgeText)
+                        .font(.system(size: 11, weight: .heavy, design: .rounded))
+                        .foregroundColor(accentColor)
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(accentColor.opacity(0.16))
+                .clipShape(Capsule())
+                Spacer()
+                Text("靠北我錢呢 · ImbrokeAF")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundColor(Color(red: 0.58, green: 0.64, blue: 0.72))
+            }
+
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(model.merchant)
+                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    Text(model.category)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Color(red: 0.64, green: 0.70, blue: 0.78))
+                        .lineLimit(1)
+                }
+                Spacer()
+                if !model.amountText.isEmpty {
+                    Text(model.amountText)
+                        .font(.system(size: 24, weight: .black, design: .rounded))
+                        .foregroundColor(model.isIncome ? Color(red: 0.20, green: 0.83, blue: 0.60) : (model.status == "parse_failed" ? accentColor : .white))
+                }
+            }
+
+            if let todayLeft = model.todayLeft, let battery = model.batteryPercent {
+                VStack(spacing: 5) {
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.white.opacity(0.10)).frame(height: 6)
+                            Capsule()
+                                .fill(LinearGradient(
+                                    colors: [Color(red: 0.37, green: 0.92, blue: 0.83), Color(red: 0.58, green: 0.77, blue: 0.99), Color(red: 0.66, green: 0.33, blue: 0.97)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ))
+                                .frame(width: max(8, geo.size.width * CGFloat(min(max(battery, 0), 100)) / 100.0), height: 6)
+                        }
+                    }
+                    .frame(height: 6)
+
+                    HStack {
+                        Text("🔋 今日還可花 $\(todayLeft)")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundColor(Color(red: 0.37, green: 0.92, blue: 0.83))
+                        Spacer()
+                        if let bank = model.bankBalance {
+                            Text("🏦 銀行 $\(bank)")
+                                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                .foregroundColor(Color(red: 0.64, green: 0.70, blue: 0.78))
+                        }
+                    }
+                }
+                .padding(.top, 2)
+            }
+        }
+        .padding(14)
+        .background(LinearGradient(
+            colors: [Color(red: 0.11, green: 0.14, blue: 0.21), Color(red: 0.06, green: 0.08, blue: 0.13)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        ))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(LinearGradient(
+                    colors: [Color.white.opacity(0.32), Color(red: 0.37, green: 0.92, blue: 0.83).opacity(0.35), Color(red: 0.58, green: 0.20, blue: 0.92).opacity(0.28)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ), lineWidth: 1.2)
+        )
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
     }
 }
 
 @available(iOS 17.0, *)
 struct CheckSafeToSpendIntent: AppIntent {
+
     static var title: LocalizedStringResource = "🔋 查詢今日安全額度"
     static var description = IntentDescription("查詢今天還能花多少錢與目前財力電量百分比。")
     static var openAppWhenRun: Bool = false

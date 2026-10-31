@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "錢呢[BROKE AF]",
+    "name": "靠北我錢呢[ImbrokeAF]",
     "slug": "broke-af",
     "owner": "laoshu77",
     "scheme": "myledger",
@@ -12,14 +12,14 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.mrhaibaoseal.pocketguardian",
       "infoPlist": {
-        "CFBundleName": "BrokeAF",
-        "CFBundleDisplayName": "BrokeAF",
+        "CFBundleName": "ImbrokeAF",
+        "CFBundleDisplayName": "ImbrokeAF",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0F172A",
+        "backgroundColor": "#06090B",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"

@@ -1,7 +1,7 @@
 import { BlurView } from 'expo-blur';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
-import { PanResponder, Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { Image, PanResponder, Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -433,9 +433,18 @@ function MainShell() {
               pointerEvents="none"
             />
             <View style={styles.brandRow}>
-              <Text style={styles.brandTitle}>錢呢[BROKE AF]</Text>
+              <View style={styles.brandLeft}>
+                <View style={styles.brandEmblem}>
+                  <Image
+                    source={require('./assets/icon.png')}
+                    style={{ width: 26, height: 26 }}
+                  />
+                </View>
+                <Text style={styles.brandTitle}>靠北我錢呢</Text>
+                <Text style={styles.brandSubEn}>ImbrokeAF</Text>
+              </View>
               <View style={styles.iosBadge}>
-                <Text style={styles.iosBadgeText}>Desert Titanium · iOS 26</Text>
+                <Text style={styles.iosBadgeText}>Obsidian Jade · iOS 26</Text>
               </View>
             </View>
           </View>
@@ -842,11 +851,34 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  brandLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  brandEmblem: {
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    backgroundColor: '#0B1217',
+    borderWidth: 1,
+    borderColor: 'rgba(52, 211, 153, 0.45)',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   brandTitle: {
     color: '#F8FAFC',
     fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  brandSubEn: {
+    color: '#94A3B8',
+    fontSize: 12,
     fontWeight: '700',
-    letterSpacing: -0.4,
+    letterSpacing: 0.2,
+    marginTop: 1,
   },
   iosBadge: {
     backgroundColor: 'rgba(16, 185, 129, 0.14)',

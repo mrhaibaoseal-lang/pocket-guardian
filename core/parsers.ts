@@ -76,7 +76,7 @@ function looksLikeFullTextPayload(s: string): boolean {
   if (!s) return false;
   if (s.includes('\n') || s.length > 24) return true;
   if (
-    /(交易成功|轉帳|消費|扣款|付款|通知|擷取|螢幕|快照|智慧入帳|Cloudflare|Webhook|執行時顯示|搜尋|自己帳號|轉入對象|玉山|星期[一二三四五六日天]|上午|下午|晚上|凌晨|\d{1,2}:\d{2})/i.test(
+    /(交易成功|轉帳|消費|扣款|付款|通知|擷取|螢幕|快照|智慧入帳|靠北我錢呢|ImbrokeAF|BrokeAF|Cloudflare|Webhook|執行時顯示|搜尋|自己帳號|轉入對象|玉山|星期[一二三四五六日天]|上午|下午|晚上|凌晨|\d{1,2}:\d{2})/i.test(
       s,
     )
   ) {
@@ -182,7 +182,7 @@ function base(source: EventSource, receivedAt: string): ParsedEvent {
 function isInvalidMerchantCandidate(s: string): boolean {
   const t = s.trim();
   if (!t || t.length > 28) return true;
-  if (/(銀行|BANK|Apple\s*Pay|Wallet|錢包|智慧入帳|擷取|螢幕|快照|通知|Cloudflare|Webhook|執行時顯示|搜尋)/i.test(t)) {
+  if (/(銀行|BANK|Apple\s*Pay|Wallet|錢包|智慧入帳|靠北我錢呢|ImbrokeAF|BrokeAF|擷取|螢幕|快照|通知|Cloudflare|Webhook|執行時顯示|搜尋)/i.test(t)) {
     return true;
   }
   if (/(?:^|\s)(?:星期[一二三四五六日天]|週[一二三四五六日天]|上午|下午|晚上|凌晨|充電中)(?:\s|$)/.test(t)) {

@@ -679,7 +679,7 @@ describe('real-device iOS 27 Shortcut screenshot & variable wiring regressions (
     const ocr7793 = [
       '10:32M',
       '16+',
-      '擷取文字至 BrokeAF （',
+      '擷取文字至 ImbrokeAF （',
       '拍攝螢幕快照',
       '從回截圖',
       '擷取 文字',

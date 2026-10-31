@@ -243,7 +243,7 @@ async function enhanceWithWorkersAiIfNeeded(
     return rawInput;
   }
 
-  const systemPrompt = `你是台灣「錢呢 BROKE AF」記帳 App 的 AI 帳務解析引擎。
+  const systemPrompt = `你是台灣「靠北我錢呢 ImbrokeAF」記帳 App 的 AI 帳務解析引擎。
 請根據使用者傳入的手機截圖與 OCR 文字，判斷這是不是一筆真實的金融交易，並只輸出單行 JSON（不要 Markdown、不要任何解釋）：
 {"kind":"transfer_out"|"transfer_in"|"card_spend"|"internal_transfer"|"non_transaction","amount":整數金額或null,"merchant":"店家或對象名稱或null","payeeBankCode":"3碼銀行代碼或null","payeeSuffix":"末4~5碼帳號或null","occurredAt":"YYYY-MM-DD HH:mm:ss或null","reason":"簡短說明"}
 

@@ -1,7 +1,7 @@
 # HANDOFF.md — 跨工具／跨模型交接紀錄
 
-> **最後更新時間**：2026-10-31 18:52 (UTC+8)
-> **最後更新 Agent**：Cline (完成 4 項更新：① 全站 UI 配色升級為「方案 1：🏛️ 黑曜鉑金 × 冰翡翠 Obsidian Platinum & Jade」90/10 暗色奢華系並保留 100% 毛玻璃與流體動畫；② 記收支/ATM/罵醒我/魔術平帳底部字卡支援上下滑動手勢跟手關閉；③ 設定頁全抽屜化與「近期收訊紀錄」展開收合抽屜；④ 明細 7 天回收桶新增「🗑️ 一鍵全部刪除」與單筆永久刪除)
+> **最後更新時間**：2026-10-31 19:10 (UTC+8)
+> **最後更新 Agent**：Cline (完成 App 重新命名為中文「靠北我錢呢」／英文「ImbrokeAF」，並設計全套 `1024×1024` 黑曜百夫長黑卡 × 冰翡翠液態玻璃高質感 3D `$?` 雕塑 App Icon `assets/icon.png` 與 Android / Splash / Favicon 圖示)
 > **專案路徑**：`C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger`
 > **Git 分支與最新狀態**：`main`（已同步寫入主工作區與本地 Commit，尚未重新打包 IPA）
 > **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `1e12ae0d-666f-42bd-beb3-d061a3a2e4ec`，前版可 Rollback ID: `845769c7-ceaf-40a6-aa24-5120b363981e`)

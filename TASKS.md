@@ -1,6 +1,6 @@
 # TASKS.md — 專案任務清單與驗收條件
 
-> **專案名稱**：錢呢[BROKE AF]（原 PocketGuardian 守財靈）`smart-ledger` (`v3.3.0`)
+> **專案名稱**：靠北我錢呢 [ImbrokeAF]（原 錢呢[BROKE AF] / PocketGuardian 守財靈）`smart-ledger` (`v3.3.0`)
 > **需求與架構基準**：請見 [`PLAN.md`](./PLAN.md)（已涵蓋完整 PRD 與系統架構，無須另建 `PRD.md` 或 `ARCHITECTURE.md`）
 > **開發規範**：請見 [`AGENTS.md`](./AGENTS.md)
 > **交接紀錄**：請見 [`HANDOFF.md`](./HANDOFF.md)
