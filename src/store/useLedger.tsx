@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import {
   buildSummary,
+  clampedDate,
   createAtm,
   createIncome,
   createManualExpense,
@@ -145,6 +146,8 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
   const metaRef = useRef<AppMeta>(meta);
   metaRef.current = meta;
   const hydratedRef = useRef<boolean>(false);
+  const inFlightPushCountRef = useRef<number>(0);
+  const localMutationSeqRef = useRef<number>(0);
 
   const setLastToast = useCallback((msg: string | null) => {
     setLastToastState(msg);
@@ -154,6 +157,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
   const pushStateToCloudSilent = useCallback((payload: LedgerData, replace = false) => {
     const baseUrl = metaRef.current.workerUrl.replace(/\/+$/, '');
     if (!baseUrl) return;
+    inFlightPushCountRef.current += 1;
     fetch(`${baseUrl}/api/state`, {
       method: 'PUT',
       headers: {
@@ -161,25 +165,37 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
         ...(metaRef.current.ingestToken ? { 'X-Ingest-Token': metaRef.current.ingestToken } : {}),
       },
       body: JSON.stringify(replace ? { data: payload, replace: true } : { data: payload }),
-    }).catch(() => undefined);
+    })
+      .catch(() => undefined)
+      .finally(() => {
+        inFlightPushCountRef.current = Math.max(0, inFlightPushCountRef.current - 1);
+      });
   }, []);
 
   const pullAndMergeFromCloud = useCallback(
     async (silent = false) => {
       try {
+        if (silent && inFlightPushCountRef.current > 0) return;
         const baseUrl = metaRef.current.workerUrl.replace(/\/+$/, '');
         if (!baseUrl) return;
+        const seqBeforeFetch = localMutationSeqRef.current;
         const res = await fetch(`${baseUrl}/api/state`, {
           headers: metaRef.current.ingestToken ? { 'X-Ingest-Token': metaRef.current.ingestToken } : {},
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = (await res.json()) as { ok?: boolean; data?: LedgerData };
+        // If user edited/deleted anything locally while GET was in flight, discard stale GET snapshot
+        if (silent && (localMutationSeqRef.current !== seqBeforeFetch || inFlightPushCountRef.current > 0)) {
+          return;
+        }
         if (json.ok && json.data) {
           const { merged, newlySyncedTxs } = mergeLedgerData(dataRef.current, json.data);
           dataRef.current = merged;
           setData(merged);
           AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(merged)).catch(() => undefined);
-          pushStateToCloudSilent(merged);
+          if (newlySyncedTxs.length > 0) {
+            pushStateToCloudSilent(merged);
+          }
           if (!silent) {
             setLastToast(
               newlySyncedTxs.length > 0
@@ -271,6 +287,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
 
   const persist = useCallback(
     (next: LedgerData, syncCloud: boolean | { syncCloud?: boolean; replaceCloud?: boolean } = true) => {
+      localMutationSeqRef.current += 1;
       const sanitized = sanitizeLedgerData(next);
       const clone: LedgerData = {
         settings: { ...sanitized.settings },
@@ -458,7 +475,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       const now = new Date().toISOString();
       const ledger = new MemoryLedger(data);
       const removed = ledger.remove(id, now);
-      persist(ledger.data);
+      persist(ledger.data, { replaceCloud: true });
       if (lastUndoableId === id) setLastUndoableId(null);
       if (removed) {
         setLastToast(`🗑️ 已撤銷「${removed.merchant ?? removed.category ?? '交易'} $${removed.amount}」（保留於 7 天回收桶）`);
@@ -472,7 +489,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
     (id: string) => {
       const ledger = new MemoryLedger(data);
       const restored = ledger.restore(id);
-      persist(ledger.data);
+      persist(ledger.data, { replaceCloud: true });
       if (restored) {
         setLastToast(`♻️ 已從回收桶還原「${restored.merchant ?? restored.category ?? '交易'} $${restored.amount}」`);
       }
@@ -557,17 +574,26 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
   const addSubscription = useCallback(
     (name: string, amount: number, billingDay: number, autoPost: boolean) => {
       if (!name.trim() || amount <= 0) return;
+      const cleanDay = Math.min(31, Math.max(1, Math.round(billingDay)));
+      const today = taipeiDate(new Date());
+      const ym = today.slice(0, 7);
+      const [y, m] = ym.split('-').map(Number);
+      const dueThisMonth = clampedDate(y, m, cleanDay);
+      // If this month's billing day has already passed (e.g. setting day 5 on the 31st),
+      // mark current month as already passed so it won't retroactively deduct for this month!
+      const initialLastChargedMonth = dueThisMonth <= today ? ym : null;
+
       const sub: Subscription = {
         id: uuid(),
         name: name.trim(),
         amount,
-        billingDay: Math.min(31, Math.max(1, Math.round(billingDay))),
+        billingDay: cleanDay,
         accountId: 'bank',
         isActive: true,
         autoPost,
-        lastChargedMonth: null,
+        lastChargedMonth: initialLastChargedMonth,
       };
-      persist({ ...data, subscriptions: [...data.subscriptions, sub] });
+      persist({ ...data, subscriptions: [...data.subscriptions, sub] }, { replaceCloud: true });
       setLastToast(`👻 已新增固定扣款預留：每月 ${sub.billingDay} 號 ${sub.name} $${sub.amount}`);
       triggerHaptic('success');
     },
@@ -576,10 +602,13 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
 
   const toggleSubscription = useCallback(
     (id: string) => {
-      persist({
-        ...data,
-        subscriptions: data.subscriptions.map((s) => (s.id === id ? { ...s, isActive: !s.isActive } : s)),
-      });
+      persist(
+        {
+          ...data,
+          subscriptions: data.subscriptions.map((s) => (s.id === id ? { ...s, isActive: !s.isActive } : s)),
+        },
+        { replaceCloud: true },
+      );
       triggerHaptic('light');
     },
     [data, persist, triggerHaptic],
@@ -587,13 +616,17 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
 
   const deleteSubscription = useCallback(
     (id: string) => {
-      persist({
-        ...data,
-        subscriptions: data.subscriptions.filter((s) => s.id !== id),
-      });
+      persist(
+        {
+          ...data,
+          subscriptions: data.subscriptions.filter((s) => s.id !== id),
+        },
+        { replaceCloud: true },
+      );
+      setLastToast('🗑️ 已刪除固定扣款預留');
       triggerHaptic('warning');
     },
-    [data, persist, triggerHaptic],
+    [data, persist, setLastToast, triggerHaptic],
   );
 
   const addPayee = useCallback(
@@ -606,10 +639,13 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
         displayName: displayName.trim(),
         defaultCategory: defaultCategory.trim() || '轉帳',
       };
-      persist({
-        ...data,
-        payees: [...data.payees.filter((p) => p.accountSuffix !== payee.accountSuffix), payee],
-      });
+      persist(
+        {
+          ...data,
+          payees: [...data.payees.filter((p) => p.accountSuffix !== payee.accountSuffix), payee],
+        },
+        { replaceCloud: true },
+      );
       setLastToast(`👤 已記住常用轉帳對象：${payee.displayName} (****${payee.accountSuffix})`);
       triggerHaptic('success');
     },
@@ -618,7 +654,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
 
   const deletePayee = useCallback(
     (id: string) => {
-      persist({ ...data, payees: data.payees.filter((p) => p.id !== id) });
+      persist({ ...data, payees: data.payees.filter((p) => p.id !== id) }, { replaceCloud: true });
       triggerHaptic('warning');
     },
     [data, persist, triggerHaptic],
@@ -726,7 +762,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
     (debtId: string) => {
       const ledger = new MemoryLedger(data);
       if (ledger.deleteDebt(debtId)) {
-        persist(ledger.data);
+        persist(ledger.data, { replaceCloud: true });
         setLastToast('🗑️ 已刪除該筆欠款紀錄');
         triggerHaptic('warning');
       }
@@ -775,7 +811,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
 
   const resetDemoData = useCallback(() => {
     const fresh = createInitialDemoLedger();
-    persist(fresh);
+    persist(fresh, { replaceCloud: true });
     setLastUndoableId(null);
     setLastToast('🧹 已將所有帳目與設定歸零');
     triggerHaptic('warning');
@@ -787,7 +823,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
         ...data,
         events: data.events.filter((e) => e.id !== eventId),
       };
-      persist(next);
+      persist(next, { replaceCloud: true });
       setLastToast('🗑️ 已從收件匣移除該筆紀錄');
       triggerHaptic('light');
     },

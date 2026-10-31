@@ -11,6 +11,7 @@
  */
 
 import {
+  clampedDate,
   emptyLedger,
   guessSource,
   MemoryLedger,
@@ -18,6 +19,7 @@ import {
   normalizeRawInput,
   normalizeText,
   parseEvent,
+  taipeiDate,
   widgetPayload,
 } from '../../core';
 import type { EventSource, LedgerData, RawInput } from '../../core';
@@ -388,18 +390,40 @@ export default {
     if (url.pathname === '/api/state') {
       if (req.method === 'GET') {
         const ledger = await loadLedger(env);
-        ledger.chargeSubscriptions(now);
+        const charged = ledger.chargeSubscriptions(now);
+        if (charged.length > 0) {
+          await saveLedger(env, ledger, now);
+        }
         return jsonResponse({ ok: true, data: ledger.data, summary: ledger.summary(now) });
       }
       if (req.method === 'PUT' || req.method === 'POST') {
         return runSerialized(async () => {
           const body = (await req.json()) as { data: LedgerData; replace?: boolean };
+          const existing = await loadLedger(env);
+          const existingSubIds = new Set((existing.data.subscriptions ?? []).map((s) => s.id));
+          const today = taipeiDate(now);
+          const ym = today.slice(0, 7);
+          const [y, m] = ym.split('-').map(Number);
+
+          // Prevent newly added subscriptions whose billingDay already passed this month
+          // from retroactively deducting the current month's balance.
+          if (Array.isArray(body.data?.subscriptions)) {
+            body.data.subscriptions = body.data.subscriptions.map((s) => {
+              if (!existingSubIds.has(s.id) && s.lastChargedMonth === null) {
+                const dueThisMonth = clampedDate(y, m, s.billingDay);
+                if (dueThisMonth <= today) {
+                  return { ...s, lastChargedMonth: ym };
+                }
+              }
+              return s;
+            });
+          }
+
           if (body.replace || (body.data.transactions.length === 0 && body.data.events.length === 0)) {
             const ledger = new MemoryLedger(body.data);
             await saveLedger(env, ledger, now);
             return jsonResponse({ ok: true, data: ledger.data, summary: ledger.summary(now) });
           }
-          const existing = await loadLedger(env);
           const { merged } = mergeLedgerData(body.data, existing.data);
           const ledger = new MemoryLedger(merged);
           await saveLedger(env, ledger, now);

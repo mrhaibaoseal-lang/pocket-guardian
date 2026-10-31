@@ -1,7 +1,7 @@
 # HANDOFF.md — 跨工具／跨模型交接紀錄
 
-> **最後更新時間**：2026-10-31 19:10 (UTC+8)
-> **最後更新 Agent**：Cline (完成 App 重新命名為中文「靠北我錢呢」／英文「ImbrokeAF」，並設計全套 `1024×1024` 黑曜百夫長黑卡 × 冰翡翠液態玻璃高質感 3D `$?` 雕塑 App Icon `assets/icon.png` 與 Android / Splash / Favicon 圖示)
+> **最後更新時間**：2026-10-31 20:50 (UTC+8)
+> **最後更新 Agent**：Cline (修復：① `src/components/ActionSheetModals.tsx` 四大底部字卡下拉／上滑跟手關閉與阻尼回彈動畫；② `core/memoryLedger.ts`、`src/store/useLedger.tsx`、`cloudflare-worker/src/index.ts` 刪除「固定扣款預留」後被雲端 `mergeLedgerData` 復活、以及設定當月已過日期如每月 5 號時立即回溯扣款的問題，並已清除雲端 D1 殘留測試項目 `調光台`)
 > **專案路徑**：`C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger`
 > **Git 分支與最新狀態**：`main`（已同步寫入主工作區與本地 Commit，尚未重新打包 IPA）
 > **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `1e12ae0d-666f-42bd-beb3-d061a3a2e4ec`，前版可 Rollback ID: `845769c7-ceaf-40a6-aa24-5120b363981e`)
@@ -20,12 +20,13 @@
      - 採用 **90/10 暗色奢華視覺焦點法則**：90% 空間使用純淨煙燻黑曜毛玻璃（`rgba(13, 18, 22, 0.52)` / `rgba(17, 24, 29, 0.68)`）搭配頂部微米級冷白刀鋒高光（`rgba(255, 255, 255, 0.22)`）與三階冷調灰白字體（主字 `#F8FAFC`、次要字 `#CBD5E1`、輔助字 `rgba(148, 163, 184, 0.72)`）；次要膠囊統一收斂為低調消光冷鈦灰玻璃（`rgba(255, 255, 255, 0.055)`）。
      - **10% 唯一視覺焦點**：僅在「本月剩餘預算光管 (`#059669 → #10B981 → #6EE7B7`)」、「今日可用重點金額 (`#34D399`)」、「主行動按鈕 (`#10B981` 配深黑字 `#04120C`)」與「底部滑動導覽膠囊」點綴低飽和冰翡翠綠，讓重點一眼跳出。
    - **② 記收支 / ATM / 罵醒我 / 魔術平帳底部字卡支援「上下滑動手勢跟手關閉」(`src/components/ActionSheetModals.tsx`)**：
-     - 整合 `PanResponder` 與 Reanimated `sheetY` / `sheetScale` / `sheetOpacity` 即時跟手拖拽與 `withSpring` 阻尼回彈。
-     - 支援在字卡上**下滑（`dy > 42` 或快速下滑）**或**上滑（`dy < -42` 或快速上滑）**順暢滑出關閉，並新增頂部原生 iOS Grabber Pill 拖曳橫條、捲動區拉到底／頂關閉與背景點擊關閉。
+     - 修復先前在 iOS 實機下拉時無動畫且拉動無反應之四大根因：(1) 將原本獨立原生 `<Modal>` 改為與 `DismissibleBanner` 相同根視圖表面的 In-Tree `KeyboardAvoidingView` 頂層覆蓋層（搭配 `renderedActive` 生命週期確保滑出期間內容不提前卸載）；(2) 補齊 `onStartShouldSetPanResponder: () => true`、`onStartShouldSetPanResponderCapture: () => false`、`onPanResponderTerminationRequest: () => false` 及原生 `onTouchStart / onTouchMove / onTouchEnd` 即時跟手位移與瞬時速度計算；(3) 當字卡內容未超過螢幕高度 `68%` 時自動設為 `scrollEnabled={false}`，防止 iOS 原生 `UIScrollView` 發送 `touchesCancelled` 中斷下拉手勢；(4) 移除關閉時的同步 `sheetY = 0` 重置，確保下滑（`dy > 26` 或快速下滑）與上滑（`dy < -28` 或快速上滑）皆有 1:1 跟手動畫、背景遮罩動態明暗漸變與順暢滑出關閉。
    - **③ 「⚙️ 設定」全頁面抽屜化 ＆ 「📡 近期收訊紀錄」展開收合抽屜 (`src/screens/SettingsAndSubsScreen.tsx`, `src/screens/ShortcutsTestBenchScreen.tsx`)**：
      - 設定頁 6 大區塊（`🔄 固定扣款預留`、`🏦 常用轉帳對象字典`、`⚙️ 預算與體感參數`、`📡 近期收訊紀錄`、`☁️ Cloudflare D1 雲端與 SideStore`、`🧹 帳本歸零重置`）與捷徑頁「`📡 近期收訊紀錄`」全部改為預設收合、點擊展開／收起的抽屜卡片。
-   - **④ 「☰ 明細 → 7天回收桶」一鍵全部永久刪除與單筆永久刪除 (`src/screens/TransactionsScreen.tsx`, `core/memoryLedger.ts`, `src/store/useLedger.tsx`, `core/__tests__/core.test.ts`)**：
+   - **④ 「☰ 明細 → 7天回收桶」一鍵全部永久刪除、單筆永久刪除 ＆ 「🔄 固定扣款預留」刪除不復活與防當月回溯扣款 (`src/screens/TransactionsScreen.tsx`, `core/memoryLedger.ts`, `src/store/useLedger.tsx`, `cloudflare-worker/src/index.ts`, `core/__tests__/core.test.ts`)**：
      - 在 `MemoryLedger` 與 `useLedger` 新增 `emptyTrash()` 與 `hardDelete(id)`，永久刪除時一併清理對應 `events` 關聯，並以 `{ replace: true }` 同步覆寫 Cloudflare D1 雲端快照，確保刪除後雲端同步不復活、重掃截圖不卡重複。
+     - 修復 `mergeLedgerData` 合併邏輯與 `deleteSubscription / deletePayee / deleteDebt / softDeleteTx` 的 `{ replaceCloud: true }` 同步機制：非空白帳本同步時以本機 `subscriptions / payees / debts` 清單為準，並加入 `inFlightPushCountRef` 與 `localMutationSeqRef` 防競態鎖，徹底防止刪除固定扣款預留後被每 8 秒雲端輪詢復活。
+     - 修復 `addSubscription` 與 Worker `PUT /api/state`：當新增固定扣款預留的扣款日在當月已過（例如 10/31 新增「每月 5 號扣款」），自動將 `lastChargedMonth` 設為當月（`2026-10`），從下個月 5 號才開始預留與扣款，絕不回溯補扣當月已過日期的餘額。
      - 在「7天回收桶」分頁頂部新增「`🗑️ 一鍵全部刪除 (N)`」防誤觸二次確認工具列，並在每筆回收桶紀錄新增單筆「`永久刪除`」按鈕。
 
 0.5. **全站 6 大 iOS 26 頂級流體物理動畫系統（`src/components/iosAnimations.tsx`, `App.tsx`, `src/screens/DashboardScreen.tsx`, `src/screens/TransactionsScreen.tsx`, `src/screens/DebtsScreen.tsx`, `src/components/MorphingCategoryPill.tsx`）**：

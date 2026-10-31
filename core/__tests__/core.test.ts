@@ -929,4 +929,27 @@ describe('real-device iOS 27 Shortcut screenshot & variable wiring regressions (
     expect(singleRemoved?.id).toBe(r3.transaction!.id);
     expect(l.data.transactions).toHaveLength(0);
   });
+
+  it('does NOT resurrect deleted subscriptions, payees, or debts during mergeLedgerData', () => {
+    const cloud = ledger({ openingBank: 5000 }).data;
+    cloud.subscriptions.push({
+      id: 'sub-test-1',
+      name: '調光台',
+      amount: 3000,
+      billingDay: 5,
+      accountId: 'bank',
+      isActive: true,
+      autoPost: true,
+      lastChargedMonth: '2026-10',
+    });
+
+    // User deleted 'sub-test-1' locally on their iPhone
+    const local = {
+      ...cloud,
+      subscriptions: [],
+    };
+
+    const { merged } = mergeLedgerData(local, cloud);
+    expect(merged.subscriptions).toHaveLength(0);
+  });
 });

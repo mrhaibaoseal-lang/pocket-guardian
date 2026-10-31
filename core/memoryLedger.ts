@@ -338,21 +338,53 @@ export function mergeLedgerData(localRaw: LedgerData, cloudRaw: LedgerData): {
     }
   }
 
-  const mergeById = <T extends { id: string }>(a: T[] = [], b: T[] = []): T[] => {
-    const m = new Map<string, T>();
-    for (const item of b) m.set(item.id, item);
-    for (const item of a) m.set(item.id, item);
-    return Array.from(m.values());
-  };
+  const isLocalFreshEmpty =
+    local.transactions.length === 0 &&
+    local.events.length === 0 &&
+    local.subscriptions.length === 0 &&
+    local.payees.length === 0 &&
+    (local.debts?.length ?? 0) === 0 &&
+    local.settings.openingBank === 0 &&
+    local.settings.openingCash === 0;
 
-  const debtMap = new Map<string, DebtRecord>();
-  for (const d of cloud.debts ?? []) debtMap.set(d.id, d);
-  for (const ld of local.debts ?? []) {
-    const cd = debtMap.get(ld.id);
-    if (!cd || (ld.settlements?.length ?? 0) >= (cd.settlements?.length ?? 0)) {
-      debtMap.set(ld.id, ld);
-    }
-  }
+  // Subscriptions & Payees are exclusively created/deleted in the App (`local`).
+  // Only inherit from `cloud` when restoring into a brand-new empty local ledger;
+  // otherwise keep `local` list authoritative so deleted items never resurrect!
+  const cloudSubMap = new Map<string, Subscription>(
+    (cloud.subscriptions ?? []).map((s) => [s.id, s]),
+  );
+  const mergedSubscriptions: Subscription[] = isLocalFreshEmpty
+    ? [...(cloud.subscriptions ?? [])]
+    : (local.subscriptions ?? []).map((ls) => {
+        const cs = cloudSubMap.get(ls.id);
+        if (!cs) return ls;
+        const lastChargedMonth =
+          ls.lastChargedMonth && cs.lastChargedMonth
+            ? ls.lastChargedMonth >= cs.lastChargedMonth
+              ? ls.lastChargedMonth
+              : cs.lastChargedMonth
+            : ls.lastChargedMonth ?? cs.lastChargedMonth;
+        return { ...ls, lastChargedMonth };
+      });
+
+  const mergedPayees: Payee[] = isLocalFreshEmpty
+    ? [...(cloud.payees ?? [])]
+    : [...(local.payees ?? [])];
+
+  const cloudDebtMap = new Map<string, DebtRecord>(
+    (cloud.debts ?? []).map((d) => [d.id, d]),
+  );
+  const mergedDebts: DebtRecord[] = isLocalFreshEmpty
+    ? [...(cloud.debts ?? [])]
+    : (local.debts ?? []).map((ld) => {
+        const cd = cloudDebtMap.get(ld.id);
+        if (!cd) return ld;
+        // If Cloud auto-settled this debt via a transfer screenshot, keep the state with more settlements
+        if ((cd.settlements?.length ?? 0) > (ld.settlements?.length ?? 0)) {
+          return cd;
+        }
+        return ld;
+      });
 
   const ls = local.settings;
   const cs = cloud.settings;
@@ -374,9 +406,9 @@ export function mergeLedgerData(localRaw: LedgerData, cloudRaw: LedgerData): {
     settings: mergedSettings,
     transactions: Array.from(txById.values()),
     events: Array.from(eventById.values()).slice(-120),
-    payees: mergeById(local.payees, cloud.payees),
-    subscriptions: mergeById(local.subscriptions, cloud.subscriptions),
-    debts: Array.from(debtMap.values()),
+    payees: mergedPayees,
+    subscriptions: mergedSubscriptions,
+    debts: mergedDebts,
   });
 
   return { merged, newlySyncedTxs };

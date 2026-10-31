@@ -1,7 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Modal,
+  Dimensions,
+  Keyboard,
+  KeyboardAvoidingView,
   PanResponder,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,6 +12,7 @@ import {
   Text,
   TextInput,
   View,
+  type GestureResponderEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
@@ -101,7 +105,7 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
       .trim();
     addQuickExpense(amt, detectedMethod, cleanName || '快速記帳', cleanName || '快速記帳');
     setQuickSentence('');
-    onClose();
+    animateDismiss('down');
   };
 
   const handleExpenseSubmit = () => {
@@ -114,14 +118,14 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
     }
     setAmountStr('');
     setMerchant('');
-    onClose();
+    animateDismiss('down');
   };
 
   const handleAtmSubmit = () => {
     const amt = Number(atmAmountStr);
     if (!Number.isFinite(amt) || amt <= 0) return;
     addAtmTransfer(atmDir, amt, atmHasFee ? 5 : 0);
-    onClose();
+    animateDismiss('down');
   };
 
   const handleReconcileSubmit = () => {
@@ -129,7 +133,7 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
     if (!Number.isFinite(actual) || actual < 0) return;
     reconcileAccount(recAccount, actual, recAffectsBudget);
     setRecActualStr('');
-    onClose();
+    animateDismiss('down');
   };
 
   const scoldPrice = Number(scoldPriceStr) || 0;
@@ -143,133 +147,352 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
       : 0;
 
   // --- Swipe Up / Swipe Down Sheet Gesture & Fluid Physics ---
-  const sheetY = useSharedValue(0);
-  const sheetScale = useSharedValue(1);
-  const sheetOpacity = useSharedValue(1);
+  const [renderedActive, setRenderedActive] = useState<ActiveModal>(active);
+  const sheetY = useSharedValue(380);
+  const sheetScale = useSharedValue(0.96);
+  const sheetOpacity = useSharedValue(0);
+  const backdropOpacity = useSharedValue(0);
+  const grabberScaleX = useSharedValue(1);
   const isClosingRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Only enable internal ScrollView scrolling when content genuinely exceeds 68% of screen height.
+  // For all 4 sheets on iPhone 16 Pro / Plus, content fits comfortably, so keeping scrollEnabled=false
+  // prevents native UIScrollView from cancelling vertical sheet drag touches!
+  const [scrollContentHeight, setScrollContentHeight] = useState(0);
+  const maxBodyHeight = Math.round(Dimensions.get('window').height * 0.68);
+  const isScrollable = scrollContentHeight > maxBodyHeight;
+  const isScrollableRef = useRef(false);
+  isScrollableRef.current = isScrollable;
+  const scrollOffsetYRef = useRef(0);
+  const maxScrollYRef = useRef(0);
+
+  const dragStateRef = useRef({
+    startX: 0,
+    startY: 0,
+    lastY: 0,
+    lastTime: 0,
+    vy: 0,
+    lastDy: 0,
+    active: false,
+    touchActive: false,
+    startedInHeader: false,
+    hapticFired: false,
+  });
 
   useEffect(() => {
     if (active !== 'none') {
+      setRenderedActive(active);
       isClosingRef.current = false;
-      sheetY.value = 36;
-      sheetScale.value = 0.97;
-      sheetOpacity.value = 0;
-      sheetY.value = withSpring(0, { damping: 18, stiffness: 250, mass: 0.75 });
-      sheetScale.value = withSpring(1, { damping: 18, stiffness: 250, mass: 0.75 });
-      sheetOpacity.value = withTiming(1, { duration: 160 });
+      scrollOffsetYRef.current = 0;
+      maxScrollYRef.current = 0;
+      setScrollContentHeight(0);
+      dragStateRef.current.active = false;
+      dragStateRef.current.touchActive = false;
+      dragStateRef.current.startedInHeader = false;
+      dragStateRef.current.hapticFired = false;
+      dragStateRef.current.vy = 0;
+
+      backdropOpacity.value = 0;
+      sheetY.value = 360;
+      sheetScale.value = 0.96;
+      sheetOpacity.value = 1;
+      grabberScaleX.value = 1;
+
+      const raf = requestAnimationFrame(() => {
+        backdropOpacity.value = withTiming(1, { duration: 190, easing: Easing.out(Easing.quad) });
+        sheetY.value = withSpring(0, { damping: 20, stiffness: 240, mass: 0.78 });
+        sheetScale.value = withSpring(1, { damping: 20, stiffness: 240, mass: 0.78 });
+      });
+      return () => cancelAnimationFrame(raf);
+    } else if (!isClosingRef.current) {
+      setRenderedActive('none');
     }
-  }, [active, sheetOpacity, sheetScale, sheetY]);
+  }, [active, backdropOpacity, grabberScaleX, sheetOpacity, sheetScale, sheetY]);
+
+  const springBackSheet = useCallback(() => {
+    sheetY.value = withSpring(0, { damping: 17, stiffness: 270, mass: 0.72 });
+    sheetScale.value = withSpring(1, { damping: 17, stiffness: 270, mass: 0.72 });
+    sheetOpacity.value = withTiming(1, { duration: 150 });
+    backdropOpacity.value = withTiming(1, { duration: 150 });
+    grabberScaleX.value = withSpring(1, { damping: 16, stiffness: 260 });
+  }, [backdropOpacity, grabberScaleX, sheetOpacity, sheetScale, sheetY]);
 
   const animateDismiss = useCallback(
     (direction: 'up' | 'down' = 'down') => {
       if (isClosingRef.current) return;
       isClosingRef.current = true;
+      dragStateRef.current.active = false;
+      dragStateRef.current.touchActive = false;
+      Keyboard.dismiss();
       triggerHaptic('selection');
-      const targetY = direction === 'up' ? -440 : 440;
+      const targetY = direction === 'up' ? -640 : 640;
       sheetY.value = withTiming(targetY, {
-        duration: 180,
+        duration: 210,
         easing: Easing.out(Easing.cubic),
       });
-      sheetScale.value = withTiming(0.95, { duration: 180 });
-      sheetOpacity.value = withTiming(0, { duration: 165 });
+      sheetScale.value = withTiming(0.94, { duration: 210 });
+      sheetOpacity.value = withTiming(0, { duration: 195 });
+      backdropOpacity.value = withTiming(0, { duration: 200 });
+      grabberScaleX.value = withTiming(1, { duration: 150 });
       setTimeout(() => {
-        onClose();
-        sheetY.value = 0;
-        sheetScale.value = 1;
-        sheetOpacity.value = 1;
+        setRenderedActive('none');
+        onCloseRef.current();
         isClosingRef.current = false;
-      }, 170);
+      }, 215);
     },
-    [onClose, sheetOpacity, sheetScale, sheetY],
+    [backdropOpacity, grabberScaleX, sheetOpacity, sheetScale, sheetY],
   );
+
+  const animateDismissRef = useRef(animateDismiss);
+  animateDismissRef.current = animateDismiss;
+  const springBackRef = useRef(springBackSheet);
+  springBackRef.current = springBackSheet;
+
+  const applySheetDrag = useCallback(
+    (dy: number) => {
+      if (isClosingRef.current) return;
+      dragStateRef.current.active = true;
+      dragStateRef.current.lastDy = dy;
+      if (!dragStateRef.current.hapticFired && Math.abs(dy) > 8) {
+        dragStateRef.current.hapticFired = true;
+        Keyboard.dismiss();
+        triggerHaptic('light');
+      }
+      sheetY.value = dy;
+      const progress = Math.min(Math.abs(dy) / 300, 1);
+      sheetScale.value = 1 - progress * 0.045;
+      sheetOpacity.value = 1 - progress * 0.25;
+      backdropOpacity.value = 1 - progress * 0.65;
+      grabberScaleX.value = 1 + Math.min(Math.abs(dy) / 110, 0.32);
+    },
+    [backdropOpacity, grabberScaleX, sheetOpacity, sheetScale, sheetY],
+  );
+
+  const applySheetDragRef = useRef(applySheetDrag);
+  applySheetDragRef.current = applySheetDrag;
+
+  const finishSheetDrag = useCallback((dy: number, vy: number) => {
+    if (isClosingRef.current) return;
+    const wasActive = dragStateRef.current.active;
+    dragStateRef.current.active = false;
+    dragStateRef.current.hapticFired = false;
+    if (!wasActive && Math.abs(dy) < 8) return;
+
+    if (dy > 26 || (dy > 10 && vy > 0.25)) {
+      animateDismissRef.current('down');
+    } else if (dy < -28 || (dy < -10 && vy < -0.28)) {
+      animateDismissRef.current('up');
+    } else {
+      springBackRef.current();
+    }
+  }, []);
+
+  const finishSheetDragRef = useRef(finishSheetDrag);
+  finishSheetDragRef.current = finishSheetDrag;
+
+  const canDragSheetWithDelta = (dx: number, dy: number) => {
+    if (Math.abs(dy) < 4 || Math.abs(dy) <= Math.abs(dx) * 1.05) return false;
+    if (!isScrollableRef.current || dragStateRef.current.startedInHeader) return true;
+    if (dy > 0 && scrollOffsetYRef.current <= 2) return true;
+    if (dy < 0 && scrollOffsetYRef.current >= maxScrollYRef.current - 2) return true;
+    return false;
+  };
 
   const sheetPanResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponderCapture: (_, g) =>
-        Math.abs(g.dy) > 10 && Math.abs(g.dy) > Math.abs(g.dx) * 1.35,
+      // Initialize PanResponder touch history on every touchStart without blocking child Pressables
+      onStartShouldSetPanResponderCapture: () => false,
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => canDragSheetWithDelta(g.dx, g.dy),
+      onMoveShouldSetPanResponderCapture: (_, g) => canDragSheetWithDelta(g.dx, g.dy),
+      onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: () => {
-        triggerHaptic('light');
+        dragStateRef.current.lastDy = 0;
       },
       onPanResponderMove: (_, g) => {
-        sheetY.value = g.dy;
-        const progress = Math.min(Math.abs(g.dy) / 360, 1);
-        sheetScale.value = 1 - progress * 0.04;
-        sheetOpacity.value = 1 - progress * 0.35;
-      },
-      onPanResponderRelease: (_, g) => {
-        if (g.dy > 42 || g.vy > 0.5) {
-          animateDismiss('down');
-        } else if (g.dy < -42 || g.vy < -0.5) {
-          animateDismiss('up');
-        } else {
-          sheetY.value = withSpring(0, { damping: 16, stiffness: 260 });
-          sheetScale.value = withSpring(1, { damping: 16, stiffness: 260 });
-          sheetOpacity.value = withTiming(1, { duration: 140 });
+        if (canDragSheetWithDelta(g.dx, g.dy) || dragStateRef.current.active) {
+          applySheetDragRef.current(g.dy);
         }
       },
+      onPanResponderRelease: (_, g) => {
+        finishSheetDragRef.current(g.dy, g.vy);
+      },
       onPanResponderTerminate: () => {
-        sheetY.value = withSpring(0, { damping: 16, stiffness: 260 });
-        sheetScale.value = withSpring(1, { damping: 16, stiffness: 260 });
-        sheetOpacity.value = withTiming(1, { duration: 140 });
+        if (!dragStateRef.current.touchActive && !isClosingRef.current) {
+          dragStateRef.current.active = false;
+          springBackRef.current();
+        }
       },
     }),
   ).current;
+
+  const headerTouchTimeRef = useRef(0);
+
+  // Direct hardware touch handlers on the sheet container ensure 100% real-time finger tracking
+  // on iOS even if touch started inside a child input or native view.
+  const handleSheetTouchStart = useCallback((e: GestureResponderEvent, inHeader = false) => {
+    if (isClosingRef.current) return;
+    const now = Date.now();
+    if (inHeader) {
+      headerTouchTimeRef.current = now;
+    }
+    const isFromHeader = inHeader || now - headerTouchTimeRef.current < 50;
+    const pageY = e.nativeEvent.pageY;
+    dragStateRef.current.startX = e.nativeEvent.pageX;
+    dragStateRef.current.startY = pageY;
+    dragStateRef.current.lastY = pageY;
+    dragStateRef.current.lastTime = now;
+    dragStateRef.current.vy = 0;
+    dragStateRef.current.lastDy = 0;
+    dragStateRef.current.active = false;
+    dragStateRef.current.touchActive = true;
+    dragStateRef.current.startedInHeader = isFromHeader;
+    dragStateRef.current.hapticFired = false;
+  }, []);
+
+  const handleSheetTouchMove = useCallback((e: GestureResponderEvent) => {
+    if (!dragStateRef.current.touchActive || isClosingRef.current) return;
+    const now = Date.now();
+    const pageY = e.nativeEvent.pageY;
+    const dt = now - dragStateRef.current.lastTime;
+    if (dt > 0) {
+      dragStateRef.current.vy = (pageY - dragStateRef.current.lastY) / dt;
+      dragStateRef.current.lastY = pageY;
+      dragStateRef.current.lastTime = now;
+    }
+    const dx = e.nativeEvent.pageX - dragStateRef.current.startX;
+    const dy = pageY - dragStateRef.current.startY;
+    if (dragStateRef.current.active || canDragSheetWithDelta(dx, dy)) {
+      applySheetDragRef.current(dy);
+    }
+  }, []);
+
+  const handleSheetTouchEnd = useCallback((e: GestureResponderEvent) => {
+    if (!dragStateRef.current.touchActive) return;
+    dragStateRef.current.touchActive = false;
+    const dy = e.nativeEvent.pageY - dragStateRef.current.startY;
+    const vy = dragStateRef.current.vy;
+    if (dragStateRef.current.active) {
+      finishSheetDragRef.current(dy, vy);
+    }
+  }, []);
+
+  const handleSheetTouchCancel = useCallback(() => {
+    dragStateRef.current.touchActive = false;
+    if (dragStateRef.current.active && !isClosingRef.current) {
+      dragStateRef.current.active = false;
+      springBackRef.current();
+    }
+  }, []);
+
+  const handleScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+      scrollOffsetYRef.current = contentOffset.y;
+      const maxScroll = Math.max(0, contentSize.height - layoutMeasurement.height);
+      maxScrollYRef.current = maxScroll;
+      if (contentOffset.y < 0) {
+        applySheetDragRef.current(-contentOffset.y * 1.15);
+      } else if (contentOffset.y > maxScroll) {
+        applySheetDragRef.current(-(contentOffset.y - maxScroll) * 1.15);
+      }
+    },
+    [],
+  );
 
   const handleScrollEndDrag = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement, velocity } = e.nativeEvent;
       const maxScroll = Math.max(0, contentSize.height - layoutMeasurement.height);
-      if (contentOffset.y < -30 || (contentOffset.y <= 0 && (velocity?.y ?? 0) < -0.6)) {
-        animateDismiss('down');
+      if (contentOffset.y < -28 || (contentOffset.y <= 0 && (velocity?.y ?? 0) < -0.45)) {
+        animateDismissRef.current('down');
       } else if (
-        contentOffset.y - maxScroll > 32 ||
-        (contentOffset.y >= maxScroll && (velocity?.y ?? 0) > 0.6)
+        contentOffset.y - maxScroll > 28 ||
+        (contentOffset.y >= maxScroll && (velocity?.y ?? 0) > 0.45)
       ) {
-        animateDismiss('up');
+        animateDismissRef.current('up');
+      } else if (dragStateRef.current.active) {
+        dragStateRef.current.active = false;
+        springBackRef.current();
       }
     },
-    [animateDismiss],
+    [],
   );
+
+  const handleContentSizeChange = useCallback((_w: number, h: number) => {
+    setScrollContentHeight(h);
+  }, []);
+
+  const backdropAnimStyle = useAnimatedStyle(() => ({
+    opacity: backdropOpacity.value,
+  }));
 
   const sheetAnimStyle = useAnimatedStyle(() => ({
     opacity: sheetOpacity.value,
     transform: [{ translateY: sheetY.value }, { scale: sheetScale.value }],
   }));
 
+  const grabberAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleX: grabberScaleX.value }],
+  }));
+
+  if (renderedActive === 'none' && active === 'none') {
+    return null;
+  }
+
+  const currentModal = renderedActive !== 'none' ? renderedActive : active;
+
   return (
-    <Modal visible={active !== 'none'} animationType="fade" transparent onRequestClose={() => animateDismiss('down')}>
-      <View style={styles.backdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={() => animateDismiss('down')} />
-        <Animated.View
-          style={[styles.sheet, sheetAnimStyle]}
-          {...sheetPanResponder.panHandlers}
-        >
-          {/* Top Grabber Handle for Swipe Up / Down */}
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={styles.backdrop}
+    >
+      <Animated.View style={[StyleSheet.absoluteFill, styles.backdropOverlay, backdropAnimStyle]} pointerEvents="none" />
+      <Pressable style={StyleSheet.absoluteFill} onPress={() => animateDismiss('down')} />
+      <Animated.View
+        style={[styles.sheet, sheetAnimStyle]}
+        {...sheetPanResponder.panHandlers}
+        onTouchStart={(e) => handleSheetTouchStart(e, false)}
+        onTouchMove={handleSheetTouchMove}
+        onTouchEnd={handleSheetTouchEnd}
+        onTouchCancel={handleSheetTouchCancel}
+      >
+        {/* Top Grabber Handle & Header Zone for Immediate Swipe Up / Down */}
+        <View onTouchStart={(e) => handleSheetTouchStart(e, true)}>
           <View style={styles.grabberRow}>
-            <View style={styles.grabberPill} />
+            <Animated.View style={[styles.grabberPill, grabberAnimStyle]} />
           </View>
 
           {/* Header */}
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>
-              {active === 'expense' && '💵 極速記收支 / 轉帳'}
-              {active === 'atm' && '🏧 ATM 存提款一鍵同步'}
-              {active === 'scold' && '🛑 救命！我想亂買東西，罵醒我'}
-              {active === 'reconcile' && '⚖️ 魔術平帳（與現實餘額對齊）'}
+              {currentModal === 'expense' && '💵 極速記收支 / 轉帳'}
+              {currentModal === 'atm' && '🏧 ATM 存提款一鍵同步'}
+              {currentModal === 'scold' && '🛑 救命！我想亂買東西，罵醒我'}
+              {currentModal === 'reconcile' && '⚖️ 魔術平帳（與現實餘額對齊）'}
             </Text>
             <Pressable onPress={() => animateDismiss('down')} style={styles.closeBtn}>
               <Text style={styles.closeBtnText}>✕ 關閉</Text>
             </Pressable>
           </View>
+        </View>
 
-          <ScrollView
-            style={styles.body}
-            keyboardShouldPersistTaps="handled"
-            onScrollEndDrag={handleScrollEndDrag}
-            scrollEventThrottle={16}
-          >
-            {/* 1. EXPENSE / INCOME MODAL */}
-            {active === 'expense' && (
+        <ScrollView
+          style={styles.body}
+          keyboardShouldPersistTaps="handled"
+          scrollEnabled={isScrollable}
+          bounces={isScrollable}
+          alwaysBounceVertical={isScrollable}
+          showsVerticalScrollIndicator={isScrollable}
+          onContentSizeChange={handleContentSizeChange}
+          onScroll={handleScroll}
+          onScrollEndDrag={handleScrollEndDrag}
+          scrollEventThrottle={16}
+        >
+          {/* 1. EXPENSE / INCOME MODAL */}
+          {currentModal === 'expense' && (
               <View style={styles.section}>
                 {/* Natural language 1-line input */}
                 <View style={styles.nlBox}>
@@ -407,7 +630,7 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
             )}
 
             {/* 2. ATM MODAL */}
-            {active === 'atm' && (
+            {currentModal === 'atm' && (
               <View style={styles.section}>
                 <Text style={styles.helperText}>
                   ATM 提款與存款屬於「資產內部移轉」，只會同步增減你的玉山銀行與現金餘額，**絕對不會算成把錢花掉**！
@@ -469,7 +692,7 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
             )}
 
             {/* 3. SCOLD ME MODAL */}
-            {active === 'scold' && (
+            {currentModal === 'scold' && (
               <View style={styles.section}>
                 <Text style={styles.label}>選擇毒舌風格</Text>
                 <View style={styles.segmentRow}>
@@ -536,7 +759,7 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
                         recordResistedImpulse(scoldItem || '衝動商品', scoldPrice);
                         setScoldItem('');
                         setScoldPriceStr('');
-                        onClose();
+                        animateDismiss('down');
                       }}
                       style={styles.resistBtn}
                     >
@@ -550,7 +773,7 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
                         addQuickExpense(scoldPrice, 'debit_card', '娛樂', scoldItem || '衝動購物');
                         setScoldItem('');
                         setScoldPriceStr('');
-                        onClose();
+                        animateDismiss('down');
                       }}
                       style={styles.buyAnywayBtn}
                     >
@@ -562,7 +785,7 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
             )}
 
             {/* 4. RECONCILE MODAL */}
-            {active === 'reconcile' && (
+            {currentModal === 'reconcile' && (
               <View style={styles.section}>
                 <Text style={styles.helperText}>
                   輸入帳戶實際餘額，系統將自動平帳補差額。
@@ -621,16 +844,23 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
             )}
           </ScrollView>
         </Animated.View>
-      </View>
-    </Modal>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(4, 7, 9, 0.80)',
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 9999,
+    elevation: 9999,
     justifyContent: 'flex-end',
+  },
+  backdropOverlay: {
+    backgroundColor: 'rgba(4, 7, 9, 0.82)',
   },
   sheet: {
     width: '100%',
@@ -653,14 +883,14 @@ const styles = StyleSheet.create({
   grabberRow: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
-    marginBottom: 4,
+    paddingTop: 6,
+    paddingBottom: 10,
   },
   grabberPill: {
-    width: 40,
-    height: 4.5,
+    width: 42,
+    height: 5,
     borderRadius: 999,
-    backgroundColor: 'rgba(255, 255, 255, 0.24)',
+    backgroundColor: 'rgba(255, 255, 255, 0.28)',
   },
   sheetHeader: {
     flexDirection: 'row',
