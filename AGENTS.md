@@ -43,7 +43,7 @@
 5. **全域省 Token 瀏覽器、iOS 實圖視覺檢查與 GitHub 打包鐵律（呼叫 `$env:USERPROFILE\.local\bin\ai-tools.ps1`）**：
    - **查技術資料（禁讀原始 HTML）**：優先用 `google:search`、`fetch_web_content` 或 `/llms.txt`；若需抓取外部網頁，一律使用 `& "$env:USERPROFILE\.local\bin\ai-tools.ps1" fetch "<URL>" "<關鍵字>" 45`（免費透過 `r.jina.ai` 轉 Markdown 並硬性鎖死最多 45 行）。
    - **測 iOS / 網頁排版（強制看 `393×852` 實圖、禁印 DOM 原始碼）**：不印幾千行 HTML，但**必須親眼看實際畫面**以確保視覺品質。一律執行 `& "$env:USERPROFILE\.local\bin\ai-tools.ps1" ios-shot "http://localhost:8081" ".tmp/ios-preview.png"` 截取 iPhone 16 Pro (`393×852`) 實圖，並呼叫 `read_files` 讀取該 PNG 圖片親眼檢視排版、毛玻璃質感、對比度與文字溢位（單張僅約 300~500 Tokens）。
-   - **GitHub 打包 IPA / CI 狀態（0 瀏覽器、純 CLI）**：嚴禁開瀏覽器看 GitHub Actions 或印出整份編譯 Log。一律使用 `& "$env:USERPROFILE\.local\bin\ai-tools.ps1" gh-status` 查狀態（1 行 JSON），失敗時用 `gh-failed-log <RunID>` 只抓最後 35 行錯誤，成功時用 `gh run download <RunID>` 直接下載。
+   - **GitHub 打包 IPA / CI 狀態（0 瀏覽器、純 CLI、嚴禁多回合輪詢）**：嚴禁開瀏覽器看 GitHub Actions 或印出整份編譯 Log，且**嚴禁在對話中連續多回合呼叫 `Start-Sleep` + `gh-status` 等待打包**（連續 5 次會瞬間把對話歷史重傳 5 次觸發 `429` 與 Cline 5 次重複呼叫鎖定）。推送觸發打包後，一律使用單回合背景自動下載器：`& "$env:USERPROFILE\.local\bin\ai-tools.ps1" gh-bg-ipa latest "<RepoPath>"`（1 秒返回、0 額外 Token，背景自動等待完成並下載至 `Downloads`），或單次查狀態 `gh-status`、失敗時用 `gh-failed-log <RunID>` 只抓最後 35 行錯誤。
 
 ---
 

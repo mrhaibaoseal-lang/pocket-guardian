@@ -190,9 +190,13 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
         }
         if (json.ok && json.data) {
           const { merged, newlySyncedTxs } = mergeLedgerData(dataRef.current, json.data);
-          dataRef.current = merged;
-          setData(merged);
-          AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(merged)).catch(() => undefined);
+          const mergedJson = JSON.stringify(merged);
+          const currentJson = JSON.stringify(dataRef.current);
+          if (mergedJson !== currentJson) {
+            dataRef.current = merged;
+            setData(merged);
+            AsyncStorage.setItem(STORAGE_KEY, mergedJson).catch(() => undefined);
+          }
           if (newlySyncedTxs.length > 0) {
             pushStateToCloudSilent(merged);
           }
@@ -302,8 +306,12 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(clone)).catch(() => undefined);
       const shouldSync =
         typeof syncCloud === 'boolean' ? syncCloud : syncCloud.syncCloud !== false;
+      // Default to replaceCloud = true on local mutations so user edits/deletions/settings changes
+      // (including setting parameters to 0) are always authoritative in Cloudflare D1.
       const shouldReplace =
-        typeof syncCloud === 'object' && Boolean(syncCloud.replaceCloud);
+        typeof syncCloud === 'object' && syncCloud.replaceCloud !== undefined
+          ? Boolean(syncCloud.replaceCloud)
+          : true;
       if (shouldSync) {
         pushStateToCloudSilent(clone, shouldReplace);
       }
@@ -800,7 +808,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
         'Content-Type': 'application/json',
         ...(meta.ingestToken ? { 'X-Ingest-Token': meta.ingestToken } : {}),
       },
-      body: JSON.stringify({ data }),
+      body: JSON.stringify({ data, replace: true }),
     });
     const json = (await res.json()) as { ok?: boolean };
     if (json.ok) {

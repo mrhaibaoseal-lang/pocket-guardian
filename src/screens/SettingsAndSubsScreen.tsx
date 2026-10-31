@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -47,15 +47,36 @@ export function SettingsAndSubsScreen() {
   const [bentoStr, setBentoStr] = useState(String(data.settings.bentoPrice));
   const [cycleDayStr, setCycleDayStr] = useState(String(data.settings.cycleStartDay));
   const [ownSuffixStr, setOwnSuffixStr] = useState(data.settings.ownAccountSuffix);
+  const focusedFieldRef = useRef<string | null>(null);
+  const dirtyFieldsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    setBudgetStr(String(data.settings.monthlyBudget));
-    setFloorStr(String(data.settings.safetyFloor));
-    setWageStr(String(data.settings.hourlyWage));
-    setBentoStr(String(data.settings.bentoPrice));
-    setCycleDayStr(String(data.settings.cycleStartDay));
-    setOwnSuffixStr(data.settings.ownAccountSuffix);
-  }, [data.settings]);
+    if (focusedFieldRef.current !== 'budget' && !dirtyFieldsRef.current.has('budget')) {
+      setBudgetStr(String(data.settings.monthlyBudget));
+    }
+    if (focusedFieldRef.current !== 'floor' && !dirtyFieldsRef.current.has('floor')) {
+      setFloorStr(String(data.settings.safetyFloor));
+    }
+    if (focusedFieldRef.current !== 'wage' && !dirtyFieldsRef.current.has('wage')) {
+      setWageStr(String(data.settings.hourlyWage));
+    }
+    if (focusedFieldRef.current !== 'bento' && !dirtyFieldsRef.current.has('bento')) {
+      setBentoStr(String(data.settings.bentoPrice));
+    }
+    if (focusedFieldRef.current !== 'cycleDay' && !dirtyFieldsRef.current.has('cycleDay')) {
+      setCycleDayStr(String(data.settings.cycleStartDay));
+    }
+    if (focusedFieldRef.current !== 'ownSuffix' && !dirtyFieldsRef.current.has('ownSuffix')) {
+      setOwnSuffixStr(data.settings.ownAccountSuffix);
+    }
+  }, [
+    data.settings.monthlyBudget,
+    data.settings.safetyFloor,
+    data.settings.hourlyWage,
+    data.settings.bentoPrice,
+    data.settings.cycleStartDay,
+    data.settings.ownAccountSuffix,
+  ]);
 
   // --- Cloud Worker Meta ---
   const [workerUrlStr, setWorkerUrlStr] = useState(meta.workerUrl);
@@ -75,13 +96,29 @@ export function SettingsAndSubsScreen() {
   const sidestoreDaysLeft = Math.max(0, 7 - elapsedDays);
 
   const handleSaveCoreSettings = () => {
+    dirtyFieldsRef.current.clear();
+    focusedFieldRef.current = null;
+    const nextBudget = Math.max(0, Number(budgetStr) || 0);
+    const nextFloor = Math.max(0, Number(floorStr) || 0);
+    const nextWage = Math.max(0, Number(wageStr) || 0);
+    const nextBento = Math.max(0, Number(bentoStr) || 0);
+    const nextCycleDay = Math.min(28, Math.max(1, Number(cycleDayStr) || 1));
+    const nextOwnSuffix = ownSuffixStr.trim() || '83151';
+
+    setBudgetStr(String(nextBudget));
+    setFloorStr(String(nextFloor));
+    setWageStr(String(nextWage));
+    setBentoStr(String(nextBento));
+    setCycleDayStr(String(nextCycleDay));
+    setOwnSuffixStr(nextOwnSuffix);
+
     updateSettings({
-      monthlyBudget: Math.max(0, Number(budgetStr) || 0),
-      safetyFloor: Math.max(0, Number(floorStr) || 0),
-      hourlyWage: Math.max(0, Number(wageStr) || 0),
-      bentoPrice: Math.max(0, Number(bentoStr) || 0),
-      cycleStartDay: Math.min(28, Math.max(1, Number(cycleDayStr) || 1)),
-      ownAccountSuffix: ownSuffixStr.trim() || '83151',
+      monthlyBudget: nextBudget,
+      safetyFloor: nextFloor,
+      hourlyWage: nextWage,
+      bentoPrice: nextBento,
+      cycleStartDay: nextCycleDay,
+      ownAccountSuffix: nextOwnSuffix,
     });
   };
 
@@ -302,7 +339,17 @@ export function SettingsAndSubsScreen() {
                 <TextInput
                   style={styles.input}
                   value={budgetStr}
-                  onChangeText={setBudgetStr}
+                  onFocus={() => {
+                    focusedFieldRef.current = 'budget';
+                  }}
+                  onChangeText={(v) => {
+                    dirtyFieldsRef.current.add('budget');
+                    setBudgetStr(v);
+                  }}
+                  onBlur={() => {
+                    if (focusedFieldRef.current === 'budget') focusedFieldRef.current = null;
+                    handleSaveCoreSettings();
+                  }}
                   keyboardType="numeric"
                 />
               </View>
@@ -311,7 +358,17 @@ export function SettingsAndSubsScreen() {
                 <TextInput
                   style={styles.input}
                   value={floorStr}
-                  onChangeText={setFloorStr}
+                  onFocus={() => {
+                    focusedFieldRef.current = 'floor';
+                  }}
+                  onChangeText={(v) => {
+                    dirtyFieldsRef.current.add('floor');
+                    setFloorStr(v);
+                  }}
+                  onBlur={() => {
+                    if (focusedFieldRef.current === 'floor') focusedFieldRef.current = null;
+                    handleSaveCoreSettings();
+                  }}
                   keyboardType="numeric"
                 />
               </View>
@@ -320,7 +377,17 @@ export function SettingsAndSubsScreen() {
                 <TextInput
                   style={styles.input}
                   value={wageStr}
-                  onChangeText={setWageStr}
+                  onFocus={() => {
+                    focusedFieldRef.current = 'wage';
+                  }}
+                  onChangeText={(v) => {
+                    dirtyFieldsRef.current.add('wage');
+                    setWageStr(v);
+                  }}
+                  onBlur={() => {
+                    if (focusedFieldRef.current === 'wage') focusedFieldRef.current = null;
+                    handleSaveCoreSettings();
+                  }}
                   keyboardType="numeric"
                 />
               </View>
@@ -329,7 +396,17 @@ export function SettingsAndSubsScreen() {
                 <TextInput
                   style={styles.input}
                   value={bentoStr}
-                  onChangeText={setBentoStr}
+                  onFocus={() => {
+                    focusedFieldRef.current = 'bento';
+                  }}
+                  onChangeText={(v) => {
+                    dirtyFieldsRef.current.add('bento');
+                    setBentoStr(v);
+                  }}
+                  onBlur={() => {
+                    if (focusedFieldRef.current === 'bento') focusedFieldRef.current = null;
+                    handleSaveCoreSettings();
+                  }}
                   keyboardType="numeric"
                 />
               </View>
@@ -338,7 +415,17 @@ export function SettingsAndSubsScreen() {
                 <TextInput
                   style={styles.input}
                   value={cycleDayStr}
-                  onChangeText={setCycleDayStr}
+                  onFocus={() => {
+                    focusedFieldRef.current = 'cycleDay';
+                  }}
+                  onChangeText={(v) => {
+                    dirtyFieldsRef.current.add('cycleDay');
+                    setCycleDayStr(v);
+                  }}
+                  onBlur={() => {
+                    if (focusedFieldRef.current === 'cycleDay') focusedFieldRef.current = null;
+                    handleSaveCoreSettings();
+                  }}
                   keyboardType="numeric"
                 />
               </View>
@@ -347,7 +434,17 @@ export function SettingsAndSubsScreen() {
                 <TextInput
                   style={styles.input}
                   value={ownSuffixStr}
-                  onChangeText={setOwnSuffixStr}
+                  onFocus={() => {
+                    focusedFieldRef.current = 'ownSuffix';
+                  }}
+                  onChangeText={(v) => {
+                    dirtyFieldsRef.current.add('ownSuffix');
+                    setOwnSuffixStr(v);
+                  }}
+                  onBlur={() => {
+                    if (focusedFieldRef.current === 'ownSuffix') focusedFieldRef.current = null;
+                    handleSaveCoreSettings();
+                  }}
                   placeholder="83151, 99999"
                   placeholderTextColor="rgba(235, 225, 210, 0.35)"
                 />

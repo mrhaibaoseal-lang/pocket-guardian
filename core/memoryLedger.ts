@@ -309,13 +309,13 @@ export function mergeLedgerData(localRaw: LedgerData, cloudRaw: LedgerData): {
   for (const ct of cloud.transactions) {
     const existing = txById.get(ct.id);
     if (existing) {
-      // Preserve soft-delete or locked merge state from whichever side is further along
+      // Local (`existing`) is authoritative for user edits (category, isAdvance, deletedAt, amount, note)
       txById.set(ct.id, {
         ...ct,
         ...existing,
         deletedAt: existing.deletedAt ?? ct.deletedAt,
         isLocked: existing.isLocked || ct.isLocked,
-        isAdvance: existing.isAdvance || ct.isAdvance,
+        isAdvance: existing.isAdvance,
         mergedMetadata: existing.mergedMetadata ?? ct.mergedMetadata,
       });
     } else if (ct.idempotencyKey && txByIdemKey.has(ct.idempotencyKey)) {
@@ -388,19 +388,20 @@ export function mergeLedgerData(localRaw: LedgerData, cloudRaw: LedgerData): {
 
   const ls = local.settings;
   const cs = cloud.settings;
-  const mergedSettings: Settings = {
-    ...cs,
-    ...ls,
-    openingBank: ls.openingBank !== 0 ? ls.openingBank : cs.openingBank,
-    openingCash: ls.openingCash !== 0 ? ls.openingCash : cs.openingCash,
-    monthlyBudget: ls.monthlyBudget !== 0 ? ls.monthlyBudget : cs.monthlyBudget,
-    safetyFloor: ls.safetyFloor !== 0 ? ls.safetyFloor : cs.safetyFloor,
-    hourlyWage: ls.hourlyWage !== 0 ? ls.hourlyWage : cs.hourlyWage,
-    bentoPrice: ls.bentoPrice !== 0 ? ls.bentoPrice : cs.bentoPrice,
-    ownAccountSuffix: ls.ownAccountSuffix || cs.ownAccountSuffix || '83151',
-    piggyBankSaved: Math.max(ls.piggyBankSaved ?? 0, cs.piggyBankSaved ?? 0),
-    resistedImpulseTotal: Math.max(ls.resistedImpulseTotal ?? 0, cs.resistedImpulseTotal ?? 0),
-  };
+  // Settings are exclusively configured in the App (`local`).
+  // Only inherit `cloud.settings` when restoring into a brand-new empty local ledger;
+  // otherwise keep `local.settings` 100% authoritative (including when a user sets any value to 0!).
+  const mergedSettings: Settings = isLocalFreshEmpty
+    ? {
+        ...ls,
+        ...cs,
+        ownAccountSuffix: cs.ownAccountSuffix || ls.ownAccountSuffix || '83151',
+      }
+    : {
+        ...cs,
+        ...ls,
+        ownAccountSuffix: ls.ownAccountSuffix || cs.ownAccountSuffix || '83151',
+      };
 
   const merged: LedgerData = sanitizeLedgerData({
     settings: mergedSettings,

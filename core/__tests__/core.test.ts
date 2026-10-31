@@ -952,4 +952,32 @@ describe('real-device iOS 27 Shortcut screenshot & variable wiring regressions (
     const { merged } = mergeLedgerData(local, cloud);
     expect(merged.subscriptions).toHaveLength(0);
   });
+
+  it('preserves user settings changes (including setting monthlyBudget or safetyFloor to 0) during mergeLedgerData', () => {
+    const cloud = ledger({
+      openingBank: 10000,
+      monthlyBudget: 15000,
+      safetyFloor: 3000,
+      hourlyWage: 200,
+      bentoPrice: 120,
+    }).data;
+
+    // User updates settings on iPhone: sets monthlyBudget to 0 (auto-by-balance) and hourlyWage to 250
+    const local: LedgerData = {
+      ...cloud,
+      settings: {
+        ...cloud.settings,
+        monthlyBudget: 0,
+        safetyFloor: 0,
+        hourlyWage: 250,
+        bentoPrice: 130,
+      },
+    };
+
+    const { merged } = mergeLedgerData(local, cloud);
+    expect(merged.settings.monthlyBudget).toBe(0);
+    expect(merged.settings.safetyFloor).toBe(0);
+    expect(merged.settings.hourlyWage).toBe(250);
+    expect(merged.settings.bentoPrice).toBe(130);
+  });
 });

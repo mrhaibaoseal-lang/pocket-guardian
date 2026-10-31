@@ -1,14 +1,14 @@
 # HANDOFF.md — 跨工具／跨模型交接紀錄
 
-> **最後更新時間**：2026-10-31 20:50 (UTC+8)
-> **最後更新 Agent**：Cline (修復：① `src/components/ActionSheetModals.tsx` 四大底部字卡下拉／上滑跟手關閉與阻尼回彈動畫；② `core/memoryLedger.ts`、`src/store/useLedger.tsx`、`cloudflare-worker/src/index.ts` 刪除「固定扣款預留」後被雲端 `mergeLedgerData` 復活、以及設定當月已過日期如每月 5 號時立即回溯扣款的問題，並已清除雲端 D1 殘留測試項目 `調光台`)
+> **最後更新時間**：2026-10-31 21:30 (UTC+8)
+> **最後更新 Agent**：Cline (全站根治雲端同步與背景輪詢覆蓋問題：① `core/memoryLedger.ts` 之 `mergeLedgerData` 移除 `ls.monthlyBudget !== 0` 等強制回退至雲端舊值的錯誤判斷，確保將預算、底線、時薪、便當價改為 `0` 或任何數值皆以本機為準；② `src/store/useLedger.tsx` 所有本機變更預設 `replaceCloud = true`，且 8 秒背景輪詢在資料無變化時不觸發 `setData` 重繪；③ `src/screens/SettingsAndSubsScreen.tsx` 預算與體感參數加入 `focusedFieldRef / dirtyFieldsRef` 防護與 `onBlur` 自動儲存，輸入時與儲存後絕不跳回舊值)
 > **專案路徑**：`C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger`
 > **Git 分支與最新狀態**：`main`（已同步寫入主工作區與本地 Commit，尚未重新打包 IPA）
 > **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `1e12ae0d-666f-42bd-beb3-d061a3a2e4ec`，前版可 Rollback ID: `845769c7-ceaf-40a6-aa24-5120b363981e`)
-> **最新無簽名 IPA 位置（v3.3.0+ 全套 iOS 流體動畫＋版面精簡版，GitHub Actions Run ID: 41113250489，9.91 MB）**：
+> **最新無簽名 IPA 位置（v3.3.0+ 底部字卡上下滑動跟手關閉修復 ＋ 固定扣款預留刪除不復活／防當月回溯扣款版，GitHub Actions Run ID: 41202906351，11.10 MB）**：
 > - `C:\Users\mrhai\Downloads\PocketGuardian-SideStore.ipa`
 > - `C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger\PocketGuardian-SideStore.ipa`
-> - `C:\Users\mrhai\.cline\worktrees\d3c7b\smart-ledger\PocketGuardian-SideStore.ipa`
+> - `C:\Users\mrhai\.cline\worktrees\40249\smart-ledger\PocketGuardian-SideStore.ipa`
 
 ---
 
