@@ -17,6 +17,7 @@ export function ShortcutsTestBenchScreen() {
   const [draftMerchant, setDraftMerchant] = useState<string>('');
   const [inboxExpanded, setInboxExpanded] = useState(false);
   const [guideExpanded, setGuideExpanded] = useState(false);
+  const [eventsExpanded, setEventsExpanded] = useState(false);
 
   const inboxEvents = useMemo(
     () =>
@@ -222,26 +223,42 @@ export function ShortcutsTestBenchScreen() {
         )}
       </LiquidGlassCard>
 
-      {/* Recent Raw Event Log */}
-      <LiquidGlassCard shape="card" contentStyle={styles.sectionCard}>
-        <Text style={styles.sectionTitle}>
-          最近收到的捷徑事件紀錄 ({data.events.length})
-        </Text>
-        {data.events.length === 0 ? (
-          <Text style={styles.emptyText}>尚無收訊紀錄</Text>
-        ) : (
-          data.events
-            .slice(-15)
-            .reverse()
-            .map((ev, idx) => (
-              <View key={idx} style={styles.eventRow}>
-                <Text style={styles.eventMeta}>
-                  [{ev.source}] {ev.parsed.kind} ·{' '}
-                  {ev.parsed.amount !== null ? `$${ev.parsed.amount}` : '無金額'}
-                </Text>
-                <Text style={styles.eventReason}>{ev.reason}</Text>
-              </View>
-            ))
+      {/* Recent Raw Event Log (Collapsible Drawer) */}
+      <LiquidGlassCard shape="card" elevated contentStyle={styles.sectionCard}>
+        <Pressable
+          style={styles.collapsibleHeaderRow}
+          onPress={() => setEventsExpanded((prev) => !prev)}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={styles.sectionTitle}>
+              📡 近期收訊紀錄 ({data.events.length})
+            </Text>
+            <Text style={styles.screenSub}>
+              {eventsExpanded ? '點選收起' : '最近 15 筆捷徑與雲端收訊紀錄 · 點選展開'}
+            </Text>
+          </View>
+          <View style={styles.collapseChevronBtn}>
+            <Text style={styles.collapseChevron}>{eventsExpanded ? '▴' : '▾'}</Text>
+          </View>
+        </Pressable>
+
+        {eventsExpanded && (
+          data.events.length === 0 ? (
+            <Text style={styles.emptyText}>尚無收訊紀錄</Text>
+          ) : (
+            data.events
+              .slice(-15)
+              .reverse()
+              .map((ev, idx) => (
+                <View key={ev.id || idx} style={styles.eventRow}>
+                  <Text style={styles.eventMeta}>
+                    [{ev.source}] {ev.parsed.kind} ·{' '}
+                    {ev.parsed.amount !== null ? `$${ev.parsed.amount}` : '無金額'}
+                  </Text>
+                  <Text style={styles.eventReason}>{ev.reason}</Text>
+                </View>
+              ))
+          )
         )}
       </LiquidGlassCard>
     </ScrollView>
@@ -266,26 +283,26 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   screenTitle: {
-    color: '#FAF6F0',
+    color: '#F8FAFC',
     fontSize: 20,
     fontWeight: '700',
     letterSpacing: -0.4,
   },
   screenSub: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: 'rgba(148, 163, 184, 0.72)',
     fontSize: 12,
     marginTop: 2,
   },
   syncBtn: {
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
-    borderColor: 'rgba(251, 191, 36, 0.3)',
+    backgroundColor: 'rgba(16, 185, 129, 0.16)',
+    borderColor: 'rgba(52, 211, 153, 0.35)',
     borderWidth: 0.8,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 999,
   },
   syncBtnText: {
-    color: '#FBBF24',
+    color: '#34D399',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -294,12 +311,12 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   endpointLabel: {
-    color: '#FBBF24',
+    color: '#34D399',
     fontSize: 11,
     fontWeight: '700',
   },
   endpointUrl: {
-    color: '#FAF6F0',
+    color: '#F8FAFC',
     fontSize: 12,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
@@ -309,7 +326,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sectionTitle: {
-    color: '#FAF6F0',
+    color: '#F8FAFC',
     fontSize: 15,
     fontWeight: '700',
   },
@@ -323,54 +340,54 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 999,
-    backgroundColor: 'rgba(214, 195, 165, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   collapseChevron: {
-    color: '#E6D5B8',
+    color: '#CBD5E1',
     fontSize: 13,
     fontWeight: '700',
   },
   guideStep: {
-    backgroundColor: 'rgba(214, 195, 165, 0.08)',
-    borderColor: 'rgba(230, 213, 184, 0.18)',
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
     borderWidth: 0.8,
     borderRadius: 16,
     padding: 11,
     gap: 3,
   },
   guideStepTitle: {
-    color: '#FBBF24',
+    color: '#34D399',
     fontSize: 13,
     fontWeight: '700',
   },
   guideStepText: {
-    color: '#E6D5B8',
+    color: '#CBD5E1',
     fontSize: 12,
     lineHeight: 17,
   },
   emptyText: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: 'rgba(148, 163, 184, 0.72)',
     fontSize: 12,
     paddingVertical: 8,
   },
   eventRow: {
-    backgroundColor: 'rgba(214, 195, 165, 0.08)',
-    borderColor: 'rgba(230, 213, 184, 0.18)',
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
     borderWidth: 0.8,
     borderRadius: 14,
     padding: 10,
     gap: 2,
   },
   eventMeta: {
-    color: '#FAF6F0',
+    color: '#F8FAFC',
     fontSize: 12,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
   eventReason: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: 'rgba(148, 163, 184, 0.72)',
     fontSize: 11,
   },
   inboxTopRow: {
@@ -385,32 +402,32 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   inboxActionBtn: {
-    backgroundColor: 'rgba(245, 158, 11, 0.16)',
-    borderColor: 'rgba(251, 191, 36, 0.35)',
+    backgroundColor: 'rgba(16, 185, 129, 0.16)',
+    borderColor: 'rgba(52, 211, 153, 0.35)',
     borderWidth: 0.8,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
   },
   inboxActionText: {
-    color: '#FBBF24',
+    color: '#34D399',
     fontSize: 11,
     fontWeight: '700',
   },
   inboxDeleteBtn: {
-    backgroundColor: 'rgba(214, 195, 165, 0.1)',
-    borderColor: 'rgba(230, 213, 184, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     borderWidth: 0.8,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
   },
   inboxDeleteText: {
-    color: '#E6D5B8',
+    color: '#CBD5E1',
     fontSize: 11,
   },
   rawPreview: {
-    color: 'rgba(230, 213, 184, 0.72)',
+    color: 'rgba(203, 213, 225, 0.75)',
     fontSize: 11,
     marginTop: 2,
     fontVariant: ['tabular-nums'],
@@ -422,23 +439,23 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   inlineInput: {
-    backgroundColor: 'rgba(28, 24, 20, 0.75)',
-    borderColor: 'rgba(230, 213, 184, 0.28)',
+    backgroundColor: 'rgba(8, 12, 15, 0.78)',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
     borderWidth: 0.8,
     borderRadius: 10,
     paddingHorizontal: 8,
     paddingVertical: 6,
-    color: '#FAF6F0',
+    color: '#F8FAFC',
     fontSize: 12,
   },
   confirmBookBtn: {
-    backgroundColor: '#FBBF24',
+    backgroundColor: '#10B981',
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 10,
   },
   confirmBookText: {
-    color: '#080705',
+    color: '#04120C',
     fontSize: 12,
     fontWeight: '800',
   },

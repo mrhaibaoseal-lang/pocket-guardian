@@ -1,20 +1,34 @@
 # HANDOFF.md — 跨工具／跨模型交接紀錄
 
-> **最後更新時間**：2026-10-31 03:10 (UTC+8)
-> **最後更新 Agent**：Cline (完成全站版面精簡與首頁英雄卡重構：首頁主顯「本月剩餘預算」、點擊記帳不跳鍵盤、捷徑頁收件匣與指南改為開關式抽屜、精簡全站冗長文字提示)
+> **最後更新時間**：2026-10-31 18:52 (UTC+8)
+> **最後更新 Agent**：Cline (完成 4 項更新：① 全站 UI 配色升級為「方案 1：🏛️ 黑曜鉑金 × 冰翡翠 Obsidian Platinum & Jade」90/10 暗色奢華系並保留 100% 毛玻璃與流體動畫；② 記收支/ATM/罵醒我/魔術平帳底部字卡支援上下滑動手勢跟手關閉；③ 設定頁全抽屜化與「近期收訊紀錄」展開收合抽屜；④ 明細 7 天回收桶新增「🗑️ 一鍵全部刪除」與單筆永久刪除)
 > **專案路徑**：`C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger`
-> **Git 分支與最新 Commit**：`main` @ `e70462a`（GitHub Actions 打包成功）
+> **Git 分支與最新狀態**：`main`（已同步寫入主工作區與本地 Commit，尚未重新打包 IPA）
 > **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `1e12ae0d-666f-42bd-beb3-d061a3a2e4ec`，前版可 Rollback ID: `845769c7-ceaf-40a6-aa24-5120b363981e`)
-> **最新無簽名 IPA 位置（v3.3.0+ 全套 iOS 流體動畫版，GitHub Actions Run ID: 41102071008，9.9 MB）**：
+> **最新無簽名 IPA 位置（v3.3.0+ 全套 iOS 流體動畫＋版面精簡版，GitHub Actions Run ID: 41113250489，9.91 MB）**：
 > - `C:\Users\mrhai\Downloads\PocketGuardian-SideStore.ipa`
 > - `C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger\PocketGuardian-SideStore.ipa`
 > - `C:\Users\mrhai\.cline\worktrees\d3c7b\smart-ledger\PocketGuardian-SideStore.ipa`
 
 ---
 
-## 1. 已完成工作摘要（截至 `v3.3.0+` + 「🤝 欠款」新功能欄 + iOS 26 頂級流體物理動畫系統）
+## 1. 已完成工作摘要（截至 `v3.3.0+` 黑曜鉑金×冰翡翠配色 ＋ 字卡上下滑動關閉 ＋ 設定全抽屜 ＋ 回收桶一鍵清空）
 
-0. **全站 6 大 iOS 26 頂級流體物理動畫系統（`src/components/iosAnimations.tsx`, `App.tsx`, `src/screens/DashboardScreen.tsx`, `src/screens/TransactionsScreen.tsx`, `src/screens/DebtsScreen.tsx`, `src/components/MorphingCategoryPill.tsx`）**：
+0. **本次 Session 完成之 4 大更新（2026-10-31 18:52）**：
+   - **① 全站 UI 配色升級為「方案 1：🏛️ 黑曜鉑金 × 冰翡翠 (Obsidian Platinum & Jade)」(`App.tsx`, `src/components/LiquidGlassView.tsx`, `src/components/iosAnimations.tsx`, `src/components/MorphingCategoryPill.tsx`, `src/components/SafeConfirmButton.tsx`, `src/components/ActionSheetModals.tsx`, `src/screens/*.tsx`)**：
+     - 嚴格保留既有 UI 排版、三層 `LiquidGlassView` 毛玻璃折射與 6 大流體物理動畫（0 破壞）。
+     - 採用 **90/10 暗色奢華視覺焦點法則**：90% 空間使用純淨煙燻黑曜毛玻璃（`rgba(13, 18, 22, 0.52)` / `rgba(17, 24, 29, 0.68)`）搭配頂部微米級冷白刀鋒高光（`rgba(255, 255, 255, 0.22)`）與三階冷調灰白字體（主字 `#F8FAFC`、次要字 `#CBD5E1`、輔助字 `rgba(148, 163, 184, 0.72)`）；次要膠囊統一收斂為低調消光冷鈦灰玻璃（`rgba(255, 255, 255, 0.055)`）。
+     - **10% 唯一視覺焦點**：僅在「本月剩餘預算光管 (`#059669 → #10B981 → #6EE7B7`)」、「今日可用重點金額 (`#34D399`)」、「主行動按鈕 (`#10B981` 配深黑字 `#04120C`)」與「底部滑動導覽膠囊」點綴低飽和冰翡翠綠，讓重點一眼跳出。
+   - **② 記收支 / ATM / 罵醒我 / 魔術平帳底部字卡支援「上下滑動手勢跟手關閉」(`src/components/ActionSheetModals.tsx`)**：
+     - 整合 `PanResponder` 與 Reanimated `sheetY` / `sheetScale` / `sheetOpacity` 即時跟手拖拽與 `withSpring` 阻尼回彈。
+     - 支援在字卡上**下滑（`dy > 42` 或快速下滑）**或**上滑（`dy < -42` 或快速上滑）**順暢滑出關閉，並新增頂部原生 iOS Grabber Pill 拖曳橫條、捲動區拉到底／頂關閉與背景點擊關閉。
+   - **③ 「⚙️ 設定」全頁面抽屜化 ＆ 「📡 近期收訊紀錄」展開收合抽屜 (`src/screens/SettingsAndSubsScreen.tsx`, `src/screens/ShortcutsTestBenchScreen.tsx`)**：
+     - 設定頁 6 大區塊（`🔄 固定扣款預留`、`🏦 常用轉帳對象字典`、`⚙️ 預算與體感參數`、`📡 近期收訊紀錄`、`☁️ Cloudflare D1 雲端與 SideStore`、`🧹 帳本歸零重置`）與捷徑頁「`📡 近期收訊紀錄`」全部改為預設收合、點擊展開／收起的抽屜卡片。
+   - **④ 「☰ 明細 → 7天回收桶」一鍵全部永久刪除與單筆永久刪除 (`src/screens/TransactionsScreen.tsx`, `core/memoryLedger.ts`, `src/store/useLedger.tsx`, `core/__tests__/core.test.ts`)**：
+     - 在 `MemoryLedger` 與 `useLedger` 新增 `emptyTrash()` 與 `hardDelete(id)`，永久刪除時一併清理對應 `events` 關聯，並以 `{ replace: true }` 同步覆寫 Cloudflare D1 雲端快照，確保刪除後雲端同步不復活、重掃截圖不卡重複。
+     - 在「7天回收桶」分頁頂部新增「`🗑️ 一鍵全部刪除 (N)`」防誤觸二次確認工具列，並在每筆回收桶紀錄新增單筆「`永久刪除`」按鈕。
+
+0.5. **全站 6 大 iOS 26 頂級流體物理動畫系統（`src/components/iosAnimations.tsx`, `App.tsx`, `src/screens/DashboardScreen.tsx`, `src/screens/TransactionsScreen.tsx`, `src/screens/DebtsScreen.tsx`, `src/components/MorphingCategoryPill.tsx`）**：
    - **方案一（動態島級頂部毛玻璃橫幅）**：`DismissibleBanner` 改為從頂部動態島以 iOS 阻尼彈簧（`damping: 15, stiffness: 230`）伴隨縮放（`0.84 → 1.0`）彈落並觸發輕觸覺震動；手指按住暫停時微幅膨脹（`scale: 1.025`），上滑時即時跟手並加速收合回動態島。
    - **方案二（Apple Wallet 級平滑滾動金額 + 香檳光管刀鋒流光）**：建立 `<AnimatedRollingNumber>` 以 iOS 五次減速曲線平滑滾動金額並帶微幅彈性脈衝；建立 `<LiquidLightTube>` 讓預算光管以 `withSpring` 彈性伸縮並循環掠過香檳金高光折射（Shimmer Sweep）。
    - **方案三（底部流體滑動膠囊導覽列 + 分頁微轉場）**：底部 5 欄導覽列改為共用 `<Animated.View>` 流體滑動琥珀膠囊（Fluid Sliding Pill）平滑滑移至選中分頁，搭配圖示 Q 彈跳動與 `<ScreenTransitionView>` `180ms` 微上浮轉場。
@@ -51,8 +65,8 @@
 
 - **Windows 環境注意事項**：本機 Node.js 位於 `C:\Program Files\nodejs`，若在終端機執行 `npx` / `vitest` / `wrangler` 遇到找不到 `node`，請先確保 `$env:PATH = "C:\Program Files\nodejs;$env:PATH"`。
 - **TypeScript 型別檢查 (`npx tsc --noEmit`)**：✅ **通過（0 Errors）**
-- **Vitest 單元測試 (`npx vitest run`)**：✅ **通過（1 Test File, 57/57 Tests Passed）**
-  - 涵蓋實機 7724/7794 轉出截圖、7717 玉山存摺明細轉入收入（`網路非約轉帳 ... 轉帳給此帳號` -> `轉入：阮*豫 ****88173 +$500`，排除年份 `2026` 與 `帳戶餘額 2,040`）、7793 錯誤截圖精簡提示、刪除舊交易後重掃不吃單（`mergeLedgerData` 忽略已刪除交易的 `idempotencyKey`）、以及 Cloudflare Workers AI / iOS 捷徑 AI 結構化 JSON 解析。
+- **Vitest 單元測試 (`npx vitest run`)**：✅ **通過（1 Test File, 59/59 Tests Passed）**
+  - 涵蓋實機 7724/7794 轉出截圖、7717 玉山存摺明細轉入收入（`網路非約轉帳 ... 轉帳給此帳號` -> `轉入：阮*豫 ****88173 +$500`，排除年份 `2026` 與 `帳戶餘額 2,040`）、7793 錯誤截圖精簡提示、刪除舊交易後重掃不吃單（`mergeLedgerData` 忽略已刪除交易的 `idempotencyKey`）、7天回收桶一鍵全部永久刪除 (`emptyTrash`) 與單筆永久刪除 (`hardDelete`)、以及 Cloudflare Workers AI / iOS 捷徑 AI 結構化 JSON 解析。
 
 ---
 

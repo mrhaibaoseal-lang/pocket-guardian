@@ -908,4 +908,25 @@ describe('real-device iOS 27 Shortcut screenshot & variable wiring regressions (
     expect(res.transaction?.amount).toBe(300);
     expect(computeBalances(l.data.settings, l.data.transactions).bank).toBe(4700);
   });
+
+  it('supports one-click emptyTrash and single hardDelete in the 7-day recycle bin', () => {
+    const l = ledger({ openingBank: 5000 });
+    const r1 = l.ingest('wallet', { text: '統一超商 NT$65' }, T0);
+    const r2 = l.ingest('wallet', { text: '全家便利商店 NT$80' }, plus(T0, 1));
+    const r3 = l.ingest('wallet', { text: '路易莎咖啡 NT$120' }, plus(T0, 2));
+    expect(l.data.transactions).toHaveLength(3);
+
+    l.remove(r1.transaction!.id, plus(T0, 3));
+    l.remove(r2.transaction!.id, plus(T0, 4));
+    expect(l.data.transactions.filter((t) => Boolean(t.deletedAt))).toHaveLength(2);
+
+    const purgedCount = l.emptyTrash();
+    expect(purgedCount).toBe(2);
+    expect(l.data.transactions).toHaveLength(1);
+    expect(l.data.transactions[0].id).toBe(r3.transaction!.id);
+
+    const singleRemoved = l.hardDelete(r3.transaction!.id);
+    expect(singleRemoved?.id).toBe(r3.transaction!.id);
+    expect(l.data.transactions).toHaveLength(0);
+  });
 });

@@ -566,6 +566,26 @@ export class MemoryLedger {
     return this.update(id, { deletedAt: null });
   }
 
+  hardDelete(id: string): Transaction | null {
+    const target = this.data.transactions.find((t) => t.id === id) ?? null;
+    if (!target) return null;
+    this.data.transactions = this.data.transactions.filter((t) => t.id !== id);
+    this.data.events = this.data.events.filter((e) => e.transactionId !== id);
+    return target;
+  }
+
+  emptyTrash(): number {
+    const trashedIds = new Set(
+      this.data.transactions.filter((t) => Boolean(t.deletedAt)).map((t) => t.id),
+    );
+    if (trashedIds.size === 0) return 0;
+    this.data.transactions = this.data.transactions.filter((t) => !t.deletedAt);
+    this.data.events = this.data.events.filter(
+      (e) => !e.transactionId || !trashedIds.has(e.transactionId),
+    );
+    return trashedIds.size;
+  }
+
   split(id: string, now: string): boolean {
     const tx = this.data.transactions.find((t) => t.id === id);
     if (!tx) return false;

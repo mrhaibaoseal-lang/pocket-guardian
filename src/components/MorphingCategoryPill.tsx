@@ -22,19 +22,11 @@ export interface CategoryGlassTint {
  * - 『交通/日常』（車費、超商、日用品、娛樂、轉帳等）：大漠鈦金玻璃
  *   底 rgba(214, 195, 165, 0.12)、字 #E6D5B8、邊框 rgba(230, 213, 184, 0.25)
  */
-export function getCategoryGlassTint(cat: string | null): CategoryGlassTint {
-  const c = cat || '';
-  if (/(食物|飲料|早餐|午餐|便當|晚餐|宵夜|餐飲)/.test(c)) {
-    return {
-      bg: 'rgba(245, 158, 11, 0.14)',
-      border: 'rgba(251, 191, 36, 0.3)',
-      text: '#FBBF24',
-    };
-  }
+export function getCategoryGlassTint(_cat: string | null): CategoryGlassTint {
   return {
-    bg: 'rgba(214, 195, 165, 0.12)',
-    border: 'rgba(230, 213, 184, 0.25)',
-    text: '#E6D5B8',
+    bg: 'rgba(255, 255, 255, 0.055)',
+    border: 'rgba(255, 255, 255, 0.12)',
+    text: '#CBD5E1',
   };
 }
 
@@ -59,8 +51,8 @@ export function MorphingCategoryPill({
       style={[
         styles.pillShell,
         {
-          backgroundColor: expanded ? 'rgba(28, 22, 16, 0.94)' : tint.bg,
-          borderColor: tint.border,
+          backgroundColor: expanded ? 'rgba(9, 14, 18, 0.95)' : tint.bg,
+          borderColor: expanded ? 'rgba(52, 211, 153, 0.32)' : tint.border,
         },
         expanded && styles.pillShellExpanded,
       ]}
@@ -104,15 +96,15 @@ export function MorphingCategoryPill({
                 style={[
                   styles.optionPill,
                   {
-                    backgroundColor: isSelected ? optTint.text : optTint.bg,
-                    borderColor: optTint.border,
+                    backgroundColor: isSelected ? '#10B981' : optTint.bg,
+                    borderColor: isSelected ? '#34D399' : optTint.border,
                   },
                 ]}
               >
                 <Text
                   style={[
                     styles.optionText,
-                    { color: isSelected ? '#080705' : optTint.text },
+                    { color: isSelected ? '#04120C' : optTint.text },
                   ]}
                 >
                   {cat}
@@ -187,7 +179,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   closeMiniText: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: 'rgba(148, 163, 184, 0.72)',
     fontSize: 11,
     fontWeight: '700',
   },

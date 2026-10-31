@@ -79,8 +79,15 @@
   - **關聯檔案**：`src/components/iosAnimations.tsx`, `App.tsx`, `src/screens/DashboardScreen.tsx`, `src/screens/TransactionsScreen.tsx`, `src/screens/DebtsScreen.tsx`, `src/components/MorphingCategoryPill.tsx`
   - **驗收條件**：
     1. 頂部通知膠囊支援動態島彈簧墜落、按住微膨脹與上滑跟手阻尼收合。
-    2. 首頁與欠款頁大金額支援 Apple Wallet 級平滑滾動跳字與香檳光管刀鋒流光（Shimmer Sweep）。
+    2. 首頁與欠款頁大金額支援 Apple Wallet 級平滑滾動跳字與光管刀鋒流光（Shimmer Sweep）。
     3. 底部導覽列支援流體滑動選中膠囊（Fluid Sliding Pill）、圖示彈跳與分頁 `180ms` 絲滑微轉場。
     4. 快捷鍵與行動卡片支援 `<TactilePressable>` 3D 果凍按壓回彈與 Haptics 觸覺回饋；清單支援 `<StaggeredItem>` 瀑布流與自動補位重排；底層環境光球支援慢速呼吸律動。
+- [x] **T2.16：全站「🏛️ 黑曜鉑金 × 冰翡翠」90/10 暗色奢華配色、字卡上下滑動關閉、設定全抽屜化與回收桶一鍵清空**
+  - **關聯檔案**：`App.tsx`, `core/memoryLedger.ts`, `core/__tests__/core.test.ts`, `src/store/useLedger.tsx`, `src/components/*`, `src/screens/*`
+  - **驗收條件**：
+    1. 全站升級為「方案 1：🏛️ 黑曜鉑金 × 冰翡翠 (Obsidian Platinum & Jade)」，保留 100% 三層液態毛玻璃與流體物理動畫。
+    2. 記收支、ATM 存提、罵醒我、魔術平帳底部字卡支援上下滑動即時跟手關閉與阻尼回彈。
+    3. 設定頁全區塊與捷徑頁「📡 近期收訊紀錄」皆改為可展開／收合的抽屜模式。
+    4. 明細頁「7天回收桶」支援「🗑️ 一鍵全部刪除」與單筆永久刪除，並以 `replace: true` 同步更新 Cloudflare D1 快照。
 - [ ] **T2.2：更多行動支付（LINE Pay / 街口支付 / 全支付）專用通知模板細化**
 - [ ] **T3.1：財政部電子發票載具明細補完（選配）**

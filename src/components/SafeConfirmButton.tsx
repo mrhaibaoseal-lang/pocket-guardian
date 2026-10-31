@@ -76,15 +76,15 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   idle: {
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   armed: {
-    backgroundColor: '#FBBF24',
-    borderColor: '#FDE68A',
+    backgroundColor: '#10B981',
+    borderColor: '#6EE7B7',
   },
   text: {
-    color: '#E6D5B8',
+    color: '#CBD5E1',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   armedText: {
-    color: '#080705',
+    color: '#04120C',
     fontWeight: '800',
   },
 });

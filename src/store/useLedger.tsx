@@ -92,6 +92,8 @@ interface LedgerContextValue {
   updateTxCategory: (id: string, category: string) => void;
   softDeleteTx: (id: string) => void;
   restoreTx: (id: string) => void;
+  hardDeleteTx: (id: string) => void;
+  emptyTrash: () => void;
   runScold: (item: string, price: number, mode: ScoldMode) => ScoldResult;
   recordResistedImpulse: (item: string, price: number) => void;
   settleEveningPiggy: () => void;
@@ -149,7 +151,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
     if (msg) setToastSeq((n) => n + 1);
   }, []);
 
-  const pushStateToCloudSilent = useCallback((payload: LedgerData) => {
+  const pushStateToCloudSilent = useCallback((payload: LedgerData, replace = false) => {
     const baseUrl = metaRef.current.workerUrl.replace(/\/+$/, '');
     if (!baseUrl) return;
     fetch(`${baseUrl}/api/state`, {
@@ -158,7 +160,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
         'Content-Type': 'application/json',
         ...(metaRef.current.ingestToken ? { 'X-Ingest-Token': metaRef.current.ingestToken } : {}),
       },
-      body: JSON.stringify({ data: payload }),
+      body: JSON.stringify(replace ? { data: payload, replace: true } : { data: payload }),
     }).catch(() => undefined);
   }, []);
 
@@ -268,7 +270,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
   }, [pullAndMergeFromCloud]);
 
   const persist = useCallback(
-    (next: LedgerData, syncCloud = true) => {
+    (next: LedgerData, syncCloud: boolean | { syncCloud?: boolean; replaceCloud?: boolean } = true) => {
       const sanitized = sanitizeLedgerData(next);
       const clone: LedgerData = {
         settings: { ...sanitized.settings },
@@ -281,8 +283,12 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       dataRef.current = clone;
       setData(clone);
       AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(clone)).catch(() => undefined);
-      if (syncCloud) {
-        pushStateToCloudSilent(clone);
+      const shouldSync =
+        typeof syncCloud === 'boolean' ? syncCloud : syncCloud.syncCloud !== false;
+      const shouldReplace =
+        typeof syncCloud === 'object' && Boolean(syncCloud.replaceCloud);
+      if (shouldSync) {
+        pushStateToCloudSilent(clone, shouldReplace);
       }
     },
     [pushStateToCloudSilent],
@@ -474,6 +480,31 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
     },
     [data, persist, triggerHaptic],
   );
+
+  const hardDeleteTx = useCallback(
+    (id: string) => {
+      const ledger = new MemoryLedger(data);
+      const removed = ledger.hardDelete(id);
+      if (!removed) return;
+      if (lastUndoableId === id) setLastUndoableId(null);
+      persist(ledger.data, { replaceCloud: true });
+      setLastToast(`🗑️ 已永久刪除「${removed.merchant ?? removed.category ?? '交易'} $${removed.amount}」`);
+      triggerHaptic('warning');
+    },
+    [data, lastUndoableId, persist, setLastToast, triggerHaptic],
+  );
+
+  const emptyTrash = useCallback(() => {
+    const ledger = new MemoryLedger(data);
+    const count = ledger.emptyTrash();
+    if (count <= 0) return;
+    if (lastUndoableId && !ledger.data.transactions.some((t) => t.id === lastUndoableId)) {
+      setLastUndoableId(null);
+    }
+    persist(ledger.data, { replaceCloud: true });
+    setLastToast(`🗑️ 已一鍵清空回收桶（永久刪除 ${count} 筆紀錄）`);
+    triggerHaptic('warning');
+  }, [data, lastUndoableId, persist, setLastToast, triggerHaptic]);
 
   const runScold = useCallback(
     (item: string, price: number, mode: ScoldMode): ScoldResult => {
@@ -826,6 +857,8 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       updateTxCategory,
       softDeleteTx,
       restoreTx,
+      hardDeleteTx,
+      emptyTrash,
       runScold,
       recordResistedImpulse,
       settleEveningPiggy,
@@ -869,6 +902,8 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       resetDemoData,
       resolveInboxEvent,
       restoreTx,
+      hardDeleteTx,
+      emptyTrash,
       runScold,
       setLastToast,
       settleDebt,

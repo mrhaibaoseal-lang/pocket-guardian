@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Modal,
+  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,10 +9,20 @@ import {
   Text,
   TextInput,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { convertToFeelings } from '../../core';
 import type { AccountId, PayMethod, ScoldMode } from '../../core';
 import { useLedger } from '../store/useLedger';
+import { triggerHaptic } from './iosAnimations';
 import { SafeConfirmButton } from './SafeConfirmButton';
 
 export type ActiveModal = 'none' | 'expense' | 'atm' | 'scold' | 'reconcile';
@@ -131,10 +142,113 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
       ? Math.round((Number(recActualStr) - currentAccountBal) * 100) / 100
       : 0;
 
+  // --- Swipe Up / Swipe Down Sheet Gesture & Fluid Physics ---
+  const sheetY = useSharedValue(0);
+  const sheetScale = useSharedValue(1);
+  const sheetOpacity = useSharedValue(1);
+  const isClosingRef = useRef(false);
+
+  useEffect(() => {
+    if (active !== 'none') {
+      isClosingRef.current = false;
+      sheetY.value = 36;
+      sheetScale.value = 0.97;
+      sheetOpacity.value = 0;
+      sheetY.value = withSpring(0, { damping: 18, stiffness: 250, mass: 0.75 });
+      sheetScale.value = withSpring(1, { damping: 18, stiffness: 250, mass: 0.75 });
+      sheetOpacity.value = withTiming(1, { duration: 160 });
+    }
+  }, [active, sheetOpacity, sheetScale, sheetY]);
+
+  const animateDismiss = useCallback(
+    (direction: 'up' | 'down' = 'down') => {
+      if (isClosingRef.current) return;
+      isClosingRef.current = true;
+      triggerHaptic('selection');
+      const targetY = direction === 'up' ? -440 : 440;
+      sheetY.value = withTiming(targetY, {
+        duration: 180,
+        easing: Easing.out(Easing.cubic),
+      });
+      sheetScale.value = withTiming(0.95, { duration: 180 });
+      sheetOpacity.value = withTiming(0, { duration: 165 });
+      setTimeout(() => {
+        onClose();
+        sheetY.value = 0;
+        sheetScale.value = 1;
+        sheetOpacity.value = 1;
+        isClosingRef.current = false;
+      }, 170);
+    },
+    [onClose, sheetOpacity, sheetScale, sheetY],
+  );
+
+  const sheetPanResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponderCapture: (_, g) =>
+        Math.abs(g.dy) > 10 && Math.abs(g.dy) > Math.abs(g.dx) * 1.35,
+      onPanResponderGrant: () => {
+        triggerHaptic('light');
+      },
+      onPanResponderMove: (_, g) => {
+        sheetY.value = g.dy;
+        const progress = Math.min(Math.abs(g.dy) / 360, 1);
+        sheetScale.value = 1 - progress * 0.04;
+        sheetOpacity.value = 1 - progress * 0.35;
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 42 || g.vy > 0.5) {
+          animateDismiss('down');
+        } else if (g.dy < -42 || g.vy < -0.5) {
+          animateDismiss('up');
+        } else {
+          sheetY.value = withSpring(0, { damping: 16, stiffness: 260 });
+          sheetScale.value = withSpring(1, { damping: 16, stiffness: 260 });
+          sheetOpacity.value = withTiming(1, { duration: 140 });
+        }
+      },
+      onPanResponderTerminate: () => {
+        sheetY.value = withSpring(0, { damping: 16, stiffness: 260 });
+        sheetScale.value = withSpring(1, { damping: 16, stiffness: 260 });
+        sheetOpacity.value = withTiming(1, { duration: 140 });
+      },
+    }),
+  ).current;
+
+  const handleScrollEndDrag = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset, contentSize, layoutMeasurement, velocity } = e.nativeEvent;
+      const maxScroll = Math.max(0, contentSize.height - layoutMeasurement.height);
+      if (contentOffset.y < -30 || (contentOffset.y <= 0 && (velocity?.y ?? 0) < -0.6)) {
+        animateDismiss('down');
+      } else if (
+        contentOffset.y - maxScroll > 32 ||
+        (contentOffset.y >= maxScroll && (velocity?.y ?? 0) > 0.6)
+      ) {
+        animateDismiss('up');
+      }
+    },
+    [animateDismiss],
+  );
+
+  const sheetAnimStyle = useAnimatedStyle(() => ({
+    opacity: sheetOpacity.value,
+    transform: [{ translateY: sheetY.value }, { scale: sheetScale.value }],
+  }));
+
   return (
-    <Modal visible={active !== 'none'} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={active !== 'none'} animationType="fade" transparent onRequestClose={() => animateDismiss('down')}>
       <View style={styles.backdrop}>
-        <View style={styles.sheet}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => animateDismiss('down')} />
+        <Animated.View
+          style={[styles.sheet, sheetAnimStyle]}
+          {...sheetPanResponder.panHandlers}
+        >
+          {/* Top Grabber Handle for Swipe Up / Down */}
+          <View style={styles.grabberRow}>
+            <View style={styles.grabberPill} />
+          </View>
+
           {/* Header */}
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>
@@ -143,12 +257,17 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
               {active === 'scold' && '🛑 救命！我想亂買東西，罵醒我'}
               {active === 'reconcile' && '⚖️ 魔術平帳（與現實餘額對齊）'}
             </Text>
-            <Pressable onPress={onClose} style={styles.closeBtn}>
+            <Pressable onPress={() => animateDismiss('down')} style={styles.closeBtn}>
               <Text style={styles.closeBtnText}>✕ 關閉</Text>
             </Pressable>
           </View>
 
-          <ScrollView style={styles.body} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            style={styles.body}
+            keyboardShouldPersistTaps="handled"
+            onScrollEndDrag={handleScrollEndDrag}
+            scrollEventThrottle={16}
+          >
             {/* 1. EXPENSE / INCOME MODAL */}
             {active === 'expense' && (
               <View style={styles.section}>
@@ -501,7 +620,7 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
               </View>
             )}
           </ScrollView>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -510,26 +629,38 @@ export function ActionSheetModals({ active, presetCategory, onClose }: ActionShe
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(8, 7, 5, 0.78)',
+    backgroundColor: 'rgba(4, 7, 9, 0.80)',
     justifyContent: 'flex-end',
   },
   sheet: {
     width: '100%',
     maxWidth: 430,
     alignSelf: 'center',
-    backgroundColor: 'rgba(24, 20, 16, 0.95)',
+    backgroundColor: 'rgba(12, 17, 21, 0.96)',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     borderCurve: 'continuous',
     paddingHorizontal: 18,
-    paddingTop: 16,
+    paddingTop: 10,
     paddingBottom: 28,
     maxHeight: '88%',
     borderWidth: 0.8,
-    borderTopColor: 'rgba(255, 230, 190, 0.38)',
-    borderLeftColor: 'rgba(255, 230, 190, 0.20)',
-    borderRightColor: 'rgba(212, 175, 55, 0.06)',
-    borderBottomColor: 'rgba(212, 175, 55, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.22)',
+    borderLeftColor: 'rgba(255, 255, 255, 0.13)',
+    borderRightColor: 'rgba(52, 211, 153, 0.08)',
+    borderBottomColor: 'rgba(52, 211, 153, 0.08)',
+  },
+  grabberRow: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    marginBottom: 4,
+  },
+  grabberPill: {
+    width: 40,
+    height: 4.5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.24)',
   },
   sheetHeader: {
     flexDirection: 'row',
@@ -538,7 +669,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sheetTitle: {
-    color: '#FAF6F0',
+    color: '#F8FAFC',
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: -0.3,
@@ -547,12 +678,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 999,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   closeBtnText: {
-    color: '#E6D5B8',
+    color: '#CBD5E1',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -564,7 +695,7 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   helperText: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: 'rgba(148, 163, 184, 0.72)',
     fontSize: 12,
     lineHeight: 18,
   },
@@ -572,36 +703,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
-    backgroundColor: 'rgba(28, 24, 20, 0.6)',
+    backgroundColor: 'rgba(8, 12, 15, 0.72)',
     borderRadius: 999,
     padding: 5,
     borderWidth: 0.8,
-    borderTopColor: 'rgba(255, 230, 190, 0.38)',
-    borderLeftColor: 'rgba(255, 230, 190, 0.20)',
-    borderRightColor: 'rgba(212, 175, 55, 0.06)',
-    borderBottomColor: 'rgba(212, 175, 55, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.22)',
+    borderLeftColor: 'rgba(255, 255, 255, 0.13)',
+    borderRightColor: 'rgba(52, 211, 153, 0.08)',
+    borderBottomColor: 'rgba(52, 211, 153, 0.08)',
   },
   nlInput: {
     flex: 1,
     minWidth: 0,
-    color: '#FAF6F0',
+    color: '#F8FAFC',
     fontSize: 13,
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
   nlBtn: {
-    backgroundColor: '#FBBF24',
+    backgroundColor: '#10B981',
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 999,
   },
   nlBtnText: {
-    color: '#080705',
+    color: '#04120C',
     fontWeight: '700',
     fontSize: 12,
   },
   label: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: 'rgba(148, 163, 184, 0.72)',
     fontSize: 12,
     fontWeight: '600',
     marginTop: 4,
@@ -615,48 +746,48 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 10,
     borderRadius: 999,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     alignItems: 'center',
     borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   segmentActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.22)',
-    borderColor: 'rgba(251, 191, 36, 0.45)',
+    backgroundColor: 'rgba(16, 185, 129, 0.18)',
+    borderColor: 'rgba(52, 211, 153, 0.42)',
   },
   segmentActiveGreen: {
-    backgroundColor: 'rgba(245, 158, 11, 0.22)',
-    borderColor: 'rgba(251, 191, 36, 0.45)',
+    backgroundColor: 'rgba(16, 185, 129, 0.18)',
+    borderColor: 'rgba(52, 211, 153, 0.42)',
   },
   segmentText: {
-    color: '#E6D5B8',
+    color: '#CBD5E1',
     fontSize: 12,
     fontWeight: '600',
   },
   segmentTextActive: {
-    color: '#FBBF24',
+    color: '#34D399',
     fontWeight: '700',
   },
   chipBtn: {
     flex: 1,
     paddingVertical: 9,
     borderRadius: 999,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     alignItems: 'center',
     borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   chipBtnActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.22)',
-    borderColor: 'rgba(251, 191, 36, 0.45)',
+    backgroundColor: 'rgba(16, 185, 129, 0.18)',
+    borderColor: 'rgba(52, 211, 153, 0.42)',
   },
   chipText: {
-    color: '#E6D5B8',
+    color: '#CBD5E1',
     fontSize: 12,
     fontWeight: '600',
   },
   chipTextActive: {
-    color: '#FBBF24',
+    color: '#34D399',
     fontWeight: '700',
   },
   wrapRow: {
@@ -668,21 +799,21 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     paddingHorizontal: 12,
     borderRadius: 999,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   tagBtnActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.22)',
-    borderColor: 'rgba(251, 191, 36, 0.45)',
+    backgroundColor: 'rgba(16, 185, 129, 0.18)',
+    borderColor: 'rgba(52, 211, 153, 0.42)',
   },
   tagText: {
-    color: '#E6D5B8',
+    color: '#CBD5E1',
     fontSize: 12,
     fontWeight: '600',
   },
   tagTextActive: {
-    color: '#FBBF24',
+    color: '#34D399',
     fontWeight: '700',
   },
   amountInputRow: {
@@ -693,8 +824,8 @@ const styles = StyleSheet.create({
   amountInput: {
     flex: 1,
     minWidth: 0,
-    backgroundColor: 'rgba(28, 24, 20, 0.65)',
-    color: '#FAF6F0',
+    backgroundColor: 'rgba(8, 12, 15, 0.72)',
+    color: '#F8FAFC',
     fontSize: 24,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
@@ -703,36 +834,36 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 18,
     borderWidth: 0.8,
-    borderTopColor: 'rgba(255, 230, 190, 0.38)',
-    borderLeftColor: 'rgba(255, 230, 190, 0.20)',
-    borderRightColor: 'rgba(212, 175, 55, 0.06)',
-    borderBottomColor: 'rgba(212, 175, 55, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.22)',
+    borderLeftColor: 'rgba(255, 255, 255, 0.13)',
+    borderRightColor: 'rgba(52, 211, 153, 0.08)',
+    borderBottomColor: 'rgba(52, 211, 153, 0.08)',
   },
   textInput: {
     minWidth: 0,
-    backgroundColor: 'rgba(28, 24, 20, 0.65)',
-    color: '#FAF6F0',
+    backgroundColor: 'rgba(8, 12, 15, 0.72)',
+    color: '#F8FAFC',
     fontSize: 14,
     paddingHorizontal: 14,
     paddingVertical: 11,
     borderRadius: 16,
     borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   feelingHint: {
-    color: '#FBBF24',
+    color: '#34D399',
     fontSize: 12,
     fontWeight: '500',
   },
   primaryBtn: {
-    backgroundColor: '#FBBF24',
+    backgroundColor: '#10B981',
     paddingVertical: 14,
     borderRadius: 999,
     alignItems: 'center',
     marginTop: 6,
   },
   primaryBtnText: {
-    color: '#080705',
+    color: '#04120C',
     fontSize: 14,
     fontWeight: '800',
   },
@@ -741,17 +872,17 @@ const styles = StyleSheet.create({
     minWidth: '22%',
     paddingVertical: 11,
     borderRadius: 999,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     alignItems: 'center',
     borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   atmChipActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.22)',
-    borderColor: 'rgba(251, 191, 36, 0.45)',
+    backgroundColor: 'rgba(16, 185, 129, 0.18)',
+    borderColor: 'rgba(52, 211, 153, 0.42)',
   },
   atmChipText: {
-    color: '#E6D5B8',
+    color: '#CBD5E1',
     fontSize: 13,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
@@ -760,14 +891,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(28, 24, 20, 0.6)',
+    backgroundColor: 'rgba(8, 12, 15, 0.65)',
     padding: 12,
     borderRadius: 16,
     borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   switchLabel: {
-    color: '#E6D5B8',
+    color: '#CBD5E1',
     fontSize: 12,
     flex: 1,
     marginRight: 8,
@@ -776,30 +907,30 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 20,
     borderWidth: 0.8,
-    borderTopColor: 'rgba(255, 230, 190, 0.38)',
-    borderLeftColor: 'rgba(255, 230, 190, 0.20)',
-    borderRightColor: 'rgba(212, 175, 55, 0.06)',
-    borderBottomColor: 'rgba(212, 175, 55, 0.06)',
-    backgroundColor: 'rgba(28, 24, 20, 0.7)',
+    borderTopColor: 'rgba(255, 255, 255, 0.22)',
+    borderLeftColor: 'rgba(255, 255, 255, 0.13)',
+    borderRightColor: 'rgba(52, 211, 153, 0.08)',
+    borderBottomColor: 'rgba(52, 211, 153, 0.08)',
+    backgroundColor: 'rgba(10, 15, 19, 0.78)',
     gap: 6,
   },
   scoldStop: {
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
+    backgroundColor: 'rgba(244, 63, 94, 0.14)',
   },
   scoldThink: {
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
   },
   scoldOk: {
-    backgroundColor: 'rgba(28, 24, 20, 0.6)',
+    backgroundColor: 'rgba(16, 185, 129, 0.14)',
   },
   scoldHeadline: {
-    color: '#FAF6F0',
+    color: '#F8FAFC',
     fontSize: 15,
     fontWeight: '700',
     marginBottom: 4,
   },
   scoldLine: {
-    color: '#E6D5B8',
+    color: '#CBD5E1',
     fontSize: 13,
     lineHeight: 20,
   },
@@ -808,39 +939,39 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   resistBtn: {
-    backgroundColor: '#FBBF24',
+    backgroundColor: '#10B981',
     paddingVertical: 13,
     paddingHorizontal: 14,
     borderRadius: 999,
     alignItems: 'center',
   },
   resistBtnText: {
-    color: '#080705',
+    color: '#04120C',
     fontWeight: '800',
     fontSize: 13,
   },
   buyAnywayBtn: {
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     paddingVertical: 11,
     borderRadius: 999,
     alignItems: 'center',
     borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   buyAnywayText: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: 'rgba(148, 163, 184, 0.72)',
     fontWeight: '600',
     fontSize: 12,
   },
   deltaBox: {
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
+    backgroundColor: 'rgba(16, 185, 129, 0.14)',
     padding: 12,
     borderRadius: 16,
     borderWidth: 0.8,
-    borderColor: 'rgba(251, 191, 36, 0.3)',
+    borderColor: 'rgba(52, 211, 153, 0.32)',
   },
   deltaText: {
-    color: '#FAF6F0',
+    color: '#F8FAFC',
     fontSize: 13,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],

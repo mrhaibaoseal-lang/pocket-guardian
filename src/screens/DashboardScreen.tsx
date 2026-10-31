@@ -355,7 +355,7 @@ export function DashboardScreen({
                   contentStyle={styles.actionCardInner}
                 >
                   <View style={styles.glassIconCircle}>
-                    <Text style={[styles.glassIconGlyph, { color: '#FBBF24' }]}>
+                    <Text style={[styles.glassIconGlyph, { color: '#34D399' }]}>
                       ＋
                     </Text>
                   </View>
@@ -379,7 +379,7 @@ export function DashboardScreen({
                   contentStyle={styles.actionCardInner}
                 >
                   <View style={styles.glassIconCircle}>
-                    <Text style={[styles.glassIconGlyph, { color: '#E6D5B8' }]}>
+                    <Text style={[styles.glassIconGlyph, { color: '#CBD5E1' }]}>
                       ⇄
                     </Text>
                   </View>
@@ -405,7 +405,7 @@ export function DashboardScreen({
                   contentStyle={styles.actionCardInner}
                 >
                   <View style={styles.glassIconCircle}>
-                    <Text style={[styles.glassIconGlyph, { color: '#FBBF24' }]}>
+                    <Text style={[styles.glassIconGlyph, { color: '#34D399' }]}>
                       ⚡
                     </Text>
                   </View>
@@ -429,7 +429,7 @@ export function DashboardScreen({
                   contentStyle={styles.actionCardInner}
                 >
                   <View style={styles.glassIconCircle}>
-                    <Text style={[styles.glassIconGlyph, { color: '#E6D5B8' }]}>
+                    <Text style={[styles.glassIconGlyph, { color: '#CBD5E1' }]}>
                       ⚖
                     </Text>
                   </View>
@@ -618,7 +618,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   heroOverline: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: 'rgba(148, 163, 184, 0.78)',
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 0.6,
@@ -627,12 +627,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 999,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   cycleCapsuleText: {
-    color: '#E6D5B8',
+    color: '#CBD5E1',
     fontSize: 11,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
@@ -643,7 +643,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   heroBigAmount: {
-    color: '#FAF6F0',
+    color: '#F8FAFC',
     fontSize: 44,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
@@ -661,17 +661,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4.5,
     borderRadius: 999,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.22)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   heroSubStatLabel: {
-    color: 'rgba(235, 225, 210, 0.55)',
+    color: 'rgba(148, 163, 184, 0.78)',
     fontSize: 10.5,
     fontWeight: '600',
   },
   heroSubStatValue: {
-    color: '#FAF6F0',
+    color: '#F8FAFC',
     fontSize: 12.5,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
@@ -680,15 +680,15 @@ const styles = StyleSheet.create({
   lightTubeTrack: {
     height: 8,
     borderRadius: 999,
-    backgroundColor: 'rgba(255, 235, 200, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
     borderWidth: 0.8,
-    borderColor: 'rgba(255, 230, 190, 0.16)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     overflow: 'visible',
   },
   lightTubeGlowWrap: {
     height: '100%',
     borderRadius: 999,
-    shadowColor: '#F59E0B',
+    shadowColor: '#10B981',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.78,
     shadowRadius: 8,
@@ -703,13 +703,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tubeSubText: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: 'rgba(148, 163, 184, 0.75)',
     fontSize: 12,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.3,
   },
   amberHighlightText: {
-    color: '#FBBF24',
+    color: '#34D399',
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
@@ -723,12 +723,12 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   balanceCellLabel: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: 'rgba(148, 163, 184, 0.75)',
     fontSize: 11,
     fontWeight: '500',
   },
   balanceCellValue: {
-    color: '#FAF6F0',
+    color: '#F8FAFC',
     fontSize: 18,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
@@ -737,12 +737,12 @@ const styles = StyleSheet.create({
   verticalHairline: {
     width: StyleSheet.hairlineWidth,
     height: 30,
-    backgroundColor: 'rgba(255, 230, 190, 0.14)',
+    backgroundColor: 'rgba(255, 255, 255, 0.10)',
     marginHorizontal: 12,
   },
   horizontalHairline: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255, 230, 190, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.09)',
   },
   heroFooterRow: {
     flexDirection: 'row',
@@ -757,15 +757,15 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   achievementText: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: 'rgba(148, 163, 184, 0.75)',
     fontSize: 12,
   },
   achievementDot: {
-    color: 'rgba(235, 225, 210, 0.3)',
+    color: 'rgba(148, 163, 184, 0.4)',
     fontSize: 12,
   },
   tabularInline: {
-    color: '#FAF6F0',
+    color: '#F8FAFC',
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.5,
@@ -774,15 +774,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
     borderWidth: 0.8,
-    borderColor: 'rgba(251, 191, 36, 0.3)',
+    borderColor: 'rgba(52, 211, 153, 0.34)',
   },
   settleGlassPillDisabled: {
     opacity: 0.45,
   },
   settleGlassPillText: {
-    color: '#FBBF24',
+    color: '#34D399',
     fontSize: 11,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
@@ -798,19 +798,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   sectionHeaderTitle: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: 'rgba(148, 163, 184, 0.78)',
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.2,
   },
   sectionHeaderMeta: {
-    color: '#E6D5B8',
+    color: '#94A3B8',
     fontSize: 11,
     fontWeight: '500',
-    opacity: 0.8,
+    opacity: 0.85,
   },
   sectionHeaderAction: {
-    color: '#FBBF24',
+    color: '#34D399',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -861,14 +861,14 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   glassIconGlyph: {
-    color: '#FAF6F0',
+    color: '#F8FAFC',
     fontSize: 15,
     fontWeight: '700',
   },
@@ -877,13 +877,13 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   actionCardTitle: {
-    color: '#FAF6F0',
+    color: '#F8FAFC',
     fontSize: 13,
     fontWeight: '600',
     letterSpacing: -0.2,
   },
   actionCardSub: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: 'rgba(148, 163, 184, 0.72)',
     fontSize: 11,
   },
   radarStripInner: {
@@ -898,11 +898,11 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   radarLabel: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: 'rgba(148, 163, 184, 0.75)',
     fontSize: 12,
   },
   upcomingTag: {
-    color: '#FBBF24',
+    color: '#34D399',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -913,7 +913,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   dateGroupHeader: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: 'rgba(148, 163, 184, 0.75)',
     fontSize: 12,
     fontWeight: '600',
     paddingHorizontal: 6,
@@ -930,14 +930,14 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   txIconGlyph: {
-    color: '#E6D5B8',
+    color: '#CBD5E1',
     fontSize: 16,
     fontWeight: '600',
   },
@@ -951,7 +951,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   txMerchant: {
-    color: '#FAF6F0',
+    color: '#F8FAFC',
     fontSize: 15,
     fontWeight: '600',
     letterSpacing: -0.3,
@@ -961,12 +961,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 999,
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
     borderWidth: 0.8,
-    borderColor: 'rgba(251, 191, 36, 0.3)',
+    borderColor: 'rgba(52, 211, 153, 0.32)',
   },
   mergedMiniBadgeText: {
-    color: '#FBBF24',
+    color: '#34D399',
     fontSize: 9,
     fontWeight: '700',
   },
@@ -977,7 +977,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   txTimeText: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: 'rgba(148, 163, 184, 0.72)',
     fontSize: 11,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.3,
@@ -986,12 +986,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 999,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   splitMiniPillText: {
-    color: '#E6D5B8',
+    color: '#CBD5E1',
     fontSize: 10,
     fontWeight: '600',
   },
@@ -1000,22 +1000,22 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   txAmountText: {
-    color: '#FAF6F0',
+    color: '#F8FAFC',
     fontSize: 16,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.5,
   },
   txAmountPositive: {
-    color: '#FDE68A',
+    color: '#6EE7B7',
   },
   txAccountSub: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: 'rgba(148, 163, 184, 0.72)',
     fontSize: 10,
   },
   insetDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255, 230, 190, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     marginLeft: 64,
   },
   emptyListInner: {
@@ -1028,24 +1028,24 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 2,
   },
   emptyCircleGlyph: {
-    color: '#E6D5B8',
+    color: '#CBD5E1',
     fontSize: 20,
   },
   emptyTitle: {
-    color: '#FAF6F0',
+    color: '#F8FAFC',
     fontSize: 15,
     fontWeight: '600',
   },
   emptySubtitle: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: 'rgba(148, 163, 184, 0.72)',
     fontSize: 12,
     textAlign: 'center',
     lineHeight: 18,

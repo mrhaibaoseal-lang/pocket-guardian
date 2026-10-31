@@ -180,7 +180,7 @@ export interface LiquidLightTubeProps {
 export function LiquidLightTube({
   percent,
   height = 8,
-  colors = ['#D97706', '#F59E0B', '#FDE68A'],
+  colors = ['#059669', '#10B981', '#6EE7B7'],
 }: LiquidLightTubeProps) {
   const clamped = Math.max(0, Math.min(100, percent));
   const widthPct = useSharedValue(0);
@@ -216,7 +216,7 @@ export function LiquidLightTube({
         <LinearGradient colors={colors} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.lightTubeGradient} />
         <Animated.View pointerEvents="none" style={[styles.shimmerBlade, shimmerAnimStyle]}>
           <LinearGradient
-            colors={['transparent', 'rgba(255, 252, 240, 0.65)', 'transparent']}
+            colors={['transparent', 'rgba(236, 253, 245, 0.72)', 'transparent']}
             start={{ x: 0, y: 0.5 }}
             end={{ x: 1, y: 0.5 }}
             style={StyleSheet.absoluteFill}
@@ -289,13 +289,13 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     borderRadius: 28,
-    backgroundColor: '#FFF8EB',
+    backgroundColor: '#ECFDF5',
   },
   lightTubeTrack: {
     borderRadius: 999,
-    backgroundColor: 'rgba(255, 235, 200, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
     borderWidth: 0.8,
-    borderColor: 'rgba(255, 230, 190, 0.16)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     overflow: 'hidden',
   },
   lightTubeGlowWrap: {
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     overflow: 'hidden',
     position: 'relative',
-    shadowColor: '#F59E0B',
+    shadowColor: '#10B981',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.45,
     shadowRadius: 8,

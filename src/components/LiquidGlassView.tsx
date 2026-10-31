@@ -61,11 +61,11 @@ export function LiquidGlassCard({
         pointerEvents="none"
       />
 
-      {/* Layer 2: 135° Champagne Surface Sheen (左上 0,0 -> 右下 1,1) */}
+      {/* Layer 2: 135° Platinum-Jade Crystal Sheen (左上 0,0 -> 右下 1,1) */}
       <LinearGradient
         colors={[
-          'rgba(255, 238, 210, 0.16)',
-          'rgba(255, 238, 210, 0.03)',
+          'rgba(255, 255, 255, 0.13)',
+          'rgba(52, 211, 153, 0.03)',
           'transparent',
         ]}
         locations={[0, 0.48, 1]}
@@ -75,7 +75,7 @@ export function LiquidGlassCard({
         pointerEvents="none"
       />
 
-      {/* Layer 3: Asymmetric Desert Titanium Specular Rim + Content */}
+      {/* Layer 3: Asymmetric Obsidian Platinum Specular Rim + Content */}
       <View style={[styles.specularRim, radiusStyle, contentStyle]}>
         {children}
       </View>
@@ -92,10 +92,10 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   bgDefault: {
-    backgroundColor: 'rgba(28, 24, 20, 0.4)',
+    backgroundColor: 'rgba(13, 18, 22, 0.52)',
   },
   bgElevated: {
-    backgroundColor: 'rgba(34, 28, 22, 0.62)',
+    backgroundColor: 'rgba(17, 24, 29, 0.68)',
   },
   radiusCard: {
     borderRadius: 28,
@@ -116,9 +116,9 @@ const styles = StyleSheet.create({
   },
   specularRim: {
     borderWidth: 0.8,
-    borderTopColor: 'rgba(255, 230, 190, 0.38)',
-    borderLeftColor: 'rgba(255, 230, 190, 0.20)',
-    borderRightColor: 'rgba(212, 175, 55, 0.06)',
-    borderBottomColor: 'rgba(212, 175, 55, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.22)',
+    borderLeftColor: 'rgba(255, 255, 255, 0.13)',
+    borderRightColor: 'rgba(52, 211, 153, 0.08)',
+    borderBottomColor: 'rgba(52, 211, 153, 0.08)',
   },
 });

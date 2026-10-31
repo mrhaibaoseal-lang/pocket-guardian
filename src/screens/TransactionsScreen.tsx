@@ -48,6 +48,8 @@ export function TransactionsScreen() {
     convertTxToDebtSplit,
     softDeleteTx,
     restoreTx,
+    hardDeleteTx,
+    emptyTrash,
   } = useLedger();
 
   const [viewMode, setViewMode] = useState<'active' | 'trash'>('active');
@@ -145,6 +147,20 @@ export function TransactionsScreen() {
         </Pressable>
       </View>
 
+      {viewMode === 'trash' && trashTxs.length > 0 && (
+        <View style={styles.trashToolbar}>
+          <Text style={styles.trashToolbarText}>
+            共 {trashTxs.length} 筆已撤銷紀錄
+          </Text>
+          <SafeConfirmButton
+            label={`🗑️ 一鍵全部刪除 (${trashTxs.length})`}
+            confirmLabel="⚠️ 再按一次永久清空 (3s)"
+            onConfirm={emptyTrash}
+            compact
+          />
+        </View>
+      )}
+
       <ScrollView
         style={styles.listScroll}
         contentContainerStyle={styles.listContent}
@@ -177,10 +193,10 @@ export function TransactionsScreen() {
               tx.type === 'income' || (tx.type === 'adjustment' && tx.amount > 0);
 
             const amountColor = isPositive
-              ? '#FDE68A'
+              ? '#6EE7B7'
               : tx.type === 'transfer' || tx.isAdvance
-              ? '#E6D5B8'
-              : '#FAF6F0';
+              ? '#CBD5E1'
+              : '#F8FAFC';
 
             const amountPrefix = isPositive
               ? '+'
@@ -314,12 +330,20 @@ export function TransactionsScreen() {
                     <Text style={styles.deletedTimeText}>
                       已移入回收桶（7天內可還原）
                     </Text>
-                    <Pressable
-                      style={styles.restoreBtn}
-                      onPress={() => restoreTx(tx.id)}
-                    >
-                      <Text style={styles.restoreBtnText}>一鍵無損還原</Text>
-                    </Pressable>
+                    <View style={styles.trashItemBtnGroup}>
+                      <SafeConfirmButton
+                        label="永久刪除"
+                        confirmLabel="確認刪除"
+                        onConfirm={() => hardDeleteTx(tx.id)}
+                        compact
+                      />
+                      <Pressable
+                        style={styles.restoreBtn}
+                        onPress={() => restoreTx(tx.id)}
+                      >
+                        <Text style={styles.restoreBtnText}>一鍵無損還原</Text>
+                      </Pressable>
+                    </View>
                   </View>
                 )}
 
@@ -398,13 +422,13 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   screenTitle: {
-    color: '#FAF6F0',
+    color: '#F8FAFC',
     fontSize: 20,
     fontWeight: '700',
     letterSpacing: -0.4,
   },
   screenSub: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: 'rgba(148, 163, 184, 0.72)',
     fontSize: 12,
     marginTop: 2,
   },
@@ -417,23 +441,45 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 9,
     borderRadius: 999,
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     alignItems: 'center',
   },
   segmentBtnActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.18)',
-    borderColor: 'rgba(251, 191, 36, 0.35)',
+    backgroundColor: 'rgba(16, 185, 129, 0.18)',
+    borderColor: 'rgba(52, 211, 153, 0.35)',
   },
   segmentText: {
-    color: '#E6D5B8',
+    color: '#CBD5E1',
     fontSize: 13,
     fontWeight: '600',
   },
   segmentTextActive: {
-    color: '#FBBF24',
+    color: '#34D399',
     fontWeight: '700',
+  },
+  trashToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
+    borderColor: 'rgba(52, 211, 153, 0.28)',
+    borderWidth: 0.8,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 10,
+  },
+  trashToolbarText: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  trashItemBtnGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   listScroll: {
     flex: 1,
@@ -448,17 +494,17 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   emptyEmoji: {
-    color: '#E6D5B8',
+    color: '#CBD5E1',
     fontSize: 32,
     marginBottom: 4,
   },
   emptyTitle: {
-    color: '#FAF6F0',
+    color: '#F8FAFC',
     fontSize: 16,
     fontWeight: '700',
   },
   emptyDesc: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: 'rgba(148, 163, 184, 0.72)',
     fontSize: 12,
     textAlign: 'center',
     lineHeight: 18,
@@ -477,12 +523,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   txTitle: {
-    color: '#FAF6F0',
+    color: '#F8FAFC',
     fontSize: 16,
     fontWeight: '700',
   },
   txMeta: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: 'rgba(148, 163, 184, 0.72)',
     fontSize: 11,
     marginTop: 3,
     fontVariant: ['tabular-nums'],
@@ -497,7 +543,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   txAccountTag: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: 'rgba(148, 163, 184, 0.72)',
     fontSize: 10,
     marginTop: 2,
   },
@@ -507,33 +553,33 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   slotPillTitanium: {
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     borderWidth: 0.8,
     paddingHorizontal: 9,
     paddingVertical: 3,
     borderRadius: 999,
   },
   slotPillTitaniumText: {
-    color: '#E6D5B8',
+    color: '#CBD5E1',
     fontSize: 11,
     fontWeight: '600',
   },
   slotPillAmber: {
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
-    borderColor: 'rgba(251, 191, 36, 0.3)',
+    backgroundColor: 'rgba(16, 185, 129, 0.14)',
+    borderColor: 'rgba(52, 211, 153, 0.32)',
     borderWidth: 0.8,
     paddingHorizontal: 9,
     paddingVertical: 3,
     borderRadius: 999,
   },
   slotPillAmberText: {
-    color: '#FBBF24',
+    color: '#34D399',
     fontSize: 11,
     fontWeight: '700',
   },
   txNote: {
-    color: '#E6D5B8',
+    color: '#CBD5E1',
     fontSize: 12,
   },
   txActionRow: {
@@ -544,7 +590,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingTop: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255, 230, 190, 0.12)',
+    borderTopColor: 'rgba(255, 255, 255, 0.10)',
   },
   leftActions: {
     flexDirection: 'row',
@@ -553,61 +599,61 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   splitBtn: {
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
-    borderColor: 'rgba(251, 191, 36, 0.3)',
+    backgroundColor: 'rgba(16, 185, 129, 0.14)',
+    borderColor: 'rgba(52, 211, 153, 0.32)',
     borderWidth: 0.8,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
   },
   splitBtnText: {
-    color: '#FBBF24',
+    color: '#34D399',
     fontSize: 11,
     fontWeight: '700',
   },
   advanceBtn: {
-    backgroundColor: 'rgba(214, 195, 165, 0.12)',
-    borderColor: 'rgba(230, 213, 184, 0.25)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     borderWidth: 0.8,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
   },
   advanceBtnActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.18)',
-    borderColor: 'rgba(251, 191, 36, 0.35)',
+    backgroundColor: 'rgba(16, 185, 129, 0.18)',
+    borderColor: 'rgba(52, 211, 153, 0.35)',
   },
   advanceBtnText: {
-    color: '#E6D5B8',
+    color: '#CBD5E1',
     fontSize: 11,
     fontWeight: '600',
   },
   deletedTimeText: {
-    color: 'rgba(235, 225, 210, 0.5)',
+    color: 'rgba(148, 163, 184, 0.72)',
     fontSize: 11,
   },
   restoreBtn: {
-    backgroundColor: '#FBBF24',
+    backgroundColor: '#10B981',
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 999,
   },
   restoreBtnText: {
-    color: '#080705',
+    color: '#04120C',
     fontSize: 12,
     fontWeight: '800',
   },
   debtSplitDrawer: {
-    backgroundColor: 'rgba(18, 15, 12, 0.84)',
+    backgroundColor: 'rgba(8, 12, 15, 0.88)',
     borderWidth: 0.8,
-    borderColor: 'rgba(251, 191, 36, 0.35)',
+    borderColor: 'rgba(52, 211, 153, 0.35)',
     borderRadius: 12,
     padding: 11,
     gap: 8,
     marginTop: 4,
   },
   debtSplitTitle: {
-    color: '#FBBF24',
+    color: '#34D399',
     fontSize: 11.5,
     fontWeight: '700',
   },
@@ -617,15 +663,15 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   debtQuickChip: {
-    backgroundColor: 'rgba(214, 195, 165, 0.14)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.28)',
+    borderColor: 'rgba(255, 255, 255, 0.14)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
   },
   debtQuickChipText: {
-    color: '#E6D5B8',
+    color: '#CBD5E1',
     fontSize: 10.5,
     fontWeight: '600',
   },
@@ -634,23 +680,23 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   debtSplitInput: {
-    backgroundColor: 'rgba(8, 7, 5, 0.8)',
+    backgroundColor: 'rgba(5, 8, 10, 0.85)',
     borderWidth: 0.8,
-    borderColor: 'rgba(230, 213, 184, 0.28)',
+    borderColor: 'rgba(255, 255, 255, 0.14)',
     borderRadius: 9,
     paddingHorizontal: 9,
     paddingVertical: 6,
-    color: '#FAF6F0',
+    color: '#F8FAFC',
     fontSize: 12,
   },
   debtSplitConfirmBtn: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#10B981',
     paddingVertical: 8,
     borderRadius: 9,
     alignItems: 'center',
   },
   debtSplitConfirmText: {
-    color: '#080705',
+    color: '#04120C',
     fontSize: 12,
     fontWeight: '800',
   },
