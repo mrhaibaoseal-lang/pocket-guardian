@@ -963,7 +963,7 @@ describe('real-device iOS 27 Shortcut screenshot & variable wiring regressions (
     }).data;
 
     // User updates settings on iPhone: sets monthlyBudget to 0 (auto-by-balance) and hourlyWage to 250
-    const local: LedgerData = {
+    const local = {
       ...cloud,
       settings: {
         ...cloud.settings,

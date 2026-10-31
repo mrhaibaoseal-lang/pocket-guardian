@@ -23,6 +23,7 @@ import Animated, {
   withSequence,
   withSpring,
   withTiming,
+  type SharedValue,
 } from 'react-native-reanimated';
 
 export type HapticKind = 'selection' | 'light' | 'medium' | 'success' | 'warning' | 'none';
@@ -229,33 +230,54 @@ export function LiquidLightTube({
 
 export function ScreenTransitionView({
   tabKey,
+  tabIndex = 0,
+  dragOffsetX,
   style,
   children,
 }: {
   tabKey: string;
+  tabIndex?: number;
+  dragOffsetX?: SharedValue<number>;
   style?: StyleProp<ViewStyle>;
   children: React.ReactNode;
 }) {
   const opacity = useSharedValue(1);
+  const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const scale = useSharedValue(1);
   const prevTabRef = useRef(tabKey);
+  const prevIndexRef = useRef(tabIndex);
 
   useEffect(() => {
     if (prevTabRef.current === tabKey) return;
+    const dir = tabIndex > prevIndexRef.current ? 1 : tabIndex < prevIndexRef.current ? -1 : 0;
     prevTabRef.current = tabKey;
-    opacity.value = 0.25;
-    translateY.value = 10;
+    prevIndexRef.current = tabIndex;
+    if (dragOffsetX) {
+      dragOffsetX.value = 0;
+    }
+    opacity.value = 0.28;
+    translateX.value = dir * 48;
+    translateY.value = dir === 0 ? 10 : 4;
     scale.value = 0.985;
-    opacity.value = withTiming(1, { duration: 180, easing: Easing.out(Easing.cubic) });
-    translateY.value = withSpring(0, { damping: 20, stiffness: 290, mass: 0.7 });
-    scale.value = withSpring(1, { damping: 20, stiffness: 290, mass: 0.7 });
-  }, [tabKey, opacity, translateY, scale]);
+    opacity.value = withTiming(1, { duration: 185, easing: Easing.out(Easing.cubic) });
+    translateX.value = withSpring(0, { damping: 21, stiffness: 290, mass: 0.68 });
+    translateY.value = withSpring(0, { damping: 21, stiffness: 290, mass: 0.68 });
+    scale.value = withSpring(1, { damping: 21, stiffness: 290, mass: 0.68 });
+  }, [tabKey, tabIndex, dragOffsetX, opacity, translateX, translateY, scale]);
 
-  const animStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ translateY: translateY.value }, { scale: scale.value }],
-  }));
+  const animStyle = useAnimatedStyle(() => {
+    const liveDragX = dragOffsetX ? dragOffsetX.value : 0;
+    const dragProgress = Math.min(Math.abs(liveDragX) / 280, 1);
+    return {
+      opacity: opacity.value * (1 - dragProgress * 0.18),
+      transform: [
+        { translateX: translateX.value + liveDragX },
+        { translateY: translateY.value },
+        { scale: scale.value * (1 - dragProgress * 0.022) },
+      ],
+    };
+  });
 
   return <Animated.View style={[{ flex: 1 }, style, animStyle]}>{children}</Animated.View>;
 }

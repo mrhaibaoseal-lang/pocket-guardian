@@ -1,7 +1,18 @@
 import { BlurView } from 'expo-blur';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useRef, useState } from 'react';
-import { Image, PanResponder, Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Image,
+  Keyboard,
+  PanResponder,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type GestureResponderEvent,
+  type ViewStyle,
+} from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -244,6 +255,14 @@ function MainShell() {
   const pillX = useSharedValue(6);
   const pillW = useSharedValue(68);
   const activeIconBounce = useSharedValue(1);
+  const pageDragX = useSharedValue(0);
+
+  const activeTabRef = useRef<TabKey>(activeTab);
+  activeTabRef.current = activeTab;
+  const activeModalRef = useRef<ActiveModal>(activeModal);
+  activeModalRef.current = activeModal;
+  const tabLayoutsRef = useRef(tabLayouts);
+  tabLayoutsRef.current = tabLayouts;
 
   useEffect(() => {
     shrinkProgress.value = withSpring(navShrunk ? 1 : 0, {
@@ -251,6 +270,17 @@ function MainShell() {
       stiffness: 220,
     });
   }, [navShrunk, shrinkProgress]);
+
+  const syncPillToActiveTab = useCallback(
+    (tab: TabKey) => {
+      const layout = tabLayoutsRef.current[tab];
+      if (layout && layout.width > 0) {
+        pillX.value = withSpring(layout.x, { damping: 18, stiffness: 250, mass: 0.72 });
+        pillW.value = withSpring(layout.width, { damping: 18, stiffness: 250, mass: 0.72 });
+      }
+    },
+    [pillX, pillW],
+  );
 
   useEffect(() => {
     const layout = tabLayouts[activeTab];
@@ -268,18 +298,200 @@ function MainShell() {
     }
   }, [activeTab, tabLayouts, pillX, pillW]);
 
-  const handleSelectTab = (tab: TabKey) => {
-    if (tab !== activeTab) {
-      triggerHaptic('selection');
-      activeIconBounce.value = withSequence(
-        withTiming(0.82, { duration: 65 }),
-        withSpring(1.16, { damping: 10, stiffness: 320 }),
-        withSpring(1, { damping: 14, stiffness: 260 }),
-      );
+  const handleSelectTab = useCallback(
+    (tab: TabKey) => {
+      if (tab !== activeTabRef.current) {
+        triggerHaptic('selection');
+        activeIconBounce.value = withSequence(
+          withTiming(0.82, { duration: 65 }),
+          withSpring(1.16, { damping: 10, stiffness: 320 }),
+          withSpring(1, { damping: 14, stiffness: 260 }),
+        );
+      }
+      setNavShrunk(false);
+      setActiveTab(tab);
+    },
+    [activeIconBounce],
+  );
+
+  const handleSelectTabRef = useRef(handleSelectTab);
+  handleSelectTabRef.current = handleSelectTab;
+
+  const swipeStateRef = useRef({
+    startX: 0,
+    startY: 0,
+    lastX: 0,
+    lastDx: 0,
+    lastTime: 0,
+    vx: 0,
+    lock: 'undecided' as 'undecided' | 'horizontal' | 'vertical',
+    touchActive: false,
+    responderActive: false,
+    hapticFired: false,
+  });
+
+  const evaluateSwipeLock = (dx: number, dy: number): 'undecided' | 'horizontal' | 'vertical' => {
+    if (activeModalRef.current !== 'none') return 'vertical';
+    if (swipeStateRef.current.lock !== 'undecided') return swipeStateRef.current.lock;
+    if (Math.abs(dy) > 10 && Math.abs(dy) >= Math.abs(dx) * 0.85) {
+      swipeStateRef.current.lock = 'vertical';
+      return 'vertical';
     }
-    setNavShrunk(false);
-    setActiveTab(tab);
+    if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.25) {
+      swipeStateRef.current.lock = 'horizontal';
+      return 'horizontal';
+    }
+    return 'undecided';
   };
+
+  const applyPageDrag = useCallback(
+    (dx: number) => {
+      if (activeModalRef.current !== 'none') return;
+      swipeStateRef.current.lastDx = dx;
+      const curIndex = TABS.findIndex((t) => t.key === activeTabRef.current);
+      const targetIndex = dx < 0 ? curIndex + 1 : curIndex - 1;
+      const hasAdjacentTab = targetIndex >= 0 && targetIndex < TABS.length;
+
+      pageDragX.value = hasAdjacentTab ? dx * 0.82 : dx * 0.2;
+
+      if (!swipeStateRef.current.hapticFired && hasAdjacentTab && Math.abs(dx) > 44) {
+        swipeStateRef.current.hapticFired = true;
+        triggerHaptic('light');
+      }
+
+      const curLayout = tabLayoutsRef.current[TABS[curIndex].key];
+      if (curLayout && hasAdjacentTab) {
+        const nextLayout = tabLayoutsRef.current[TABS[targetIndex].key];
+        if (nextLayout) {
+          const progress = Math.min(Math.abs(dx) / 180, 1) * 0.72;
+          pillX.value = curLayout.x + (nextLayout.x - curLayout.x) * progress;
+          pillW.value = curLayout.width + (nextLayout.width - curLayout.width) * progress;
+        }
+      } else if (curLayout && !hasAdjacentTab) {
+        pillX.value = curLayout.x + (dx > 0 ? -1 : 1) * Math.min(Math.abs(dx) * 0.08, 6);
+      }
+    },
+    [pageDragX, pillX, pillW],
+  );
+
+  const applyPageDragRef = useRef(applyPageDrag);
+  applyPageDragRef.current = applyPageDrag;
+
+  const springBackPageDrag = useCallback(() => {
+    pageDragX.value = withSpring(0, { damping: 20, stiffness: 280, mass: 0.7 });
+    syncPillToActiveTab(activeTabRef.current);
+  }, [pageDragX, syncPillToActiveTab]);
+
+  const springBackPageDragRef = useRef(springBackPageDrag);
+  springBackPageDragRef.current = springBackPageDrag;
+
+  const finishPageDrag = useCallback((dx: number, vx: number) => {
+    if (swipeStateRef.current.lock !== 'horizontal') {
+      swipeStateRef.current.lock = 'undecided';
+      swipeStateRef.current.touchActive = false;
+      swipeStateRef.current.hapticFired = false;
+      return;
+    }
+    swipeStateRef.current.lock = 'undecided';
+    swipeStateRef.current.touchActive = false;
+    swipeStateRef.current.hapticFired = false;
+
+    const curIndex = TABS.findIndex((t) => t.key === activeTabRef.current);
+    if ((dx < -44 || (dx < -16 && vx < -0.25)) && curIndex < TABS.length - 1) {
+      Keyboard.dismiss();
+      handleSelectTabRef.current(TABS[curIndex + 1].key);
+      return;
+    }
+    if ((dx > 44 || (dx > 16 && vx > 0.25)) && curIndex > 0) {
+      Keyboard.dismiss();
+      handleSelectTabRef.current(TABS[curIndex - 1].key);
+      return;
+    }
+    springBackPageDragRef.current();
+  }, []);
+
+  const finishPageDragRef = useRef(finishPageDrag);
+  finishPageDragRef.current = finishPageDrag;
+
+  const pagePanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponder: (_, g) => evaluateSwipeLock(g.dx, g.dy) === 'horizontal',
+      onMoveShouldSetPanResponderCapture: (_, g) => evaluateSwipeLock(g.dx, g.dy) === 'horizontal',
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: () => {
+        swipeStateRef.current.responderActive = true;
+      },
+      onPanResponderMove: (_, g) => {
+        if (evaluateSwipeLock(g.dx, g.dy) === 'horizontal') {
+          applyPageDragRef.current(g.dx);
+        }
+      },
+      onPanResponderRelease: (_, g) => {
+        swipeStateRef.current.responderActive = false;
+        finishPageDragRef.current(g.dx, g.vx);
+      },
+      onPanResponderTerminate: () => {
+        swipeStateRef.current.responderActive = false;
+        if (!swipeStateRef.current.touchActive) {
+          finishPageDragRef.current(swipeStateRef.current.lastDx, swipeStateRef.current.vx);
+        }
+      },
+    }),
+  ).current;
+
+  const handlePageTouchStart = useCallback((e: GestureResponderEvent) => {
+    if (activeModalRef.current !== 'none') return;
+    const pageX = e.nativeEvent.pageX;
+    const pageY = e.nativeEvent.pageY;
+    swipeStateRef.current.startX = pageX;
+    swipeStateRef.current.startY = pageY;
+    swipeStateRef.current.lastX = pageX;
+    swipeStateRef.current.lastDx = 0;
+    swipeStateRef.current.lastTime = Date.now();
+    swipeStateRef.current.vx = 0;
+    swipeStateRef.current.lock = 'undecided';
+    swipeStateRef.current.touchActive = true;
+    swipeStateRef.current.hapticFired = false;
+  }, []);
+
+  const handlePageTouchMove = useCallback((e: GestureResponderEvent) => {
+    if (!swipeStateRef.current.touchActive || activeModalRef.current !== 'none') return;
+    const now = Date.now();
+    const pageX = e.nativeEvent.pageX;
+    const pageY = e.nativeEvent.pageY;
+    const dt = now - swipeStateRef.current.lastTime;
+    if (dt > 0) {
+      swipeStateRef.current.vx = (pageX - swipeStateRef.current.lastX) / dt;
+      swipeStateRef.current.lastX = pageX;
+      swipeStateRef.current.lastTime = now;
+    }
+    const dx = pageX - swipeStateRef.current.startX;
+    const dy = pageY - swipeStateRef.current.startY;
+    if (evaluateSwipeLock(dx, dy) === 'horizontal') {
+      applyPageDragRef.current(dx);
+    }
+  }, []);
+
+  const handlePageTouchEnd = useCallback((e: GestureResponderEvent) => {
+    if (!swipeStateRef.current.touchActive) return;
+    const dx = e.nativeEvent.pageX - swipeStateRef.current.startX;
+    const vx = swipeStateRef.current.vx;
+    finishPageDragRef.current(dx, vx);
+  }, []);
+
+  const handlePageTouchCancel = useCallback(() => {
+    swipeStateRef.current.touchActive = false;
+    if (swipeStateRef.current.responderActive) {
+      return;
+    }
+    if (swipeStateRef.current.lock === 'horizontal') {
+      finishPageDragRef.current(swipeStateRef.current.lastDx, swipeStateRef.current.vx);
+    } else {
+      swipeStateRef.current.lock = 'undecided';
+    }
+  }, []);
 
   const floatingBarAnimStyle = useAnimatedStyle(() => {
     return {
@@ -347,73 +559,87 @@ function MainShell() {
       <View style={styles.safeArea}>
         <StatusBar style="light" />
 
-        {/* Main Screen Content (Scrolls over the Ambient Light Canvas) */}
-        <ScreenTransitionView tabKey={activeTab} style={styles.screenBody}>
-          {activeTab === 'dashboard' && (
-            <DashboardScreen
-              topInsetPadding={headerTotalHeight + 10}
-              bottomInsetPadding={bottomTotalPad + 16}
-              onOpenModal={(m, cat) => {
-                if (cat) setPresetCategory(cat);
-                setActiveModal(m);
-              }}
-              onNavigateTab={(t) => handleSelectTab(t)}
-              onScrollShrinkChange={(shrunk) => setNavShrunk(shrunk)}
-            />
-          )}
-          {activeTab === 'transactions' && (
-            <View
-              style={[
-                styles.subScreenPad,
-                {
-                  paddingTop: headerTotalHeight + 6,
-                  paddingBottom: bottomTotalPad,
-                },
-              ]}
-            >
-              <TransactionsScreen />
-            </View>
-          )}
-          {activeTab === 'debts' && (
-            <View
-              style={[
-                styles.subScreenPad,
-                {
-                  paddingTop: headerTotalHeight + 6,
-                  paddingBottom: bottomTotalPad,
-                },
-              ]}
-            >
-              <DebtsScreen />
-            </View>
-          )}
-          {activeTab === 'testbench' && (
-            <View
-              style={[
-                styles.subScreenPad,
-                {
-                  paddingTop: headerTotalHeight + 6,
-                  paddingBottom: bottomTotalPad,
-                },
-              ]}
-            >
-              <ShortcutsTestBenchScreen />
-            </View>
-          )}
-          {activeTab === 'settings' && (
-            <View
-              style={[
-                styles.subScreenPad,
-                {
-                  paddingTop: headerTotalHeight + 6,
-                  paddingBottom: bottomTotalPad,
-                },
-              ]}
-            >
-              <SettingsAndSubsScreen />
-            </View>
-          )}
-        </ScreenTransitionView>
+        {/* Main Screen Content (Scrolls over the Ambient Light Canvas, supports left/right swipe page switching) */}
+        <View
+          style={styles.screenBody}
+          {...pagePanResponder.panHandlers}
+          onTouchStart={handlePageTouchStart}
+          onTouchMove={handlePageTouchMove}
+          onTouchEnd={handlePageTouchEnd}
+          onTouchCancel={handlePageTouchCancel}
+        >
+          <ScreenTransitionView
+            tabKey={activeTab}
+            tabIndex={TABS.findIndex((t) => t.key === activeTab)}
+            dragOffsetX={pageDragX}
+            style={styles.screenBody}
+          >
+            {activeTab === 'dashboard' && (
+              <DashboardScreen
+                topInsetPadding={headerTotalHeight + 10}
+                bottomInsetPadding={bottomTotalPad + 16}
+                onOpenModal={(m, cat) => {
+                  if (cat) setPresetCategory(cat);
+                  setActiveModal(m);
+                }}
+                onNavigateTab={(t) => handleSelectTab(t)}
+                onScrollShrinkChange={(shrunk) => setNavShrunk(shrunk)}
+              />
+            )}
+            {activeTab === 'transactions' && (
+              <View
+                style={[
+                  styles.subScreenPad,
+                  {
+                    paddingTop: headerTotalHeight + 6,
+                    paddingBottom: bottomTotalPad,
+                  },
+                ]}
+              >
+                <TransactionsScreen />
+              </View>
+            )}
+            {activeTab === 'debts' && (
+              <View
+                style={[
+                  styles.subScreenPad,
+                  {
+                    paddingTop: headerTotalHeight + 6,
+                    paddingBottom: bottomTotalPad,
+                  },
+                ]}
+              >
+                <DebtsScreen />
+              </View>
+            )}
+            {activeTab === 'testbench' && (
+              <View
+                style={[
+                  styles.subScreenPad,
+                  {
+                    paddingTop: headerTotalHeight + 6,
+                    paddingBottom: bottomTotalPad,
+                  },
+                ]}
+              >
+                <ShortcutsTestBenchScreen />
+              </View>
+            )}
+            {activeTab === 'settings' && (
+              <View
+                style={[
+                  styles.subScreenPad,
+                  {
+                    paddingTop: headerTotalHeight + 6,
+                    paddingBottom: bottomTotalPad,
+                  },
+                ]}
+              >
+                <SettingsAndSubsScreen />
+              </View>
+            )}
+          </ScreenTransitionView>
+        </View>
 
         {/* ====================================================================
             STICKY FROSTED BLUR HEADER (浮動毛玻璃頂部列 — 自動避開動態島 59pt)
@@ -513,7 +739,14 @@ function MainShell() {
           ]}
           pointerEvents="box-none"
         >
-          <Animated.View style={[styles.floatingBarAnimWrap, floatingBarAnimStyle]}>
+          <Animated.View
+            style={[styles.floatingBarAnimWrap, floatingBarAnimStyle]}
+            {...pagePanResponder.panHandlers}
+            onTouchStart={handlePageTouchStart}
+            onTouchMove={handlePageTouchMove}
+            onTouchEnd={handlePageTouchEnd}
+            onTouchCancel={handlePageTouchCancel}
+          >
             <LiquidGlassCard
               shape="pill"
               elevated

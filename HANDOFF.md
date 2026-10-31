@@ -1,9 +1,9 @@
 # HANDOFF.md — 跨工具／跨模型交接紀錄
 
-> **最後更新時間**：2026-10-31 21:30 (UTC+8)
-> **最後更新 Agent**：Cline (全站根治雲端同步與背景輪詢覆蓋問題：① `core/memoryLedger.ts` 之 `mergeLedgerData` 移除 `ls.monthlyBudget !== 0` 等強制回退至雲端舊值的錯誤判斷，確保將預算、底線、時薪、便當價改為 `0` 或任何數值皆以本機為準；② `src/store/useLedger.tsx` 所有本機變更預設 `replaceCloud = true`，且 8 秒背景輪詢在資料無變化時不觸發 `setData` 重繪；③ `src/screens/SettingsAndSubsScreen.tsx` 預算與體感參數加入 `focusedFieldRef / dirtyFieldsRef` 防護與 `onBlur` 自動儲存，輸入時與儲存後絕不跳回舊值)
+> **最後更新時間**：2026-11-01 01:15 (UTC+8)
+> **最後更新 Agent**：Cline (① 新增全站 5 大分頁 `總覽 / 明細 / 欠款 / 捷徑 / 設定` 支援頁面與底部導覽列「左右滑動切換頁面」`App.tsx`, `src/components/iosAnimations.tsx`，具備 1:1 水平跟手位移、邊界阻尼回彈、方向性彈簧轉場、底部翡翠光膠囊即時聯動推進與垂直捲動方向鎖定防誤觸；② 全站根治雲端同步與背景輪詢覆蓋問題：`core/memoryLedger.ts` 之 `mergeLedgerData` 確保將預算、底線、時薪、便當價改為 `0` 或任何數值皆以本機為準、`src/store/useLedger.tsx` 預設 `replaceCloud = true`、`src/screens/SettingsAndSubsScreen.tsx` 加入 `focusedFieldRef / dirtyFieldsRef` 防護與 `onBlur` 自動儲存)
 > **專案路徑**：`C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger`
-> **Git 分支與最新狀態**：`main`（已同步寫入主工作區與本地 Commit，尚未重新打包 IPA）
+> **Git 分支與最新狀態**：`main`（已同步寫入主工作區並推送 `origin/main` 觸發 IPA 打包）
 > **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `1e12ae0d-666f-42bd-beb3-d061a3a2e4ec`，前版可 Rollback ID: `845769c7-ceaf-40a6-aa24-5120b363981e`)
 > **最新無簽名 IPA 位置（v3.3.0+ 底部字卡上下滑動跟手關閉修復 ＋ 固定扣款預留刪除不復活／防當月回溯扣款版，GitHub Actions Run ID: 41202906351，11.10 MB）**：
 > - `C:\Users\mrhai\Downloads\PocketGuardian-SideStore.ipa`
@@ -28,6 +28,10 @@
      - 修復 `mergeLedgerData` 合併邏輯與 `deleteSubscription / deletePayee / deleteDebt / softDeleteTx` 的 `{ replaceCloud: true }` 同步機制：非空白帳本同步時以本機 `subscriptions / payees / debts` 清單為準，並加入 `inFlightPushCountRef` 與 `localMutationSeqRef` 防競態鎖，徹底防止刪除固定扣款預留後被每 8 秒雲端輪詢復活。
      - 修復 `addSubscription` 與 Worker `PUT /api/state`：當新增固定扣款預留的扣款日在當月已過（例如 10/31 新增「每月 5 號扣款」），自動將 `lastChargedMonth` 設為當月（`2026-10`），從下個月 5 號才開始預留與扣款，絕不回溯補扣當月已過日期的餘額。
      - 在「7天回收桶」分頁頂部新增「`🗑️ 一鍵全部刪除 (N)`」防誤觸二次確認工具列，並在每筆回收桶紀錄新增單筆「`永久刪除`」按鈕。
+
+   - **⑤ 全站 5 大分頁「左右滑動切換頁面」與底部流體膠囊即時跟手聯動 (`App.tsx`, `src/components/iosAnimations.tsx`)**：
+     - 支援在畫面任意區域或底部懸浮導覽列**往左滑切換下一頁、往右滑切換上一頁**（依序：`◈ 總覽 ↔ ☰ 明細 ↔ 🤝 欠款 ↔ ⚡ 捷徑 ↔ ⚙ 設定`）。
+     - 實作智慧方向鎖定（`evaluateSwipeLock`）：當手指垂直滑動（`|dy| > 10`）時立即鎖定為垂直捲動，確保長清單上下滑動 0 誤觸；當水平滑動（`|dx| > 12` 且大於垂直位移 `1.25` 倍）時切入水平跟手模式，支援 1:1 頁面即時位移、首尾頁邊界阻尼回彈（Rubber-banding）、跨過門檻微震動回饋（Haptics）、方向性滑入彈簧動畫，以及底部導覽列冰翡翠選中膠囊隨手指進度即時平滑推進。
 
 0.5. **全站 6 大 iOS 26 頂級流體物理動畫系統（`src/components/iosAnimations.tsx`, `App.tsx`, `src/screens/DashboardScreen.tsx`, `src/screens/TransactionsScreen.tsx`, `src/screens/DebtsScreen.tsx`, `src/components/MorphingCategoryPill.tsx`）**：
    - **方案一（動態島級頂部毛玻璃橫幅）**：`DismissibleBanner` 改為從頂部動態島以 iOS 阻尼彈簧（`damping: 15, stiffness: 230`）伴隨縮放（`0.84 → 1.0`）彈落並觸發輕觸覺震動；手指按住暫停時微幅膨脹（`scale: 1.025`），上滑時即時跟手並加速收合回動態島。
