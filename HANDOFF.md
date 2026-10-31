@@ -1,7 +1,7 @@
 # HANDOFF.md — 跨工具／跨模型交接紀錄
 
-> **最後更新時間**：2026-11-01 01:15 (UTC+8)
-> **最後更新 Agent**：Cline (① 新增全站 5 大分頁 `總覽 / 明細 / 欠款 / 捷徑 / 設定` 支援頁面與底部導覽列「左右滑動切換頁面」`App.tsx`, `src/components/iosAnimations.tsx`，具備 1:1 水平跟手位移、邊界阻尼回彈、方向性彈簧轉場、底部翡翠光膠囊即時聯動推進與垂直捲動方向鎖定防誤觸；② 全站根治雲端同步與背景輪詢覆蓋問題：`core/memoryLedger.ts` 之 `mergeLedgerData` 確保將預算、底線、時薪、便當價改為 `0` 或任何數值皆以本機為準、`src/store/useLedger.tsx` 預設 `replaceCloud = true`、`src/screens/SettingsAndSubsScreen.tsx` 加入 `focusedFieldRef / dirtyFieldsRef` 防護與 `onBlur` 自動儲存)
+> **最後更新時間**：2026-11-01 02:30 (UTC+8)
+> **最後更新 Agent**：Cline (① 新增全站 iOS 桌面與鎖定畫面雙小工具組 `targets/widget/PocketGuardianWidget.swift`：`WidgetBundle` 內建「🔋 實時財力＆帳戶餘額看板」與「⚡ 極速記帳＆閃電扣款面板」，支援 `↻` 桌面即時刷新 `RefreshWidgetIntent`、免開 App 一鍵閃電扣款 `QuickWidgetExpenseIntent` 與點擊分類秒開記帳字卡 Deep Link `App.tsx`；② 在 `targets/app-intents/PocketGuardianShortcuts.swift` 與 `.github/workflows/build-sidestore-ipa.yml` 加入 `PocketWidgetBridge.m` 退回桌面自動重載小工具、新增「⚡ 快速記一筆支出」捷徑積木，並將 `PocketGuardianWidgetExtension.appex` 自動編譯嵌入 `.ipa` 之 `PlugIns/` 完美支援 Feather + FlareStore 付費憑證簽名)
 > **專案路徑**：`C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger`
 > **Git 分支與最新狀態**：`main`（已同步寫入主工作區並推送 `origin/main` 觸發 IPA 打包）
 > **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `1e12ae0d-666f-42bd-beb3-d061a3a2e4ec`，前版可 Rollback ID: `845769c7-ceaf-40a6-aa24-5120b363981e`)

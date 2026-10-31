@@ -5,6 +5,22 @@ import SwiftUI
 import UIKit
 import UserNotifications
 import Vision
+import WidgetKit
+
+@objc(PocketWidgetReloader)
+public class PocketWidgetReloader: NSObject {
+    @objc public static func reloadAllWithDelay() {
+        if #available(iOS 14.0, *) {
+            WidgetCenter.shared.reloadAllTimelines()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                WidgetCenter.shared.reloadAllTimelines()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
+                WidgetCenter.shared.reloadAllTimelines()
+            }
+        }
+    }
+}
 
 @available(iOS 17.0, *)
 enum ShortcutBannerMode: String, AppEnum {
@@ -254,6 +270,7 @@ struct IngestNotificationIntent: AppIntent {
         request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
 
         let (data, _) = try await URLSession.shared.data(for: request)
+        WidgetCenter.shared.reloadAllTimelines()
         if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             let message = (json["message"] as? String) ?? "✅ 已傳送至靠北我錢呢"
             let model = IngestSnippetModel.from(json: json, fallbackMessage: message)
@@ -590,6 +607,54 @@ struct CheckSafeToSpendIntent: AppIntent {
 }
 
 @available(iOS 17.0, *)
+struct QuickRecordExpenseIntent: AppIntent {
+    static var title: LocalizedStringResource = "⚡ 快速記一筆支出"
+    static var description = IntentDescription("輸入金額與品項，直接背景寫入帳本並即時更新桌面小工具餘額。")
+    static var openAppWhenRun: Bool = false
+
+    @Parameter(title: "消費金額 (NT$)")
+    var amount: Int
+
+    @Parameter(title: "品項或商家", default: "快速消費")
+    var merchant: String
+
+    @Parameter(title: "Cloudflare Webhook 網址", default: "https://pocket-guardian-api.mr-haibaoseal.workers.dev/api/ingest")
+    var webhookUrl: String
+
+    func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<String> {
+        guard amount > 0, let url = URL(string: webhookUrl) else {
+            return .result(value: "金額或網址錯誤", dialog: "⚠️ 請輸入大於 0 的金額")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let stamp = Int(Date().timeIntervalSince1970 * 1000)
+        let payload: [String: Any] = [
+            "source": "wallet",
+            "amount": "\(amount)",
+            "merchant": merchant,
+            "text": "NT$\(amount) \(merchant) [shortcut:\(stamp)]"
+        ]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
+
+        let (data, _) = try await URLSession.shared.data(for: request)
+        WidgetCenter.shared.reloadAllTimelines()
+
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let widget = json["widget"] as? [String: Any],
+           let todayLeft = widget["todayLeft"] as? Int,
+           let bankVal = (widget["bank"] as? Double).map({ Int($0) }) ?? (widget["bank"] as? Int) {
+            let msg = "✅ 已記 \(merchant) -$\(amount)｜🔋 今日還可花 $\(todayLeft)｜🏦 銀行 $\(bankVal)"
+            return .result(value: msg, dialog: IntentDialog(stringLiteral: msg))
+        }
+
+        let fallback = "✅ 已記 \(merchant) -$\(amount)"
+        return .result(value: fallback, dialog: IntentDialog(stringLiteral: fallback))
+    }
+}
+
+@available(iOS 17.0, *)
 struct PocketGuardianShortcutsProvider: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
@@ -600,6 +665,15 @@ struct PocketGuardianShortcutsProvider: AppShortcutsProvider {
             ],
             shortTitle: "🛡️ 智慧入帳",
             systemImageName: "shield.checkered"
+        )
+        AppShortcut(
+            intent: QuickRecordExpenseIntent(),
+            phrases: [
+                "用 \(.applicationName) 快速記帳",
+                "在 \(.applicationName) 記一筆支出"
+            ],
+            shortTitle: "⚡ 快速記帳",
+            systemImageName: "bolt.circle.fill"
         )
         AppShortcut(
             intent: CheckSafeToSpendIntent(),

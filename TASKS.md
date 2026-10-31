@@ -46,10 +46,11 @@
   - **關聯檔案**：`core/scold.ts`, `core/summary.ts`, `src/screens/SettingsAndSubsScreen.tsx`, `src/components/ActionSheetModals.tsx`
 
 - [x] **T1.2：Swift `WidgetKit` 小工具與 Swift `AppIntents` 捷徑積木 (`targets/`)**
-  - **關聯檔案**：`targets/widget/PocketGuardianWidget.swift`, `targets/app-intents/PocketGuardianShortcuts.swift`, `.github/workflows/build-sidestore-ipa.yml`
+  - **關聯檔案**：`targets/widget/PocketGuardianWidget.swift`, `targets/app-intents/PocketGuardianShortcuts.swift`, `.github/workflows/build-sidestore-ipa.yml`, `App.tsx`
   - **驗收條件**：
-    1. `IngestNotificationIntent` 支援「通知或畫面文字」以及選填「Apple Pay 金額 (`String?`)」、「Apple Pay 商家 (`String?`)」。
-    2. GitHub Actions 自動產出免簽名 `PocketGuardian-SideStore.ipa`（`v3.3.0`，Run ID `41064228785` 已編譯通過並下載至專案根目錄與 `C:\Users\mrhai\Downloads\PocketGuardian-SideStore.ipa`）。
+    1. `IngestNotificationIntent` 支援「通知或畫面文字」以及選填「Apple Pay 金額 (`String?`)」、「Apple Pay 商家 (`String?`)」，另提供 `QuickRecordExpenseIntent`（「⚡ 快速記一筆支出」）捷徑積木。
+    2. `PocketGuardianWidgetBundle` 提供兩款黑曜鉑金 × 冰翡翠桌面小工具：**「🔋 實時財力＆帳戶餘額」** 與 **「⚡ 極速記帳＆閃電扣款」**（含 `↻` 桌面即時刷新 `RefreshWidgetIntent`、免開 App 一鍵閃電扣款 `QuickWidgetExpenseIntent`、以及點擊秒開對應字卡 `myledger://expense|atm|scold|reconcile|debts` Deep Link）。
+    3. GitHub Actions 自動編譯 `PocketGuardianWidgetExtension.appex` 並嵌入 `Payload/*.app/PlugIns/`，支援 Feather + FlareStore 付費憑證與 SideStore 安裝。
 
 ---
 

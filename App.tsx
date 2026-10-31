@@ -5,6 +5,7 @@ import {
   Dimensions,
   Image,
   Keyboard,
+  Linking,
   PanResponder,
   Platform,
   Pressable,
@@ -247,7 +248,7 @@ function DismissibleBanner({
 }
 
 function MainShell() {
-  const { lastUndoableTx, lastToast, clearToast, clearUndo, setBannerPaused, softDeleteTx } = useLedger();
+  const { lastUndoableTx, lastToast, clearToast, clearUndo, setBannerPaused, softDeleteTx, syncFromCloud } = useLedger();
   const safeInsets = useHardwareSafeInsets();
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
   const [activeModal, setActiveModal] = useState<ActiveModal>('none');
@@ -345,6 +346,71 @@ function MainShell() {
 
   const handleSelectTabRef = useRef(handleSelectTab);
   handleSelectTabRef.current = handleSelectTab;
+
+  // Handle Deep Links from iOS Home Screen / Lock Screen Widgets (myledger://...)
+  const handleDeepLink = useCallback(
+    (rawUrl: string | null) => {
+      if (!rawUrl || !rawUrl.toLowerCase().startsWith('myledger://')) return;
+      syncFromCloud().catch(() => undefined);
+      try {
+        const withoutScheme = rawUrl.replace(/^myledger:\/\//i, '');
+        const [pathPart, queryPart = ''] = withoutScheme.split('?');
+        const action = pathPart.replace(/^\/+|\/+$/g, '').toLowerCase();
+        if (queryPart) {
+          const catMatch = queryPart.match(/(?:^|&)category=([^&]+)/i);
+          if (catMatch && catMatch[1]) {
+            setPresetCategory(decodeURIComponent(catMatch[1]));
+          }
+        }
+        if (action === 'expense' || action === 'cash' || action === 'quick-add') {
+          handleSelectTabRef.current('dashboard');
+          setActiveModal('expense');
+        } else if (action === 'atm') {
+          handleSelectTabRef.current('dashboard');
+          setActiveModal('atm');
+        } else if (action === 'scold') {
+          handleSelectTabRef.current('dashboard');
+          setActiveModal('scold');
+        } else if (action === 'reconcile') {
+          handleSelectTabRef.current('dashboard');
+          setActiveModal('reconcile');
+        } else if (action === 'debts') {
+          setActiveModal('none');
+          handleSelectTabRef.current('debts');
+        } else if (action === 'transactions') {
+          setActiveModal('none');
+          handleSelectTabRef.current('transactions');
+        } else if (action === 'settings') {
+          setActiveModal('none');
+          handleSelectTabRef.current('settings');
+        } else if (action === 'testbench' || action === 'shortcuts') {
+          setActiveModal('none');
+          handleSelectTabRef.current('testbench');
+        } else if (action === 'dashboard') {
+          setActiveModal('none');
+          handleSelectTabRef.current('dashboard');
+        }
+      } catch {
+        // Ignore malformed deep link URLs
+      }
+    },
+    [syncFromCloud],
+  );
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    Linking.getInitialURL()
+      .then((url) => {
+        if (url) handleDeepLink(url);
+      })
+      .catch(() => undefined);
+    const sub = Linking.addEventListener('url', (event) => {
+      handleDeepLink(event.url);
+    });
+    return () => {
+      sub.remove();
+    };
+  }, [handleDeepLink]);
 
   const swipeStateRef = useRef({
     startX: 0,
