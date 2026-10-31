@@ -2,15 +2,19 @@ import { BlurView } from 'expo-blur';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Dimensions,
   Image,
   Keyboard,
   PanResponder,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
   type GestureResponderEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   type ViewStyle,
 } from 'react-native';
 import Animated, {
@@ -250,6 +254,17 @@ function MainShell() {
   const [presetCategory, setPresetCategory] = useState<string>('超商');
   const [navShrunk, setNavShrunk] = useState(false);
   const [tabLayouts, setTabLayouts] = useState<Partial<Record<TabKey, { x: number; width: number }>>>({});
+  const [pageWidth, setPageWidth] = useState<number>(() => {
+    if (Platform.OS === 'web') return 430;
+    const w = Dimensions.get('window').width;
+    return w > 0 ? w : 430;
+  });
+
+  const pagerScrollRef = useRef<React.ComponentRef<typeof ScrollView> | null>(null);
+  const pageWidthRef = useRef(pageWidth);
+  pageWidthRef.current = pageWidth;
+  const isProgrammaticScrollRef = useRef(false);
+  const programmaticTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const shrinkProgress = useSharedValue(0);
   const pillX = useSharedValue(6);
@@ -299,7 +314,8 @@ function MainShell() {
   }, [activeTab, tabLayouts, pillX, pillW]);
 
   const handleSelectTab = useCallback(
-    (tab: TabKey) => {
+    (tab: TabKey, fromPagerSwipe = false) => {
+      const targetIndex = TABS.findIndex((t) => t.key === tab);
       if (tab !== activeTabRef.current) {
         triggerHaptic('selection');
         activeIconBounce.value = withSequence(
@@ -308,8 +324,21 @@ function MainShell() {
           withSpring(1, { damping: 14, stiffness: 260 }),
         );
       }
+      activeTabRef.current = tab;
       setNavShrunk(false);
       setActiveTab(tab);
+
+      if (!fromPagerSwipe && targetIndex >= 0 && pageWidthRef.current > 0) {
+        isProgrammaticScrollRef.current = true;
+        if (programmaticTimerRef.current) clearTimeout(programmaticTimerRef.current);
+        programmaticTimerRef.current = setTimeout(() => {
+          isProgrammaticScrollRef.current = false;
+        }, 380);
+        pagerScrollRef.current?.scrollTo({
+          x: targetIndex * pageWidthRef.current,
+          animated: true,
+        });
+      }
     },
     [activeIconBounce],
   );
@@ -493,6 +522,53 @@ function MainShell() {
     }
   }, []);
 
+  const handlePagerScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const w = pageWidthRef.current;
+      if (w <= 0) return;
+      const offsetX = e.nativeEvent.contentOffset.x;
+      const rawProgress = offsetX / w;
+
+      if (!isProgrammaticScrollRef.current) {
+        const clamped = Math.max(0, Math.min(TABS.length - 1, rawProgress));
+        const leftIdx = Math.floor(clamped);
+        const rightIdx = Math.min(TABS.length - 1, leftIdx + 1);
+        const frac = clamped - leftIdx;
+        const leftLayout = tabLayoutsRef.current[TABS[leftIdx].key];
+        const rightLayout = tabLayoutsRef.current[TABS[rightIdx].key];
+        if (leftLayout && rightLayout) {
+          pillX.value = leftLayout.x + (rightLayout.x - leftLayout.x) * frac;
+          pillW.value = leftLayout.width + (rightLayout.width - leftLayout.width) * frac;
+        }
+
+        const nearestIdx = Math.max(0, Math.min(TABS.length - 1, Math.round(rawProgress)));
+        const nearestTab = TABS[nearestIdx].key;
+        if (nearestTab !== activeTabRef.current) {
+          Keyboard.dismiss();
+          handleSelectTabRef.current(nearestTab, true);
+        }
+      }
+    },
+    [pillX, pillW],
+  );
+
+  const handlePagerMomentumEnd = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      isProgrammaticScrollRef.current = false;
+      const w = pageWidthRef.current;
+      if (w <= 0) return;
+      const idx = Math.max(0, Math.min(TABS.length - 1, Math.round(e.nativeEvent.contentOffset.x / w)));
+      const targetTab = TABS[idx].key;
+      if (targetTab !== activeTabRef.current) {
+        Keyboard.dismiss();
+        handleSelectTabRef.current(targetTab, true);
+      } else {
+        syncPillToActiveTab(targetTab);
+      }
+    },
+    [syncPillToActiveTab],
+  );
+
   const floatingBarAnimStyle = useAnimatedStyle(() => {
     return {
       transform: [{ scale: 1 - shrinkProgress.value * 0.14 }],
@@ -559,22 +635,50 @@ function MainShell() {
       <View style={styles.safeArea}>
         <StatusBar style="light" />
 
-        {/* Main Screen Content (Scrolls over the Ambient Light Canvas, supports left/right swipe page switching) */}
+        {/* Main Screen Content (iOS Native Horizontal Paging ScrollView + Web/Bar Swipe Support) */}
         <View
           style={styles.screenBody}
-          {...pagePanResponder.panHandlers}
-          onTouchStart={handlePageTouchStart}
-          onTouchMove={handlePageTouchMove}
-          onTouchEnd={handlePageTouchEnd}
-          onTouchCancel={handlePageTouchCancel}
+          onLayout={(e) => {
+            const w = Math.round(e.nativeEvent.layout.width);
+            if (w > 0 && Math.abs(w - pageWidthRef.current) > 1) {
+              pageWidthRef.current = w;
+              setPageWidth(w);
+              const curIdx = TABS.findIndex((t) => t.key === activeTabRef.current);
+              if (curIdx > 0) {
+                pagerScrollRef.current?.scrollTo({ x: curIdx * w, animated: false });
+              }
+            }
+          }}
+          {...(Platform.OS === 'web' ? pagePanResponder.panHandlers : {})}
         >
-          <ScreenTransitionView
-            tabKey={activeTab}
-            tabIndex={TABS.findIndex((t) => t.key === activeTab)}
-            dragOffsetX={pageDragX}
+          <ScrollView
+            ref={pagerScrollRef}
+            horizontal
+            pagingEnabled
+            directionalLockEnabled
+            bounces
+            alwaysBounceHorizontal
+            alwaysBounceVertical={false}
+            showsHorizontalScrollIndicator={false}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            scrollEnabled={activeModal === 'none'}
+            scrollEventThrottle={16}
+            onScrollBeginDrag={() => {
+              isProgrammaticScrollRef.current = false;
+            }}
+            onScroll={handlePagerScroll}
+            onMomentumScrollEnd={handlePagerMomentumEnd}
+            onScrollEndDrag={(e) => {
+              const vx = e.nativeEvent.velocity?.x ?? 0;
+              if (Math.abs(vx) < 0.05) {
+                handlePagerMomentumEnd(e);
+              }
+            }}
             style={styles.screenBody}
+            contentContainerStyle={{ width: pageWidth * TABS.length }}
           >
-            {activeTab === 'dashboard' && (
+            <View style={{ width: pageWidth, flex: 1 }}>
               <DashboardScreen
                 topInsetPadding={headerTotalHeight + 10}
                 bottomInsetPadding={bottomTotalPad + 16}
@@ -585,60 +689,56 @@ function MainShell() {
                 onNavigateTab={(t) => handleSelectTab(t)}
                 onScrollShrinkChange={(shrunk) => setNavShrunk(shrunk)}
               />
-            )}
-            {activeTab === 'transactions' && (
-              <View
-                style={[
-                  styles.subScreenPad,
-                  {
-                    paddingTop: headerTotalHeight + 6,
-                    paddingBottom: bottomTotalPad,
-                  },
-                ]}
-              >
-                <TransactionsScreen />
-              </View>
-            )}
-            {activeTab === 'debts' && (
-              <View
-                style={[
-                  styles.subScreenPad,
-                  {
-                    paddingTop: headerTotalHeight + 6,
-                    paddingBottom: bottomTotalPad,
-                  },
-                ]}
-              >
-                <DebtsScreen />
-              </View>
-            )}
-            {activeTab === 'testbench' && (
-              <View
-                style={[
-                  styles.subScreenPad,
-                  {
-                    paddingTop: headerTotalHeight + 6,
-                    paddingBottom: bottomTotalPad,
-                  },
-                ]}
-              >
-                <ShortcutsTestBenchScreen />
-              </View>
-            )}
-            {activeTab === 'settings' && (
-              <View
-                style={[
-                  styles.subScreenPad,
-                  {
-                    paddingTop: headerTotalHeight + 6,
-                    paddingBottom: bottomTotalPad,
-                  },
-                ]}
-              >
-                <SettingsAndSubsScreen />
-              </View>
-            )}
-          </ScreenTransitionView>
+            </View>
+            <View
+              style={[
+                styles.subScreenPad,
+                {
+                  width: pageWidth,
+                  paddingTop: headerTotalHeight + 6,
+                  paddingBottom: bottomTotalPad,
+                },
+              ]}
+            >
+              <TransactionsScreen />
+            </View>
+            <View
+              style={[
+                styles.subScreenPad,
+                {
+                  width: pageWidth,
+                  paddingTop: headerTotalHeight + 6,
+                  paddingBottom: bottomTotalPad,
+                },
+              ]}
+            >
+              <DebtsScreen />
+            </View>
+            <View
+              style={[
+                styles.subScreenPad,
+                {
+                  width: pageWidth,
+                  paddingTop: headerTotalHeight + 6,
+                  paddingBottom: bottomTotalPad,
+                },
+              ]}
+            >
+              <ShortcutsTestBenchScreen />
+            </View>
+            <View
+              style={[
+                styles.subScreenPad,
+                {
+                  width: pageWidth,
+                  paddingTop: headerTotalHeight + 6,
+                  paddingBottom: bottomTotalPad,
+                },
+              ]}
+            >
+              <SettingsAndSubsScreen />
+            </View>
+          </ScrollView>
         </View>
 
         {/* ====================================================================
