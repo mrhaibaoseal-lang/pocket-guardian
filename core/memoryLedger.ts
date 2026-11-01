@@ -267,6 +267,77 @@ export function sanitizeLedgerData(data: LedgerData): LedgerData {
     if (ev.parsed?.amount === 2026 && ev.parsed?.source === 'efingo' && !ev.parsed?.merchant) {
       continue;
     }
+    // 5. Recover transfers that were falsely marked 'ignored' ("轉入自己帳戶（內部移轉，不計入支出）")
+    if (
+      ev.status === 'ignored' &&
+      (/轉入自己帳戶/.test(ev.reason ?? '') || /轉入自己帳戶/.test(ev.parsed?.reason ?? ''))
+    ) {
+      const reparsed = ev.rawText
+        ? parseEvent('transfer_page', { text: ev.rawText }, ev.receivedAt, ownSuffix)
+        : {
+            ...ev.parsed,
+            kind: 'transfer_out' as const,
+            reason: '玉山轉帳成功畫面',
+          };
+      const amt = reparsed.amount ?? ev.parsed?.amount ?? null;
+      if (amt && amt > 0 && amt <= 10_000_000) {
+        const baseKey =
+          idempotencyKeyFor(reparsed) ??
+          `tp:transfer_out:${reparsed.occurredAt}|${amt}|${reparsed.payeeSuffix ?? ''}`;
+        // Deduplicate repeated scans of the exact same screenshot
+        if (seenTransferKeys.has(baseKey)) {
+          continue;
+        }
+        seenTransferKeys.add(baseKey);
+        const payee = reparsed.payeeSuffix
+          ? (data.payees ?? []).find((x) => x.accountSuffix === reparsed.payeeSuffix) ?? null
+          : null;
+        const label = payee
+          ? payee.displayName
+          : reparsed.merchant && reparsed.payeeSuffix
+          ? `轉帳給 ${reparsed.merchant} (****${reparsed.payeeSuffix})`
+          : reparsed.payeeSuffix
+          ? `轉帳給 ****${reparsed.payeeSuffix}`
+          : reparsed.merchant
+          ? `轉帳給 ${reparsed.merchant}`
+          : '轉帳';
+        const txId = ev.transactionId ?? `tx-repaired-${ev.id.slice(0, 8)}`;
+        if (!activeTxIds.has(txId)) {
+          repairedTxs.push({
+            id: txId,
+            amount: amt,
+            type: 'expense',
+            method: 'bank_transfer',
+            category: payee?.defaultCategory ?? '轉帳',
+            merchant: label,
+            note: null,
+            accountId: 'bank',
+            toAccountId: null,
+            payeeId: payee?.id ?? null,
+            frontendSlot: null,
+            bankSlot: 'transfer_page',
+            idempotencyKey: baseKey,
+            isLocked: false,
+            mergedMetadata: null,
+            timeSource: reparsed.timeSource,
+            affectsBudget: true,
+            isAdvance: false,
+            deletedAt: null,
+            occurredAt: reparsed.occurredAt,
+            createdAt: ev.receivedAt,
+          });
+          activeTxIds.add(txId);
+        }
+        repairedEvents.push({
+          ...ev,
+          parsed: { ...reparsed, kind: 'transfer_out', amount: amt },
+          transactionId: txId,
+          status: 'new_tx',
+          reason: label,
+        });
+      }
+      continue;
+    }
     if (ev.status === 'parse_failed' && ev.reason.length > 60) {
       repairedEvents.push({
         ...ev,

@@ -19,7 +19,7 @@
   - **驗收條件**：
     1. 支援 Apple Pay 錢包通知、玉山 e.Fingo 推播、玉山與各家銀行轉帳成功頁雙欄／單欄 OCR Regex 解析（含 3 位數金額如 `$100`），過濾 OTP 驗證碼與行銷促銷推播。
     2. 支援多通道自動容錯（Self-Healing Pipeline）：即使 iOS 捷徑選錯 `source` 通道，仍自動嘗試 `efingo` / `wallet` / `transfer_page` 並校正來源。
-    3. 30 分鐘跨通道雙插槽自動合體並標記 `is_locked = true`；同源連發必新增第 2 筆交易；支援一鍵拆單還原；支援轉帳 `±3 分鐘` 重複觸發攔截與自己轉自己（多組末碼）排除。
+    3. 30 分鐘跨通道雙插槽自動合體並標記 `is_locked = true`；同源連發必新增第 2 筆交易；支援一鍵拆單還原；支援轉帳 `±3 分鐘` 重複觸發攔截；已移除「轉入自己帳戶（內部移轉）」忽略機制，並支援同時解析未遮罩完整對方帳號（如 `0222979124126`）與收款人姓名（如 `潘O杏`）。
     4. `monthlyBudget === 0` 時，本月剩餘預算與每日預算自動根據「目前帳戶餘額（扣除安全水位底線）」計算；`monthlyBudget > 0` 時根據設定金額計算。
     5. 外幣交易（如 `US$10.00`、`¥1,000`）與缺金額輸入自動進入「📥 未入帳／已略過收件匣」（保留 30 天、自動遮罩完整銀行帳號），支援一鍵補記與刪除。
     6. 支援實機捷徑將「`文字 (商家 數量)` / `通知` / `已擷取的文字` / `螢幕上的文字`」直接傳入金額與商家選填欄位，防止多行 OCR 數字串接為 `1.032e+42` 亂碼，並精簡非交易畫面（7793）未入帳提示。
@@ -46,11 +46,11 @@
   - **關聯檔案**：`core/scold.ts`, `core/summary.ts`, `src/screens/SettingsAndSubsScreen.tsx`, `src/components/ActionSheetModals.tsx`
 
 - [x] **T1.2：Swift `WidgetKit` 小工具與 Swift `AppIntents` 捷徑積木 (`targets/`)**
-  - **關聯檔案**：`targets/widget/PocketGuardianWidget.swift`, `targets/app-intents/PocketGuardianShortcuts.swift`, `.github/workflows/build-sidestore-ipa.yml`, `App.tsx`
+  - **關聯檔案**：`targets/widget/PocketGuardianWidget.swift`, `targets/app-intents/PocketGuardianShortcuts.swift`, `.github/workflows/build-sidestore-ipa.yml`
   - **驗收條件**：
-    1. `IngestNotificationIntent` 支援「通知或畫面文字」以及選填「Apple Pay 金額 (`String?`)」、「Apple Pay 商家 (`String?`)」，另提供 `QuickRecordExpenseIntent`（「⚡ 快速記一筆支出」）捷徑積木。
-    2. `PocketGuardianWidgetBundle` 提供兩款黑曜鉑金 × 冰翡翠桌面小工具：**「🔋 實時財力＆帳戶餘額」** 與 **「⚡ 極速記帳＆閃電扣款」**（含 `↻` 桌面即時刷新 `RefreshWidgetIntent`、免開 App 一鍵閃電扣款 `QuickWidgetExpenseIntent`、以及點擊秒開對應字卡 `myledger://expense|atm|scold|reconcile|debts` Deep Link）。
-    3. GitHub Actions 自動編譯 `PocketGuardianWidgetExtension.appex` 並嵌入 `Payload/*.app/PlugIns/`，支援 Feather + FlareStore 付費憑證與 SideStore 安裝。
+    1. `IngestNotificationIntent` 支援「通知或畫面文字」以及選填「Apple Pay 金額 (`String?`)」、「Apple Pay 商家 (`String?`)」。
+    2. 桌面小工具（中尺寸、小尺寸、鎖定畫面與極速記帳小工具）以「💰 總餘額（玉山銀行＋現金錢包）」作為最明顯的主視覺大字，並搭配玉山銀行／現金明細與今日可花費剩餘輔助資訊。
+    3. GitHub Actions 自動產出免簽名 `PocketGuardian-SideStore.ipa`（`v3.3.0`，Run ID `41064228785` 已編譯通過並下載至專案根目錄與 `C:\Users\mrhai\Downloads\PocketGuardian-SideStore.ipa`）。
 
 ---
 

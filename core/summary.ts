@@ -46,7 +46,9 @@ export function confirmationText(prefix: string, summary: DashboardSummary): str
 /** Compact payload for the iOS widget. */
 export function widgetPayload(summary: DashboardSummary) {
   const s = summary.safe;
+  const totalBalance = Math.round((summary.balances.bank + summary.balances.cash) * 100) / 100;
   return {
+    totalBalance,
     todayLeft: Math.floor(s.todayLeft),
     dailyAllowance: s.dailyAllowance,
     batteryPercent: s.batteryPercent,

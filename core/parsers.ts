@@ -512,12 +512,13 @@ function parseTransferPage(p: ParsedEvent, text: string, ownSuffix: string): Par
 
   const iso = taipeiLocalToIso(bodyText, p.occurredAt) ?? taipeiLocalToIso(cleaned, p.occurredAt);
 
-  const maskedSuffixes = [...bodyText.matchAll(/[*＊•·●xX\-]{2,}\s*(\d{3,6})/g)].map((m) => m[1]);
-  const fullAccountSuffixes =
-    maskedSuffixes.length > 0
-      ? []
-      : [...bodyText.matchAll(/(?:^|[^\d])\d{4,11}(\d{5})(?!\d)/g)].map((m) => m[1]);
-  const suffixes = maskedSuffixes.length > 0 ? maskedSuffixes : fullAccountSuffixes;
+  const suffixes: string[] = [];
+  for (const m of bodyText.matchAll(
+    /(?:[*＊•·●xX\-]{2,}\s*(\d{3,6})|(?:^|[^\d*＊•·●xX\-])\d{4,11}(\d{5})(?!\d))/g,
+  )) {
+    const suf = m[1] ?? m[2];
+    if (suf) suffixes.push(suf);
+  }
 
   const bankCodes = [
     ...bodyText.matchAll(
@@ -526,8 +527,12 @@ function parseTransferPage(p: ParsedEvent, text: string, ownSuffix: string): Par
   ].map((m) => m[1]);
 
   const ownSuffixes = parseOwnSuffixList(ownSuffix);
-  const explicitTargetMatch = bodyText.match(
-    /(?:轉入對象|轉入帳號|收款帳號|對方帳號)[^\n]*?(?:[*＊•·●xX\-]{2,}\s*(\d{3,6})|\b\d{4,11}(\d{5})\b)/,
+  const targetBlockMatch = bodyText.match(
+    /(?:轉入對象|轉入帳號|收款帳號|對方帳號)\s*[:：]?([\s\S]{1,140}?)(?=(?:自己帳號|轉出帳號|扣款帳號|付款帳號|手續費|可用餘額|帳戶餘額|$))/,
+  );
+  const targetBlock = targetBlockMatch?.[1] ?? '';
+  const explicitTargetMatch = targetBlock.match(
+    /(?:[*＊•·●xX\-]{2,}\s*(\d{3,6})|(?:^|[^\d*＊•·●xX\-])\d{4,11}(\d{5})(?!\d))/,
   );
   const explicitTargetSuffix = explicitTargetMatch?.[1] ?? explicitTargetMatch?.[2] ?? null;
 
@@ -535,7 +540,7 @@ function parseTransferPage(p: ParsedEvent, text: string, ownSuffix: string): Par
   let ownFound: string | null = null;
   let payeeIdx = -1;
   suffixes.forEach((s, i) => {
-    if (ownSuffixes.includes(s) && !ownFound && s !== explicitTargetSuffix) {
+    if (ownSuffixes.includes(s) && !ownFound && s !== explicitTargetSuffix && suffixes.length > 1) {
       ownFound = s;
     } else if (!payeeSuffix) {
       payeeSuffix = s;
@@ -545,10 +550,6 @@ function parseTransferPage(p: ParsedEvent, text: string, ownSuffix: string): Par
   if (explicitTargetSuffix) {
     payeeSuffix = explicitTargetSuffix;
   }
-
-  const isSelfTransfer =
-    (explicitTargetSuffix !== null && ownSuffixes.includes(explicitTargetSuffix)) ||
-    (suffixes.length > 0 && suffixes.every((s) => ownSuffixes.includes(s)));
 
   const lines = bodyText
     .split('\n')
@@ -619,7 +620,7 @@ function parseTransferPage(p: ParsedEvent, text: string, ownSuffix: string): Par
     }
   }
 
-  // Detect counterparty name / note in passbook detail layout (e.g. "轉帳留言\n阮*豫\n存摺備註")
+  // Detect counterparty name / note in passbook detail or transfer target layout
   let counterpartyName: string | null = null;
   const noteIdx = lines.findIndex((l) => /^(?:轉帳留言|存摺備註|對方戶名|轉入戶名|收款人|匯款人)$/.test(l));
   if (noteIdx >= 0 && lines[noteIdx + 1]) {
@@ -630,6 +631,28 @@ function parseTransferPage(p: ParsedEvent, text: string, ownSuffix: string): Par
       !isMaskedAccountLine(candidate)
     ) {
       counterpartyName = candidate;
+    }
+  }
+  if (!counterpartyName && targetBlock) {
+    const nameInTarget = targetBlock.match(
+      /(?:^|[\s:：])([\u4e00-\u9fa5][Oo0○◯〇*＊•·●][\u4e00-\u9fa5]{1,2})(?=\s|$)/,
+    );
+    if (nameInTarget) {
+      counterpartyName = nameInTarget[1].trim();
+    }
+  }
+  if (!counterpartyName) {
+    const firstAcctLineIdx = lines.findIndex((l) => isMaskedAccountLine(l));
+    const searchEnd = firstAcctLineIdx >= 0 ? firstAcctLineIdx : lines.length;
+    for (let i = 0; i < searchEnd; i++) {
+      if (/^(?:自己帳號|轉出帳號|扣款帳號)/.test(lines[i])) break;
+      const m = lines[i].match(
+        /^(?:(?:轉入對象|轉入帳號|收款帳號|對方帳號)\s*[:：]?\s*)?([\u4e00-\u9fa5][Oo0○◯〇*＊•·●][\u4e00-\u9fa5]{1,2})$/,
+      );
+      if (m) {
+        counterpartyName = m[1];
+        break;
+      }
     }
   }
 
@@ -643,7 +666,7 @@ function parseTransferPage(p: ParsedEvent, text: string, ownSuffix: string): Par
     lines.some((l) => /^[（(【\[]?\s*(?:提|支)\s*[）)】\]]?(?:\s+\d[\d,]*)?$/.test(l)) ||
     /(?:^|\n)[ \t]*(?:提|支)[ \t]+(?=\d)/.test(bodyText);
   const hasMaskedSenderName =
-    counterpartyName !== null && /^[\u4e00-\u9fa5A-Za-z][*＊•·●○][\u4e00-\u9fa5A-Za-z]{1,3}$/.test(counterpartyName);
+    counterpartyName !== null && /^[\u4e00-\u9fa5A-Za-z][Oo0○◯〇*＊•·●][\u4e00-\u9fa5A-Za-z]{1,3}$/.test(counterpartyName);
 
   const hasIncomingMarkers =
     hasExplicitDepositBadge ||
@@ -655,22 +678,6 @@ function parseTransferPage(p: ParsedEvent, text: string, ownSuffix: string): Par
     /(轉入對象|轉入帳號|收款帳號|扣款金額|轉出金額|跨行轉出|轉帳支出)/.test(bodyText) ||
     lines.some((l) => /^-\s*(?:NT\$|\$)?\s*\d/.test(l));
   const isIncomingTransfer = hasIncomingMarkers && !hasOutgoingTargetMarkers;
-
-  if (isSelfTransfer) {
-    return {
-      ...res,
-      kind: 'ignored',
-      amount,
-      occurredAt: iso ?? p.occurredAt,
-      timeSource: iso ? 'absolute' : 'notification_received',
-      payeeSuffix: payeeSuffix ?? suffixes[0] ?? null,
-      payeeBankCode: bankCodes[0] ?? null,
-      ownSuffix: ownFound ?? ownSuffixes[0] ?? null,
-      confidence: 'high',
-      evidence,
-      reason: '轉入自己帳戶（內部移轉，不計入支出）',
-    };
-  }
 
   if (!amount) return { ...res, confidence: 'low', reason: '轉帳畫面中找不到金額' };
 
@@ -749,15 +756,6 @@ export function parseAiStructuredText(
           reason: obj.reason || '畫面中未偵測到交易或轉帳金額',
         };
       }
-      if (obj.kind === 'internal_transfer' || obj.kind === 'ignored') {
-        return {
-          ...p,
-          kind: 'ignored',
-          amount: amt,
-          confidence: 'high',
-          reason: obj.reason || '轉入自己帳戶（內部移轉，不計入支出）',
-        };
-      }
       if (amt && (obj.kind === 'transfer_in' || obj.kind === 'income')) {
         return {
           ...p,
@@ -774,7 +772,7 @@ export function parseAiStructuredText(
           reason: obj.reason || 'AI 辨識轉入入帳',
         };
       }
-      if (amt && obj.kind === 'transfer_out') {
+      if (amt && (obj.kind === 'transfer_out' || obj.kind === 'internal_transfer')) {
         return {
           ...p,
           kind: 'transfer_out',
@@ -787,7 +785,16 @@ export function parseAiStructuredText(
           timeSource: iso ? 'absolute' : 'notification_received',
           confidence: 'high',
           evidence: `AI:${amt}`,
-          reason: obj.reason || 'AI 辨識轉帳支出',
+          reason: 'AI 辨識轉帳支出',
+        };
+      }
+      if (obj.kind === 'ignored') {
+        return {
+          ...p,
+          kind: 'ignored',
+          amount: amt,
+          confidence: 'high',
+          reason: obj.reason || '非消費通知，已略過',
         };
       }
       if (amt && (obj.kind === 'card_spend' || obj.kind === 'expense')) {

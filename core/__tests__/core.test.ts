@@ -254,21 +254,41 @@ describe('parsers (real samples)', () => {
     expect(parsedShort.occurredAt.startsWith('2026-10-26T')).toBe(true);
   });
 
-  it('ignores self-transfers when the destination account belongs to the user', () => {
-    const selfTransfer = [
+  it('parses full unmasked recipient account (0222979124126) + masked own account (********83151) as transfer_out and never ignores as self-transfer', () => {
+    const friendTransfer = [
       '交易成功',
-      '2026-10-26 02:07:37',
-      '轉帳金額 1,000',
-      '轉入對象 013 國泰世華 ********99999',
-      '自己帳號 808 玉山商業銀行 ********83151',
+      '2026-11-01 19:53:42',
+      '轉帳金額 274',
+      '轉入對象 潘O杏',
+      '808 玉山銀行',
+      '0222979124126',
+      '自己帳號 王O弘',
+      '********83151',
+      '可用餘額 *****',
+      '手續費 0',
+      '備註給對方 -',
+      '備註給自己 -',
+      '分享結果',
     ].join('\n');
-    const parsed = parseEvent('transfer_page', { text: selfTransfer }, T0, '83151, 99999');
-    expect(parsed.kind).toBe('ignored');
+    const parsed = parseEvent('transfer_page', { text: friendTransfer }, T0, '83151');
+    expect(parsed).toMatchObject({
+      kind: 'transfer_out',
+      amount: 274,
+      merchant: '潘O杏',
+      payeeSuffix: '24126',
+      payeeBankCode: '808',
+      ownSuffix: '83151',
+    });
 
-    const l = ledger({ ownAccountSuffix: '83151, 99999' });
-    const res = l.ingest('transfer_page', { text: selfTransfer }, T0);
-    expect(res.status).toBe('ignored');
-    expect(l.data.transactions).toHaveLength(0);
+    const l = ledger({ ownAccountSuffix: '83151' });
+    const res = l.ingest('transfer_page', { text: friendTransfer }, T0);
+    expect(res.status).toBe('new_tx');
+    expect(l.data.transactions).toHaveLength(1);
+    expect(l.data.transactions[0]).toMatchObject({
+      type: 'expense',
+      amount: 274,
+      merchant: '轉帳給 潘O杏 (****24126)',
+    });
   });
 
   it('handles Apple Pay (iOS 27 Wallet) currency formats, flags foreign currency for review, and sends empty inputs to inbox', () => {
@@ -979,5 +999,57 @@ describe('real-device iOS 27 Shortcut screenshot & variable wiring regressions (
     expect(merged.settings.safetyFloor).toBe(0);
     expect(merged.settings.hourlyWage).toBe(250);
     expect(merged.settings.bentoPrice).toBe(130);
+  });
+
+  it('automatically recovers transfers previously ignored as "轉入自己帳戶（內部移轉，不計入支出）" and deduplicates repeated scans', () => {
+    const rawOcr = [
+      '交易成功',
+      '2026-11-01 19:53:42',
+      '轉帳金額 274',
+      '轉入對象 潘O杏',
+      '808 玉山銀行',
+      '****24126',
+      '自己帳號 王O弘',
+      '********83151',
+    ].join('\n');
+    const local = ledger({ openingBank: 5000 }).data;
+    for (let i = 0; i < 5; i++) {
+      local.events.push({
+        id: `ev-ignored-274-${i}`,
+        source: 'transfer_page',
+        rawText: rawOcr,
+        fingerprint: rawOcr,
+        receivedAt: plus(T0, i * 5),
+        parsed: {
+          source: 'transfer_page',
+          kind: 'ignored',
+          amount: 274,
+          merchant: null,
+          location: null,
+          occurredAt: '2026-11-01T11:53:42.000Z',
+          timeSource: 'absolute',
+          payeeBankCode: '808',
+          payeeSuffix: '83151',
+          ownSuffix: '83151',
+          confidence: 'high',
+          evidence: '轉帳金額 274',
+          reason: '轉入自己帳戶（內部移轉，不計入支出）',
+        },
+        transactionId: null,
+        status: 'ignored',
+        reason: '轉入自己帳戶（內部移轉，不計入支出）',
+      });
+    }
+
+    const cloud = ledger({ openingBank: 5000 }).data;
+    const { merged } = mergeLedgerData(local, cloud);
+    expect(merged.transactions).toHaveLength(1);
+    expect(merged.transactions[0]).toMatchObject({
+      type: 'expense',
+      amount: 274,
+      merchant: '轉帳給 潘O杏 (****24126)',
+    });
+    expect(merged.events).toHaveLength(1);
+    expect(merged.events[0].status).toBe('new_tx');
   });
 });

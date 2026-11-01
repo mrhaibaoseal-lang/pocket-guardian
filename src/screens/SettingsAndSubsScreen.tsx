@@ -430,7 +430,7 @@ export function SettingsAndSubsScreen() {
                 />
               </View>
               <View style={styles.fieldItem}>
-                <Text style={styles.fieldLabel}>我的帳戶末碼 (多組用逗號分隔)</Text>
+                <Text style={styles.fieldLabel}>我的銀行帳號末5碼</Text>
                 <TextInput
                   style={styles.input}
                   value={ownSuffixStr}
@@ -445,7 +445,7 @@ export function SettingsAndSubsScreen() {
                     if (focusedFieldRef.current === 'ownSuffix') focusedFieldRef.current = null;
                     handleSaveCoreSettings();
                   }}
-                  placeholder="83151, 99999"
+                  placeholder="83151"
                   placeholderTextColor="rgba(235, 225, 210, 0.35)"
                 />
               </View>

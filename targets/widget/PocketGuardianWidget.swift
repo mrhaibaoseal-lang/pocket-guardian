@@ -6,6 +6,7 @@ import WidgetKit
 // MARK: - Models & Local Cache
 
 struct WidgetSummaryPayload: Codable {
+    let totalBalance: Double?
     let todayLeft: Int
     let dailyAllowance: Int
     let batteryPercent: Int
@@ -14,6 +15,10 @@ struct WidgetSummaryPayload: Codable {
     let cash: Double
     let trueAvailable: Int
     let updatedAt: String
+
+    var displayTotalBalance: Double {
+        totalBalance ?? (bank + cash)
+    }
 }
 
 struct WidgetApiResponse: Decodable {
@@ -28,6 +33,7 @@ enum PocketWidgetStorage {
     private static let fetchedAtKey = "PG_WIDGET_FETCHED_AT_V2"
 
     static let fallbackPayload = WidgetSummaryPayload(
+        totalBalance: 0,
         todayLeft: 0,
         dailyAllowance: 0,
         batteryPercent: 100,
@@ -299,6 +305,12 @@ struct PocketGuardianWidgetEntryView: View {
         }
     }
 
+    var heroBalanceColor: Color {
+        entry.payload.displayTotalBalance < 0
+            ? Color(red: 0.96, green: 0.32, blue: 0.32)
+            : jadeBright
+    }
+
     var timeString: String {
         if let status = entry.statusText, !status.isEmpty {
             return status
@@ -316,10 +328,11 @@ struct PocketGuardianWidgetEntryView: View {
         switch family {
         case .accessoryCircular:
             Gauge(value: Double(min(max(entry.payload.batteryPercent, 0), 100)), in: 0...100) {
-                Text("🔋")
+                Text("💰")
             } currentValueLabel: {
-                Text("$\(entry.payload.todayLeft)")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                Text("$\(formatMoney(entry.payload.displayTotalBalance))")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .minimumScaleFactor(0.55)
             }
             .gaugeStyle(.accessoryCircular)
             .pocketWidgetBackground()
@@ -327,11 +340,11 @@ struct PocketGuardianWidgetEntryView: View {
         case .accessoryRectangular:
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
-                    Text("🔋 今日可用 \(entry.payload.batteryPercent)%")
+                    Text("💰 總餘額")
                         .font(.system(size: 11, weight: .semibold, design: .rounded))
                     Spacer()
                 }
-                Text("$\(formatIntMoney(entry.payload.todayLeft))")
+                Text("$\(formatMoney(entry.payload.displayTotalBalance))")
                     .font(.system(size: 16, weight: .heavy, design: .rounded))
                 Text("🏦 $\(formatMoney(entry.payload.bank)) · 💵 $\(formatMoney(entry.payload.cash))")
                     .font(.system(size: 10, weight: .medium, design: .rounded))
@@ -351,12 +364,9 @@ struct PocketGuardianWidgetEntryView: View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 5) {
-                    Text("🔋 今日可用")
+                    Text("💰 總餘額")
                         .font(.system(size: 11, weight: .bold, design: .rounded))
                         .foregroundColor(textSecondary)
-                    Text("\(entry.payload.batteryPercent)%")
-                        .font(.system(size: 11, weight: .heavy, design: .rounded))
-                        .foregroundColor(themeColor)
                     Spacer(minLength: 2)
                     if #available(iOS 17.0, *) {
                         Button(intent: RefreshWidgetIntent()) {
@@ -377,9 +387,9 @@ struct PocketGuardianWidgetEntryView: View {
                     }
                 }
 
-                Text("$\(formatIntMoney(entry.payload.todayLeft))")
-                    .font(.system(size: 26, weight: .black, design: .rounded))
-                    .foregroundColor(themeColor)
+                Text("$\(formatMoney(entry.payload.displayTotalBalance))")
+                    .font(.system(size: 28, weight: .black, design: .rounded))
+                    .foregroundColor(heroBalanceColor)
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
 
@@ -399,7 +409,7 @@ struct PocketGuardianWidgetEntryView: View {
                 }
 
                 HStack {
-                    Text("本月剩 $\(formatIntMoney(entry.payload.trueAvailable))")
+                    Text("今日還可花 $\(formatIntMoney(entry.payload.todayLeft))")
                         .font(.system(size: 9, weight: .semibold, design: .rounded))
                         .foregroundColor(textMuted)
                     Spacer()
@@ -440,13 +450,10 @@ struct PocketGuardianWidgetEntryView: View {
     var smallDashboardBody: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 4) {
-                Text("🔋 今日可用")
+                Text("💰 總餘額")
                     .font(.system(size: 11, weight: .bold, design: .rounded))
                     .foregroundColor(textSecondary)
                 Spacer(minLength: 2)
-                Text("\(entry.payload.batteryPercent)%")
-                    .font(.system(size: 11, weight: .heavy, design: .rounded))
-                    .foregroundColor(themeColor)
                 if #available(iOS 17.0, *) {
                     Button(intent: RefreshWidgetIntent()) {
                         Image(systemName: "arrow.clockwise")
@@ -461,21 +468,11 @@ struct PocketGuardianWidgetEntryView: View {
                 }
             }
 
-            Text("$\(formatIntMoney(entry.payload.todayLeft))")
-                .font(.system(size: 24, weight: .black, design: .rounded))
-                .foregroundColor(themeColor)
+            Text("$\(formatMoney(entry.payload.displayTotalBalance))")
+                .font(.system(size: 25, weight: .black, design: .rounded))
+                .foregroundColor(heroBalanceColor)
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
-
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.white.opacity(0.10)).frame(height: 6)
-                    Capsule()
-                        .fill(LinearGradient(colors: [jadePrimary, themeColor], startPoint: .leading, endPoint: .trailing))
-                        .frame(width: max(6, geo.size.width * clampedBattery), height: 6)
-                }
-            }
-            .frame(height: 6)
 
             VStack(spacing: 3) {
                 HStack {
@@ -496,8 +493,8 @@ struct PocketGuardianWidgetEntryView: View {
             .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).stroke(glassStroke, lineWidth: 0.7))
 
             HStack(spacing: 4) {
-                Text(timeString)
-                    .font(.system(size: 9, weight: .medium, design: .rounded))
+                Text("今日剩 $\(formatIntMoney(entry.payload.todayLeft))")
+                    .font(.system(size: 9.5, weight: .semibold, design: .rounded))
                     .foregroundColor(textMuted)
                     .lineLimit(1)
                 Spacer(minLength: 2)
@@ -571,15 +568,15 @@ struct PocketQuickAddWidgetEntryView: View {
         case .systemMedium:
             VStack(alignment: .leading, spacing: 7) {
                 HStack(spacing: 6) {
-                    Text("🔋 今日 $\(formatIntMoney(entry.payload.todayLeft))")
-                        .font(.system(size: 11, weight: .heavy, design: .rounded))
+                    Text("💰 總餘額 $\(formatMoney(entry.payload.displayTotalBalance))")
+                        .font(.system(size: 12, weight: .heavy, design: .rounded))
                         .foregroundColor(jadeBright)
                     Text("｜").font(.system(size: 10)).foregroundColor(textMuted)
                     Text("🏦 $\(formatMoney(entry.payload.bank))")
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .font(.system(size: 10.5, weight: .bold, design: .rounded))
                         .foregroundColor(textPrimary)
                     Text("💵 $\(formatMoney(entry.payload.cash))")
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .font(.system(size: 10.5, weight: .bold, design: .rounded))
                         .foregroundColor(textSecondary)
                     Spacer(minLength: 2)
                     Text(statusLabel)
@@ -637,10 +634,11 @@ struct PocketQuickAddWidgetEntryView: View {
     var smallQuickAddBody: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 4) {
-                Text("🏦 $\(formatMoney(entry.payload.bank))")
+                Text("💰 總餘額 $\(formatMoney(entry.payload.displayTotalBalance))")
                     .font(.system(size: 11, weight: .heavy, design: .rounded))
                     .foregroundColor(jadeBright)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                 Spacer(minLength: 2)
                 if #available(iOS 17.0, *) {
                     Button(intent: RefreshWidgetIntent()) {
@@ -742,8 +740,8 @@ struct PocketGuardianWidget: Widget {
         StaticConfiguration(kind: kind, provider: PocketProvider()) { entry in
             PocketGuardianWidgetEntryView(entry: entry)
         }
-        .configurationDisplayName("🔋 實時財力＆帳戶餘額")
-        .description("即時顯示今日可用額度、玉山銀行與現金餘額，附桌面一鍵刷新與快速記帳。")
+        .configurationDisplayName("💰 總餘額＆實時帳戶")
+        .description("一眼看清總餘額（玉山銀行＋現金錢包），附桌面一鍵刷新與快速記帳。")
         .supportedFamilies([
             .systemSmall,
             .systemMedium,

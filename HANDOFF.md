@@ -1,10 +1,10 @@
 # HANDOFF.md — 跨工具／跨模型交接紀錄
 
-> **最後更新時間**：2026-11-01 02:30 (UTC+8)
-> **最後更新 Agent**：Cline (① 新增全站 iOS 桌面與鎖定畫面雙小工具組 `targets/widget/PocketGuardianWidget.swift`：`WidgetBundle` 內建「🔋 實時財力＆帳戶餘額看板」與「⚡ 極速記帳＆閃電扣款面板」，支援 `↻` 桌面即時刷新 `RefreshWidgetIntent`、免開 App 一鍵閃電扣款 `QuickWidgetExpenseIntent` 與點擊分類秒開記帳字卡 Deep Link `App.tsx`；② 在 `targets/app-intents/PocketGuardianShortcuts.swift` 與 `.github/workflows/build-sidestore-ipa.yml` 加入 `PocketWidgetBridge.m` 退回桌面自動重載小工具、新增「⚡ 快速記一筆支出」捷徑積木，並將 `PocketGuardianWidgetExtension.appex` 自動編譯嵌入 `.ipa` 之 `PlugIns/` 完美支援 Feather + FlareStore 付費憑證簽名)
+> **最後更新時間**：2026-11-01 23:10 (UTC+8)
+> **最後更新 Agent**：Cline (① 將 iOS 桌面小工具與鎖定畫面小工具 `targets/widget/PocketGuardianWidget.swift`、`core/summary.ts` 最醒目的主視覺大字改為「💰 總餘額（玉山銀行＋現金錢包）」，並將「今日可花費剩餘」收斂為次要輔助資訊；② 徹底移除「轉入自己帳戶（內部移轉，不計入支出）」忽略機制、修復玉山轉帳結果頁未遮罩完整對方帳號 `0222979124126` 擷取與 `sanitizeLedgerData` 自動補記)
 > **專案路徑**：`C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger`
 > **Git 分支與最新狀態**：`main`（已同步寫入主工作區並推送 `origin/main` 觸發 IPA 打包）
-> **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `1e12ae0d-666f-42bd-beb3-d061a3a2e4ec`，前版可 Rollback ID: `845769c7-ceaf-40a6-aa24-5120b363981e`)
+> **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `e1c0f72e-03fd-498e-af07-849dab5ef446`，前版可 Rollback ID: `1e12ae0d-666f-42bd-beb3-d061a3a2e4ec`)
 > **最新無簽名 IPA 位置（v3.3.0+ 底部字卡上下滑動跟手關閉修復 ＋ 固定扣款預留刪除不復活／防當月回溯扣款版，GitHub Actions Run ID: 41202906351，11.10 MB）**：
 > - `C:\Users\mrhai\Downloads\PocketGuardian-SideStore.ipa`
 > - `C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger\PocketGuardian-SideStore.ipa`
@@ -48,10 +48,10 @@
    - **點子 ③ BROKE AF 帳齡溫度計（`computeDebtAging`）**：依天數自動標記 `🌱 剛發生`、`⏳ 有點涼了`、`🧊 呆帳警報 (30天+)` 與 `🔥 快還錢！`。
    - **點子 ⑤ 部分還款分期進度條 ＋ 玉山銀行／現金錢包連動**：支援分次收回／歸還（附「先還一半」、「全額」快捷鍵）、視覺化進度條與歷次還款明細，並可選擇同步更新玉山銀行、現金錢包或僅勾銷狀態。
    - **點子 ⑥ 轉帳截圖末 5 碼自動沖銷連動**：當欠款綁定對方帳號末 5 碼（或對應常用轉帳對象 `Payee`），使用 iPhone 轉帳成功頁截圖捷徑入帳時，自動沖銷「我欠別人」欠款並標記 `isAdvance = true` 避免重複扣減個人預算。
-2. **標籤錨定轉帳解析器與多格式日期／自己轉自己排除（`core/parsers.ts`, `core/time.ts`, `core/dedupe.ts`）**：
-   - `parseTransferPage` 改為標籤錨定結構（同時支援單欄逐行與 iOS Vision 雙欄分開讀排版），精準取得 `轉帳金額`（支援 `20`、`100`、`1,000`），排除狀態列 `10:50` / 電量 `100`、手續費 `15`、三碼銀行通用結構 `^\d{3}[ \t]*[\u4e00-\u9fa5A-Za-z]{2,}` 與日期。
+2. **標籤錨定轉帳解析器與多格式日期／完整與遮罩帳號解析（`core/parsers.ts`, `core/time.ts`, `core/dedupe.ts`, `core/memoryLedger.ts`）**：
+   - `parseTransferPage` 改為標籤錨定結構（同時支援單欄逐行與 iOS Vision 雙欄分開讀排版），精準取得 `轉帳金額`（支援 `20`、`100`、`274`、`1,000`），排除狀態列 `10:50` / 電量 `100`、手續費 `0`/`15`、三碼銀行通用結構 `^\d{3}[ \t]*[\u4e00-\u9fa5A-Za-z]{2,}` 與日期。
    - `taipeiLocalToIso` 擴充支援西元年（`2026-10-28`、`2026/10/28`）、民國年（`115/10/28`、`115年10月28日` 自動 `+1911`）與短日期時間（`10/26 02:07`）。
-   - 支援多組「我的帳戶末碼」（如 `83151, 99999`），當轉入對象屬於使用者自己的帳戶時自動判定為內部移轉（`ignored`），不計入支出。
+   - 已依使用者需求**徹底移除「轉入自己帳戶（內部移轉，不計入支出）」(`isSelfTransfer` / `internal_transfer`) 忽略機制**；同時支援在同一畫面並存「未遮罩完整對方帳號（如 `0222979124126` → `24126`）」與「遮罩自己帳號（如 `********83151`）」時精準擷取對方帳號末 5 碼 `24126` 與對方姓名 `潘O杏`，並於 `sanitizeLedgerData` 自動補記曾被誤標為 `轉入自己帳戶` 的轉帳事件。
    - 補強無時間戳截圖與跨通道轉帳在 `±3 分鐘` 內的重複觸發攔截（`duplicate`）。
 2. **結構化白名單 `parseWallet`、外幣攔截與無誤殺行銷過濾（`core/parsers.ts`）**：
    - 移除 `parseWallet` 寬鬆的 `N 元` 自由文字匹配；新增外幣偵測（`US$10.00`、`¥1,000` 等），偵測到外幣或缺金額時一律標為 `unknown` 送入收件匣待確認，絕不誤當新台幣或 `$0` 入帳。
@@ -70,7 +70,7 @@
 
 - **Windows 環境注意事項**：本機 Node.js 位於 `C:\Program Files\nodejs`，若在終端機執行 `npx` / `vitest` / `wrangler` 遇到找不到 `node`，請先確保 `$env:PATH = "C:\Program Files\nodejs;$env:PATH"`。
 - **TypeScript 型別檢查 (`npx tsc --noEmit`)**：✅ **通過（0 Errors）**
-- **Vitest 單元測試 (`npx vitest run`)**：✅ **通過（1 Test File, 59/59 Tests Passed）**
+- **Vitest 單元測試 (`npx vitest run`)**：✅ **通過（1 Test File, 62/62 Tests Passed）**
   - 涵蓋實機 7724/7794 轉出截圖、7717 玉山存摺明細轉入收入（`網路非約轉帳 ... 轉帳給此帳號` -> `轉入：阮*豫 ****88173 +$500`，排除年份 `2026` 與 `帳戶餘額 2,040`）、7793 錯誤截圖精簡提示、刪除舊交易後重掃不吃單（`mergeLedgerData` 忽略已刪除交易的 `idempotencyKey`）、7天回收桶一鍵全部永久刪除 (`emptyTrash`) 與單筆永久刪除 (`hardDelete`)、以及 Cloudflare Workers AI / iOS 捷徑 AI 結構化 JSON 解析。
 
 ---
