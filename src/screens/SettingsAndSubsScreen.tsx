@@ -1,18 +1,36 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { LiquidGlassCard } from '../components/LiquidGlassView';
+import { ScrollView, Switch, Text, TextInput, View } from 'react-native';
 import { SafeConfirmButton } from '../components/SafeConfirmButton';
+import { CellBox, FormRow } from '../components/ui/FormRow';
+import { IconTile } from '../components/ui/Icon';
+import { Button, LargeTitle, Row, Section } from '../components/ui/List';
+import { PushedPage } from '../components/ui/PushedPage';
 import { useLedger } from '../store/useLedger';
+import { type, usePalette, useThemedStyles, type Palette } from '../theme';
 
-export function SettingsAndSubsScreen() {
+type SubPage = 'none' | 'budget' | 'subs' | 'payees' | 'events' | 'cloud';
+
+const PAGE_TITLES: Record<Exclude<SubPage, 'none'>, string> = {
+  budget: '預算',
+  subs: '固定扣款',
+  payees: '常用轉帳對象',
+  events: '收訊紀錄',
+  cloud: '雲端同步',
+};
+
+type FieldKey = 'budget' | 'floor' | 'wage' | 'bento' | 'cycleDay' | 'ownSuffix';
+
+interface ScreenProps {
+  topInsetPadding?: number;
+  bottomInsetPadding?: number;
+  onOpenShortcuts?: () => void;
+}
+
+export function SettingsAndSubsScreen({
+  topInsetPadding = 54,
+  bottomInsetPadding = 120,
+  onOpenShortcuts,
+}: ScreenProps) {
   const {
     data,
     meta,
@@ -27,48 +45,42 @@ export function SettingsAndSubsScreen() {
     pushToCloud,
     resetDemoData,
   } = useLedger();
+  const c = usePalette();
+  const s = useThemedStyles(makeStyles);
+  const [page, setPage] = useState<SubPage>('none');
 
-  // --- New Subscription Form ---
+  // --- New subscription form ---
   const [subName, setSubName] = useState('');
   const [subAmount, setSubAmount] = useState('');
   const [subDay, setSubDay] = useState('15');
   const [subAutoPost, setSubAutoPost] = useState(false);
 
-  // --- New Payee Form ---
+  // --- New payee form ---
   const [payeeBankCode, setPayeeBankCode] = useState('808');
   const [payeeSuffix, setPayeeSuffix] = useState('');
   const [payeeName, setPayeeName] = useState('');
-  const [payeeCategory, setPayeeCategory] = useState('轉帳');
+  const [payeeCategory] = useState('轉帳');
 
-  // --- Core Settings Form ---
+  // --- Core settings (auto-saved on blur) ---
   const [budgetStr, setBudgetStr] = useState(String(data.settings.monthlyBudget));
   const [floorStr, setFloorStr] = useState(String(data.settings.safetyFloor));
   const [wageStr, setWageStr] = useState(String(data.settings.hourlyWage));
   const [bentoStr, setBentoStr] = useState(String(data.settings.bentoPrice));
   const [cycleDayStr, setCycleDayStr] = useState(String(data.settings.cycleStartDay));
   const [ownSuffixStr, setOwnSuffixStr] = useState(data.settings.ownAccountSuffix);
-  const focusedFieldRef = useRef<string | null>(null);
-  const dirtyFieldsRef = useRef<Set<string>>(new Set());
+  const focusedFieldRef = useRef<FieldKey | null>(null);
+  const dirtyFieldsRef = useRef<Set<FieldKey>>(new Set());
 
   useEffect(() => {
-    if (focusedFieldRef.current !== 'budget' && !dirtyFieldsRef.current.has('budget')) {
-      setBudgetStr(String(data.settings.monthlyBudget));
-    }
-    if (focusedFieldRef.current !== 'floor' && !dirtyFieldsRef.current.has('floor')) {
-      setFloorStr(String(data.settings.safetyFloor));
-    }
-    if (focusedFieldRef.current !== 'wage' && !dirtyFieldsRef.current.has('wage')) {
-      setWageStr(String(data.settings.hourlyWage));
-    }
-    if (focusedFieldRef.current !== 'bento' && !dirtyFieldsRef.current.has('bento')) {
-      setBentoStr(String(data.settings.bentoPrice));
-    }
-    if (focusedFieldRef.current !== 'cycleDay' && !dirtyFieldsRef.current.has('cycleDay')) {
-      setCycleDayStr(String(data.settings.cycleStartDay));
-    }
-    if (focusedFieldRef.current !== 'ownSuffix' && !dirtyFieldsRef.current.has('ownSuffix')) {
-      setOwnSuffixStr(data.settings.ownAccountSuffix);
-    }
+    const sync = (key: FieldKey, apply: () => void) => {
+      if (focusedFieldRef.current !== key && !dirtyFieldsRef.current.has(key)) apply();
+    };
+    sync('budget', () => setBudgetStr(String(data.settings.monthlyBudget)));
+    sync('floor', () => setFloorStr(String(data.settings.safetyFloor)));
+    sync('wage', () => setWageStr(String(data.settings.hourlyWage)));
+    sync('bento', () => setBentoStr(String(data.settings.bentoPrice)));
+    sync('cycleDay', () => setCycleDayStr(String(data.settings.cycleStartDay)));
+    sync('ownSuffix', () => setOwnSuffixStr(data.settings.ownAccountSuffix));
   }, [
     data.settings.monthlyBudget,
     data.settings.safetyFloor,
@@ -78,22 +90,11 @@ export function SettingsAndSubsScreen() {
     data.settings.ownAccountSuffix,
   ]);
 
-  // --- Cloud Worker Meta ---
   const [workerUrlStr, setWorkerUrlStr] = useState(meta.workerUrl);
   const [tokenStr, setTokenStr] = useState(meta.ingestToken);
 
-  // --- Collapsible Drawer States ---
-  const [subsExpanded, setSubsExpanded] = useState(false);
-  const [payeesExpanded, setPayeesExpanded] = useState(false);
-  const [budgetExpanded, setBudgetExpanded] = useState(false);
-  const [eventsExpanded, setEventsExpanded] = useState(false);
-  const [cloudExpanded, setCloudExpanded] = useState(false);
-  const [resetExpanded, setResetExpanded] = useState(false);
-
-  // SideStore 7-day countdown calculation
   const refreshedMs = Date.parse(meta.sidestoreRefreshedAt) || Date.now();
-  const elapsedDays = Math.floor((Date.now() - refreshedMs) / 86400000);
-  const sidestoreDaysLeft = Math.max(0, 7 - elapsedDays);
+  const sidestoreDaysLeft = Math.max(0, 7 - Math.floor((Date.now() - refreshedMs) / 86400000));
 
   const handleSaveCoreSettings = () => {
     dirtyFieldsRef.current.clear();
@@ -104,14 +105,12 @@ export function SettingsAndSubsScreen() {
     const nextBento = Math.max(0, Number(bentoStr) || 0);
     const nextCycleDay = Math.min(28, Math.max(1, Number(cycleDayStr) || 1));
     const nextOwnSuffix = ownSuffixStr.trim() || '83151';
-
     setBudgetStr(String(nextBudget));
     setFloorStr(String(nextFloor));
     setWageStr(String(nextWage));
     setBentoStr(String(nextBento));
     setCycleDayStr(String(nextCycleDay));
     setOwnSuffixStr(nextOwnSuffix);
-
     updateSettings({
       monthlyBudget: nextBudget,
       safetyFloor: nextFloor,
@@ -121,6 +120,22 @@ export function SettingsAndSubsScreen() {
       ownAccountSuffix: nextOwnSuffix,
     });
   };
+
+  /** Props for an auto-saving settings field. */
+  const bind = (key: FieldKey, value: string, setter: (v: string) => void) => ({
+    value,
+    onFocus: () => {
+      focusedFieldRef.current = key;
+    },
+    onChangeText: (v: string) => {
+      dirtyFieldsRef.current.add(key);
+      setter(v);
+    },
+    onBlur: () => {
+      if (focusedFieldRef.current === key) focusedFieldRef.current = null;
+      handleSaveCoreSettings();
+    },
+  });
 
   const handleAddSub = () => {
     const amt = Number(subAmount);
@@ -138,693 +153,292 @@ export function SettingsAndSubsScreen() {
     setPayeeName('');
   };
 
-  return (
+  const pageScroll = (children: React.ReactNode) => (
     <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
+      style={s.screen}
+      contentContainerStyle={{ paddingTop: 12, paddingBottom: bottomInsetPadding }}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
       showsVerticalScrollIndicator={false}
     >
-      <Text style={styles.screenTitle}>訂閱預留、轉帳字典與雲端設定</Text>
-
-      {/* 1. Subscriptions (Fixed Recurring Charges) */}
-      <LiquidGlassCard shape="card" contentStyle={styles.card}>
-        <Pressable
-          style={styles.collapsibleHeaderRow}
-          onPress={() => setSubsExpanded((prev) => !prev)}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={styles.cardTitle}>
-              🔄 固定扣款預留 ({data.subscriptions.length})
-            </Text>
-            <Text style={styles.cardDesc}>
-              {subsExpanded
-                ? '點選收起'
-                : '月初預先扣除安全額度，自動配對不重複扣款 · 點選展開'}
-            </Text>
-          </View>
-          <View style={styles.collapseChevronBtn}>
-            <Text style={styles.collapseChevron}>{subsExpanded ? '▴' : '▾'}</Text>
-          </View>
-        </Pressable>
-
-        {subsExpanded && (
-          <>
-            {data.subscriptions.map((sub) => (
-              <View key={sub.id} style={styles.listItem}>
-                <View style={styles.listItemLeft}>
-                  <Text style={styles.listItemTitle}>
-                    {sub.isActive ? '◈' : '◇'} {sub.name} · ${sub.amount}
-                  </Text>
-                  <Text style={styles.listItemSub}>
-                    每月 {sub.billingDay} 號扣款 ·{' '}
-                    {sub.autoPost ? '無通知自動入帳' : '等待玉山簽帳卡推播配對'}
-                  </Text>
-                </View>
-                <View style={styles.listItemActions}>
-                  <Pressable
-                    style={styles.smallBtn}
-                    onPress={() => toggleSubscription(sub.id)}
-                  >
-                    <Text style={styles.smallBtnText}>
-                      {sub.isActive ? '暫停' : '啟用'}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.smallBtn, styles.smallBtnAmber]}
-                    onPress={() => deleteSubscription(sub.id)}
-                  >
-                    <Text style={[styles.smallBtnText, { color: '#34D399' }]}>刪除</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ))}
-
-            <View style={styles.formRow}>
-              <TextInput
-                style={[styles.input, { flex: 2 }]}
-                value={subName}
-                onChangeText={setSubName}
-                placeholder="項目 (如 Spotify)"
-                placeholderTextColor="rgba(235, 225, 210, 0.4)"
-              />
-              <TextInput
-                style={[styles.input, { flex: 1 }]}
-                value={subAmount}
-                onChangeText={setSubAmount}
-                keyboardType="numeric"
-                placeholder="金額"
-                placeholderTextColor="rgba(235, 225, 210, 0.4)"
-              />
-              <TextInput
-                style={[styles.input, { flex: 1 }]}
-                value={subDay}
-                onChangeText={setSubDay}
-                keyboardType="numeric"
-                placeholder="幾號"
-                placeholderTextColor="rgba(235, 225, 210, 0.4)"
-              />
-            </View>
-
-            <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>
-                無推播自動入帳（若為網銀無通知扣款再開啟）
-              </Text>
-              <Switch value={subAutoPost} onValueChange={setSubAutoPost} />
-            </View>
-
-            <Pressable style={styles.primaryBtn} onPress={handleAddSub}>
-              <Text style={styles.primaryBtnText}>＋ 新增固定扣款預留</Text>
-            </Pressable>
-          </>
-        )}
-      </LiquidGlassCard>
-
-      {/* 2. Payee Dictionary */}
-      <LiquidGlassCard shape="card" contentStyle={styles.card}>
-        <Pressable
-          style={styles.collapsibleHeaderRow}
-          onPress={() => setPayeesExpanded((prev) => !prev)}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={styles.cardTitle}>
-              🏦 常用轉帳對象字典 ({data.payees.length})
-            </Text>
-            <Text style={styles.cardDesc}>
-              {payeesExpanded
-                ? '點選收起'
-                : '轉帳截圖入帳自動比對末五碼並帶入對象名稱 · 點選展開'}
-            </Text>
-          </View>
-          <View style={styles.collapseChevronBtn}>
-            <Text style={styles.collapseChevron}>{payeesExpanded ? '▴' : '▾'}</Text>
-          </View>
-        </Pressable>
-
-        {payeesExpanded && (
-          <>
-            {data.payees.map((p) => (
-              <View key={p.id} style={styles.listItem}>
-                <View style={styles.listItemLeft}>
-                  <Text style={styles.listItemTitle}>
-                    {p.displayName}（****{p.accountSuffix}）
-                  </Text>
-                  <Text style={styles.listItemSub}>
-                    銀行代碼 {p.bankCode || '808'} · 預設分類：{p.defaultCategory}
-                  </Text>
-                </View>
-                <Pressable
-                  style={[styles.smallBtn, styles.smallBtnAmber]}
-                  onPress={() => deletePayee(p.id)}
-                >
-                  <Text style={[styles.smallBtnText, { color: '#34D399' }]}>刪除</Text>
-                </Pressable>
-              </View>
-            ))}
-
-            <View style={styles.formRow}>
-              <TextInput
-                style={[styles.input, { flex: 1 }]}
-                value={payeeBankCode}
-                onChangeText={setPayeeBankCode}
-                placeholder="銀行808"
-                placeholderTextColor="rgba(235, 225, 210, 0.4)"
-              />
-              <TextInput
-                style={[styles.input, { flex: 1.4 }]}
-                value={payeeSuffix}
-                onChangeText={setPayeeSuffix}
-                placeholder="末五碼 (如 24126)"
-                placeholderTextColor="rgba(235, 225, 210, 0.4)"
-              />
-              <TextInput
-                style={[styles.input, { flex: 1.8 }]}
-                value={payeeName}
-                onChangeText={setPayeeName}
-                placeholder="暱稱 (如 室友房租)"
-                placeholderTextColor="rgba(235, 225, 210, 0.4)"
-              />
-            </View>
-
-            <Pressable style={styles.primaryBtn} onPress={handleAddPayee}>
-              <Text style={styles.primaryBtnText}>＋ 記住此轉帳帳號</Text>
-            </Pressable>
-          </>
-        )}
-      </LiquidGlassCard>
-
-      {/* 3. Budget, Safety Floor & Feelings Parameters */}
-      <LiquidGlassCard shape="card" contentStyle={styles.card}>
-        <Pressable
-          style={styles.collapsibleHeaderRow}
-          onPress={() => setBudgetExpanded((prev) => !prev)}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={styles.cardTitle}>⚙️ 預算與體感參數</Text>
-            <Text style={styles.cardDesc}>
-              {budgetExpanded
-                ? '點選收起'
-                : `月預算 $${data.settings.monthlyBudget} · 底線 $${data.settings.safetyFloor} · 時薪 $${data.settings.hourlyWage} · 點選展開`}
-            </Text>
-          </View>
-          <View style={styles.collapseChevronBtn}>
-            <Text style={styles.collapseChevron}>{budgetExpanded ? '▴' : '▾'}</Text>
-          </View>
-        </Pressable>
-
-        {budgetExpanded && (
-          <>
-            <View style={styles.fieldGrid}>
-              <View style={styles.fieldItem}>
-                <Text style={styles.fieldLabel}>每月預算上限 (0=依餘額)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={budgetStr}
-                  onFocus={() => {
-                    focusedFieldRef.current = 'budget';
-                  }}
-                  onChangeText={(v) => {
-                    dirtyFieldsRef.current.add('budget');
-                    setBudgetStr(v);
-                  }}
-                  onBlur={() => {
-                    if (focusedFieldRef.current === 'budget') focusedFieldRef.current = null;
-                    handleSaveCoreSettings();
-                  }}
-                  keyboardType="numeric"
-                />
-              </View>
-              <View style={styles.fieldItem}>
-                <Text style={styles.fieldLabel}>安全水位底線 (保命底線)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={floorStr}
-                  onFocus={() => {
-                    focusedFieldRef.current = 'floor';
-                  }}
-                  onChangeText={(v) => {
-                    dirtyFieldsRef.current.add('floor');
-                    setFloorStr(v);
-                  }}
-                  onBlur={() => {
-                    if (focusedFieldRef.current === 'floor') focusedFieldRef.current = null;
-                    handleSaveCoreSettings();
-                  }}
-                  keyboardType="numeric"
-                />
-              </View>
-              <View style={styles.fieldItem}>
-                <Text style={styles.fieldLabel}>你的時薪 ($/hr)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={wageStr}
-                  onFocus={() => {
-                    focusedFieldRef.current = 'wage';
-                  }}
-                  onChangeText={(v) => {
-                    dirtyFieldsRef.current.add('wage');
-                    setWageStr(v);
-                  }}
-                  onBlur={() => {
-                    if (focusedFieldRef.current === 'wage') focusedFieldRef.current = null;
-                    handleSaveCoreSettings();
-                  }}
-                  keyboardType="numeric"
-                />
-              </View>
-              <View style={styles.fieldItem}>
-                <Text style={styles.fieldLabel}>雞腿便當基準價 ($)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={bentoStr}
-                  onFocus={() => {
-                    focusedFieldRef.current = 'bento';
-                  }}
-                  onChangeText={(v) => {
-                    dirtyFieldsRef.current.add('bento');
-                    setBentoStr(v);
-                  }}
-                  onBlur={() => {
-                    if (focusedFieldRef.current === 'bento') focusedFieldRef.current = null;
-                    handleSaveCoreSettings();
-                  }}
-                  keyboardType="numeric"
-                />
-              </View>
-              <View style={styles.fieldItem}>
-                <Text style={styles.fieldLabel}>每月結算日 (1-28)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={cycleDayStr}
-                  onFocus={() => {
-                    focusedFieldRef.current = 'cycleDay';
-                  }}
-                  onChangeText={(v) => {
-                    dirtyFieldsRef.current.add('cycleDay');
-                    setCycleDayStr(v);
-                  }}
-                  onBlur={() => {
-                    if (focusedFieldRef.current === 'cycleDay') focusedFieldRef.current = null;
-                    handleSaveCoreSettings();
-                  }}
-                  keyboardType="numeric"
-                />
-              </View>
-              <View style={styles.fieldItem}>
-                <Text style={styles.fieldLabel}>我的銀行帳號末5碼</Text>
-                <TextInput
-                  style={styles.input}
-                  value={ownSuffixStr}
-                  onFocus={() => {
-                    focusedFieldRef.current = 'ownSuffix';
-                  }}
-                  onChangeText={(v) => {
-                    dirtyFieldsRef.current.add('ownSuffix');
-                    setOwnSuffixStr(v);
-                  }}
-                  onBlur={() => {
-                    if (focusedFieldRef.current === 'ownSuffix') focusedFieldRef.current = null;
-                    handleSaveCoreSettings();
-                  }}
-                  placeholder="83151"
-                  placeholderTextColor="rgba(235, 225, 210, 0.35)"
-                />
-              </View>
-            </View>
-
-            <Pressable style={styles.primaryBtn} onPress={handleSaveCoreSettings}>
-              <Text style={styles.primaryBtnText}>儲存參數並重算今日安全額度</Text>
-            </Pressable>
-          </>
-        )}
-      </LiquidGlassCard>
-
-      {/* 4. Recent Signal / Notification Records Drawer */}
-      <LiquidGlassCard shape="card" contentStyle={styles.card}>
-        <Pressable
-          style={styles.collapsibleHeaderRow}
-          onPress={() => setEventsExpanded((prev) => !prev)}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={styles.cardTitle}>
-              📡 近期收訊紀錄 ({data.events.length})
-            </Text>
-            <Text style={styles.cardDesc}>
-              {eventsExpanded
-                ? '點選收起'
-                : '最近 15 筆捷徑與雲端收訊紀錄 · 點選展開'}
-            </Text>
-          </View>
-          <View style={styles.collapseChevronBtn}>
-            <Text style={styles.collapseChevron}>{eventsExpanded ? '▴' : '▾'}</Text>
-          </View>
-        </Pressable>
-
-        {eventsExpanded && (
-          data.events.length === 0 ? (
-            <Text style={styles.cardDesc}>尚無收訊紀錄</Text>
-          ) : (
-            data.events
-              .slice(-15)
-              .reverse()
-              .map((ev, idx) => (
-                <View key={ev.id || idx} style={styles.listItem}>
-                  <View style={styles.listItemLeft}>
-                    <Text style={styles.listItemTitle}>
-                      [{ev.source}] {ev.parsed.kind} ·{' '}
-                      {ev.parsed.amount !== null ? `$${ev.parsed.amount}` : '無金額'}
-                    </Text>
-                    <Text style={styles.listItemSub} numberOfLines={2}>
-                      {ev.reason}
-                    </Text>
-                  </View>
-                </View>
-              ))
-          )
-        )}
-      </LiquidGlassCard>
-
-      {/* 5. Cloudflare Workers + D1 & SideStore Status */}
-      <LiquidGlassCard shape="card" contentStyle={styles.card}>
-        <Pressable
-          style={styles.collapsibleHeaderRow}
-          onPress={() => setCloudExpanded((prev) => !prev)}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={styles.cardTitle}>☁️ Cloudflare D1 雲端與 SideStore</Text>
-            <Text style={styles.cardDesc}>
-              {cloudExpanded
-                ? '點選收起'
-                : `雲端備份、捷徑金鑰 · SideStore 剩餘 ${sidestoreDaysLeft} 天 · 點選展開`}
-            </Text>
-          </View>
-          <View style={styles.collapseChevronBtn}>
-            <Text style={styles.collapseChevron}>{cloudExpanded ? '▴' : '▾'}</Text>
-          </View>
-        </Pressable>
-
-        {cloudExpanded && (
-          <>
-            <Text style={styles.fieldLabel}>Cloudflare Worker 網址</Text>
-            <TextInput
-              style={styles.input}
-              value={workerUrlStr}
-              onChangeText={(v) => {
-                setWorkerUrlStr(v);
-                updateMeta({ workerUrl: v });
-              }}
-              autoCapitalize="none"
-              placeholder="https://pocket-guardian-api.your-name.workers.dev"
-              placeholderTextColor="rgba(235, 225, 210, 0.4)"
-            />
-
-            <Text style={styles.fieldLabel}>X-Ingest-Token 金鑰（選填）</Text>
-            <TextInput
-              style={styles.input}
-              value={tokenStr}
-              onChangeText={(v) => {
-                setTokenStr(v);
-                updateMeta({ ingestToken: v });
-              }}
-              autoCapitalize="none"
-              placeholder="留空代表免驗證快速測試"
-              placeholderTextColor="rgba(235, 225, 210, 0.4)"
-            />
-
-            <View style={styles.cloudBtnRow}>
-              <Pressable
-                style={styles.cloudBtnTitanium}
-                onPress={() => {
-                  syncFromCloud().catch(() => undefined);
-                }}
-              >
-                <Text style={styles.cloudBtnTitaniumText}>從雲端拉取</Text>
-              </Pressable>
-              <Pressable
-                style={styles.cloudBtnAmber}
-                onPress={() => {
-                  pushToCloud().catch(() => undefined);
-                }}
-              >
-                <Text style={styles.cloudBtnAmberText}>備份至雲端</Text>
-              </Pressable>
-            </View>
-
-            {/* SideStore 7-day reminder */}
-            <View style={styles.sidestoreBox}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.sidestoreTitle}>
-                  SideStore 免費憑證倒數：剩餘 {sidestoreDaysLeft} 天
-                </Text>
-                <Text style={styles.sidestoreSub}>
-                  即使過期，Cloudflare 雲端捷徑仍會 100% 正常記帳，重簽後一秒無縫接軌
-                </Text>
-              </View>
-              <Pressable
-                style={styles.smallBtn}
-                onPress={() =>
-                  updateMeta({ sidestoreRefreshedAt: new Date().toISOString() })
-                }
-              >
-                <Text style={styles.smallBtnText}>已重簽</Text>
-              </Pressable>
-            </View>
-          </>
-        )}
-      </LiquidGlassCard>
-
-      {/* 6. Reset All Data to Zero */}
-      <LiquidGlassCard shape="card" contentStyle={styles.card}>
-        <Pressable
-          style={styles.collapsibleHeaderRow}
-          onPress={() => setResetExpanded((prev) => !prev)}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={styles.cardTitle}>🧹 帳本歸零重置</Text>
-            <Text style={styles.cardDesc}>
-              {resetExpanded ? '點選收起' : '清空所有交易、欠款與收訊紀錄 · 點選展開'}
-            </Text>
-          </View>
-          <View style={styles.collapseChevronBtn}>
-            <Text style={styles.collapseChevron}>{resetExpanded ? '▴' : '▾'}</Text>
-          </View>
-        </Pressable>
-
-        {resetExpanded && (
-          <SafeConfirmButton
-            label="清空所有帳目並歸零"
-            confirmLabel="確定全部歸零？再點一次執行"
-            onConfirm={resetDemoData}
-          />
-        )}
-      </LiquidGlassCard>
+      {children}
     </ScrollView>
+  );
+
+  const renderPage = () => {
+    switch (page) {
+      case 'budget':
+        return pageScroll(
+          <>
+            <Section footer="每月預算填 0 代表依照帳戶餘額自動計算。">
+              <FormRow label="每月預算" keyboardType="numeric" {...bind('budget', budgetStr, setBudgetStr)} />
+              <FormRow label="安全底線" keyboardType="numeric" {...bind('floor', floorStr, setFloorStr)} />
+              <FormRow label="結算日" keyboardType="numeric" {...bind('cycleDay', cycleDayStr, setCycleDayStr)} />
+            </Section>
+            <Section header="換算" footer="用來把金額換算成「幾個便當」或「幾小時工時」。">
+              <FormRow label="時薪" keyboardType="numeric" {...bind('wage', wageStr, setWageStr)} />
+              <FormRow label="便當價格" keyboardType="numeric" {...bind('bento', bentoStr, setBentoStr)} />
+            </Section>
+            <Section header="帳戶" footer="用來辨識轉給自己的轉帳。">
+              <FormRow
+                label="帳號末五碼"
+                keyboardType="numeric"
+                placeholder="83151"
+                {...bind('ownSuffix', ownSuffixStr, setOwnSuffixStr)}
+              />
+            </Section>
+            <View style={s.pad}>
+              <Button title="儲存" onPress={handleSaveCoreSettings} />
+            </View>
+          </>,
+        );
+      case 'subs':
+        return pageScroll(
+          <>
+            {data.subscriptions.length > 0 ? (
+              <Section footer="這些金額會在每月初先預留，扣款時自動配對，不會重複扣。">
+                {data.subscriptions.map((sub) => (
+                  <Row
+                    key={sub.id}
+                    title={sub.name}
+                    titleStyle={!sub.isActive ? { color: c.secondaryLabel } : undefined}
+                    subtitle={`每月 ${sub.billingDay} 號 · ${sub.autoPost ? '自動入帳' : '等銀行通知配對'}${sub.isActive ? '' : ' · 已暫停'}`}
+                    value={`$${sub.amount.toLocaleString()}`}
+                    trailing={
+                      <View style={s.inlineActions}>
+                        <Switch
+                          value={sub.isActive}
+                          onValueChange={() => toggleSubscription(sub.id)}
+                          trackColor={{ true: c.accent, false: c.fillStrong }}
+                        />
+                        <SafeConfirmButton label="刪除" confirmLabel="確認" onConfirm={() => deleteSubscription(sub.id)} compact />
+                      </View>
+                    }
+                  />
+                ))}
+              </Section>
+            ) : null}
+            <Section header="新增">
+              <FormRow label="名稱" value={subName} onChangeText={setSubName} placeholder="Spotify" />
+              <FormRow label="金額" value={subAmount} onChangeText={setSubAmount} keyboardType="numeric" placeholder="$0" />
+              <FormRow label="扣款日" value={subDay} onChangeText={setSubDay} keyboardType="numeric" placeholder="15" />
+              <Row
+                title="沒有通知時自動入帳"
+                trailing={
+                  <Switch value={subAutoPost} onValueChange={setSubAutoPost} trackColor={{ true: c.accent, false: c.fillStrong }} />
+                }
+              />
+            </Section>
+            <View style={s.pad}>
+              <Button title="新增固定扣款" onPress={handleAddSub} disabled={!subName.trim() || !(Number(subAmount) > 0)} />
+            </View>
+          </>,
+        );
+      case 'payees':
+        return pageScroll(
+          <>
+            {data.payees.length > 0 ? (
+              <Section footer="掃到轉帳截圖時，會用末五碼自動帶入對象名稱。">
+                {data.payees.map((p) => (
+                  <Row
+                    key={p.id}
+                    title={p.displayName}
+                    subtitle={`${p.bankCode || '808'} · ****${p.accountSuffix} · ${p.defaultCategory}`}
+                    trailing={<SafeConfirmButton label="刪除" confirmLabel="確認" onConfirm={() => deletePayee(p.id)} compact />}
+                  />
+                ))}
+              </Section>
+            ) : null}
+            <Section header="新增">
+              <FormRow label="暱稱" value={payeeName} onChangeText={setPayeeName} placeholder="室友房租" />
+              <FormRow label="銀行代碼" value={payeeBankCode} onChangeText={setPayeeBankCode} keyboardType="numeric" placeholder="808" />
+              <FormRow label="末五碼" value={payeeSuffix} onChangeText={setPayeeSuffix} keyboardType="numeric" maxLength={5} placeholder="24126" />
+            </Section>
+            <View style={s.pad}>
+              <Button title="新增對象" onPress={handleAddPayee} disabled={!payeeSuffix.trim() || !payeeName.trim()} />
+            </View>
+          </>,
+        );
+      case 'events':
+        return pageScroll(
+          data.events.length === 0 ? (
+            <View style={s.empty}>
+              <Text style={s.emptyTitle}>沒有收訊紀錄</Text>
+              <Text style={s.emptySub}>捷徑或雲端送來的通知會顯示在這裡。</Text>
+            </View>
+          ) : (
+            <Section header="最近 15 筆">
+              {data.events
+                .slice(-15)
+                .reverse()
+                .map((ev, idx) => (
+                  <Row
+                    key={ev.id || idx}
+                    title={`${ev.parsed.kind}${ev.parsed.amount !== null ? ` · $${ev.parsed.amount.toLocaleString()}` : ''}`}
+                    subtitle={`${ev.source} · ${ev.reason}`}
+                  />
+                ))}
+            </Section>
+          ),
+        );
+      case 'cloud':
+        return pageScroll(
+          <>
+            <Section header="Cloudflare Worker" footer="金鑰留空代表不驗證，只建議測試時使用。">
+              <CellBox>
+                <Text style={s.fieldLabel}>網址</Text>
+                <FieldInline
+                  value={workerUrlStr}
+                  onChangeText={(v) => {
+                    setWorkerUrlStr(v);
+                    updateMeta({ workerUrl: v });
+                  }}
+                  placeholder="https://your-worker.workers.dev"
+                />
+              </CellBox>
+              <CellBox>
+                <Text style={s.fieldLabel}>X-Ingest-Token</Text>
+                <FieldInline
+                  value={tokenStr}
+                  onChangeText={(v) => {
+                    setTokenStr(v);
+                    updateMeta({ ingestToken: v });
+                  }}
+                  placeholder="選填"
+                />
+              </CellBox>
+            </Section>
+            <Section>
+              <Row title="從雲端下載" titleStyle={{ color: c.positive }} onPress={() => syncFromCloud().catch(() => undefined)} />
+              <Row title="備份到雲端" titleStyle={{ color: c.positive }} onPress={() => pushToCloud().catch(() => undefined)} />
+            </Section>
+            <Section header="SideStore" footer="憑證過期也不影響雲端捷徑記帳，重新簽署後就會接上。">
+              <Row
+                title="憑證剩餘"
+                value={`${sidestoreDaysLeft} 天`}
+                valueStyle={sidestoreDaysLeft <= 1 ? { color: c.negative } : undefined}
+              />
+              <Row
+                title="我已重新簽署"
+                titleStyle={{ color: c.positive }}
+                onPress={() => updateMeta({ sidestoreRefreshedAt: new Date().toISOString() })}
+              />
+            </Section>
+          </>,
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <View style={s.screen}>
+      <ScrollView
+        style={s.screen}
+        contentContainerStyle={{ paddingTop: topInsetPadding, paddingBottom: bottomInsetPadding }}
+        showsVerticalScrollIndicator={false}
+      >
+        <LargeTitle title="設定" />
+
+        <Section separatorInset={58}>
+          <Row
+            leading={<IconTile name="sliders" bg={c.accent} />}
+            title="預算"
+            value={data.settings.monthlyBudget > 0 ? `$${data.settings.monthlyBudget.toLocaleString()}` : '依餘額'}
+            chevron
+            onPress={() => setPage('budget')}
+          />
+          <Row
+            leading={<IconTile name="repeat" bg={c.indigo} />}
+            title="固定扣款"
+            value={String(data.subscriptions.length)}
+            chevron
+            onPress={() => setPage('subs')}
+          />
+          <Row
+            leading={<IconTile name="bank" bg={c.blue} />}
+            title="常用轉帳對象"
+            value={String(data.payees.length)}
+            chevron
+            onPress={() => setPage('payees')}
+          />
+        </Section>
+
+        <Section separatorInset={58}>
+          <Row
+            leading={<IconTile name="shortcut" bg={c.purple} />}
+            title="捷徑與自動化"
+            chevron
+            onPress={onOpenShortcuts}
+          />
+          <Row
+            leading={<IconTile name="bell" bg={c.warning} />}
+            title="收訊紀錄"
+            value={String(data.events.length)}
+            chevron
+            onPress={() => setPage('events')}
+          />
+          <Row
+            leading={<IconTile name="cloud" bg={c.cyan} />}
+            title="雲端同步"
+            value={`SideStore ${sidestoreDaysLeft} 天`}
+            valueStyle={sidestoreDaysLeft <= 1 ? { color: c.negative } : undefined}
+            chevron
+            onPress={() => setPage('cloud')}
+          />
+        </Section>
+
+        <Section footer="會清空所有交易、欠款和收訊紀錄，無法復原。">
+          <Row
+            title="清空帳本"
+            destructive
+            trailing={<SafeConfirmButton label="清空" confirmLabel="確定清空" onConfirm={resetDemoData} compact />}
+          />
+        </Section>
+      </ScrollView>
+
+      {page !== 'none' ? (
+        <PushedPage title={PAGE_TITLES[page]} backLabel="設定" topInset={topInsetPadding} onBack={() => setPage('none')}>
+          {renderPage()}
+        </PushedPage>
+      ) : null}
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 36,
-    gap: 14,
-  },
-  screenTitle: {
-    color: '#F8FAFC',
-    fontSize: 20,
-    fontWeight: '700',
-    letterSpacing: -0.4,
-  },
-  card: {
-    padding: 15,
-    gap: 10,
-  },
-  cardTitle: {
-    color: '#F8FAFC',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  cardDesc: {
-    color: 'rgba(148, 163, 184, 0.72)',
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 2,
-  },
-  collapsibleHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    paddingVertical: 2,
-  },
-  collapseChevronBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255, 255, 255, 0.055)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  collapseChevron: {
-    color: '#CBD5E1',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  listItem: {
-    backgroundColor: 'rgba(255, 255, 255, 0.045)',
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderWidth: 0.8,
-    borderRadius: 16,
-    padding: 11,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 8,
-  },
-  listItemLeft: {
-    flex: 1,
-  },
-  listItemTitle: {
-    color: '#F8FAFC',
-    fontSize: 14,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
-  },
-  listItemSub: {
-    color: 'rgba(148, 163, 184, 0.72)',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  listItemActions: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  smallBtn: {
-    backgroundColor: 'rgba(255, 255, 255, 0.055)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 0.8,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-  },
-  smallBtnAmber: {
-    backgroundColor: 'rgba(16, 185, 129, 0.14)',
-    borderColor: 'rgba(52, 211, 153, 0.32)',
-  },
-  smallBtnText: {
-    color: '#CBD5E1',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  formRow: {
-    flexDirection: 'row',
-    gap: 8,
-    width: '100%',
-  },
-  input: {
-    minWidth: 0,
-    backgroundColor: 'rgba(8, 12, 15, 0.72)',
-    borderColor: 'rgba(255, 255, 255, 0.14)',
-    borderWidth: 0.8,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    color: '#F8FAFC',
-    fontSize: 13,
-    fontVariant: ['tabular-nums'],
-  },
-  switchRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  switchLabel: {
-    color: '#CBD5E1',
-    fontSize: 12,
-    flex: 1,
-  },
-  primaryBtn: {
-    backgroundColor: '#10B981',
-    borderRadius: 999,
-    paddingVertical: 11,
-    alignItems: 'center',
-  },
-  primaryBtnText: {
-    color: '#04120C',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  fieldGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  fieldItem: {
-    width: '48%',
-    flexGrow: 1,
-    minWidth: 140,
-    gap: 4,
-  },
-  fieldLabel: {
-    color: 'rgba(148, 163, 184, 0.75)',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  cloudBtnRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 4,
-  },
-  cloudBtnTitanium: {
-    flex: 1,
-    paddingVertical: 11,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255, 255, 255, 0.055)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-    alignItems: 'center',
-  },
-  cloudBtnTitaniumText: {
-    color: '#CBD5E1',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  cloudBtnAmber: {
-    flex: 1,
-    paddingVertical: 11,
-    borderRadius: 999,
-    backgroundColor: 'rgba(16, 185, 129, 0.18)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(52, 211, 153, 0.35)',
-    alignItems: 'center',
-  },
-  cloudBtnAmberText: {
-    color: '#34D399',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  sidestoreBox: {
-    backgroundColor: 'rgba(255, 255, 255, 0.045)',
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderWidth: 0.8,
-    borderRadius: 16,
-    padding: 11,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 4,
-  },
-  sidestoreTitle: {
-    color: '#34D399',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  sidestoreSub: {
-    color: 'rgba(148, 163, 184, 0.72)',
-    fontSize: 11,
-    marginTop: 2,
-  },
+function FieldInline({
+  value,
+  onChangeText,
+  placeholder,
+  secure,
+}: {
+  value: string;
+  onChangeText: (v: string) => void;
+  placeholder?: string;
+  secure?: boolean;
+}) {
+  const c = usePalette();
+  return (
+    <TextInput
+      value={value}
+      onChangeText={onChangeText}
+      placeholder={placeholder}
+      placeholderTextColor={c.tertiaryLabel}
+      selectionColor={c.accent}
+      autoCapitalize="none"
+      autoCorrect={false}
+      secureTextEntry={secure}
+      style={[type.body, { color: c.label, paddingVertical: 4 }]}
+    />
+  );
+}
+
+const makeStyles = (c: Palette) => ({
+  screen: { flex: 1, backgroundColor: c.bg },
+  pad: { paddingHorizontal: 16, marginTop: -8, marginBottom: 28 },
+  inlineActions: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+  fieldLabel: { ...type.footnote, color: c.secondaryLabel },
+  empty: { paddingVertical: 60, paddingHorizontal: 40, alignItems: 'center' as const },
+  emptyTitle: { ...type.title3, color: c.label },
+  emptySub: { ...type.subheadline, color: c.secondaryLabel, marginTop: 6, textAlign: 'center' as const },
 });

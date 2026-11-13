@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { Pressable, Text, type ViewStyle } from 'react-native';
+import Animated, { LinearTransition } from 'react-native-reanimated';
+import { type, usePalette } from '../theme';
+import { triggerHaptic } from './iosAnimations';
 
 interface SafeConfirmButtonProps {
   label: string;
@@ -8,19 +10,23 @@ interface SafeConfirmButtonProps {
   onConfirm: () => void;
   style?: ViewStyle;
   compact?: boolean;
+  /** Destructive actions turn red when armed (default). */
+  destructive?: boolean;
 }
 
 /**
- * 🛡️ 二次確認防誤觸按鈕 (Desert Titanium & Warm Amber Liquid Glass):
- * First tap arms the button in warm champagne gold for 3 seconds; second tap executes.
+ * Two-tap confirm button. First tap arms it for 3 s (turns red / accent),
+ * second tap runs the action — same pattern as iOS swipe-to-delete confirm.
  */
 export function SafeConfirmButton({
   label,
-  confirmLabel = '再按一次確認 (3s)',
+  confirmLabel = '再按一次確認',
   onConfirm,
   style,
   compact = false,
+  destructive = true,
 }: SafeConfirmButtonProps) {
+  const c = usePalette();
   const [armed, setArmed] = useState(false);
 
   useEffect(() => {
@@ -29,70 +35,45 @@ export function SafeConfirmButton({
     return () => clearTimeout(timer);
   }, [armed]);
 
-  const handlePress = () => {
-    if (!armed) {
-      try {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      } catch {
-        // ignore on web
-      }
-      setArmed(true);
-    } else {
-      setArmed(false);
-      onConfirm();
-    }
-  };
+  const armedBg = destructive ? c.negative : c.accent;
+  const armedFg = destructive ? '#FFFFFF' : c.onAccent;
 
   return (
-    <Pressable
-      onPress={handlePress}
-      style={[
-        styles.base,
-        compact && styles.compact,
-        armed ? styles.armed : styles.idle,
-        style,
-      ]}
-    >
-      <Text style={[styles.text, compact && styles.compactText, armed && styles.armedText]}>
-        {armed ? confirmLabel : label}
-      </Text>
-    </Pressable>
+    <Animated.View layout={LinearTransition.duration(180)} style={style}>
+      <Pressable
+        onPress={() => {
+          if (!armed) {
+            triggerHaptic('warning');
+            setArmed(true);
+          } else {
+            setArmed(false);
+            triggerHaptic('success');
+            onConfirm();
+          }
+        }}
+        style={({ pressed }) => ({
+          height: compact ? 28 : 40,
+          paddingHorizontal: compact ? 12 : 16,
+          borderRadius: compact ? 14 : 12,
+          borderCurve: 'continuous',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: armed ? armedBg : c.fill,
+          opacity: pressed ? 0.7 : 1,
+        })}
+      >
+        <Text
+          style={[
+            compact ? type.footnote : type.subheadline,
+            {
+              fontWeight: '600',
+              color: armed ? armedFg : destructive ? c.negative : c.label,
+            },
+          ]}
+        >
+          {armed ? confirmLabel : label}
+        </Text>
+      </Pressable>
+    </Animated.View>
   );
 }
-
-const styles = StyleSheet.create({
-  base: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    borderCurve: 'continuous',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 0.8,
-  },
-  compact: {
-    paddingVertical: 5,
-    paddingHorizontal: 11,
-    borderRadius: 999,
-  },
-  idle: {
-    backgroundColor: 'rgba(255, 255, 255, 0.055)',
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-  },
-  armed: {
-    backgroundColor: '#10B981',
-    borderColor: '#6EE7B7',
-  },
-  text: {
-    color: '#CBD5E1',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  compactText: {
-    fontSize: 11,
-  },
-  armedText: {
-    color: '#04120C',
-    fontWeight: '800',
-  },
-});

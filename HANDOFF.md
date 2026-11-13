@@ -1,7 +1,7 @@
 # HANDOFF.md — 跨工具／跨模型交接紀錄
 
-> **最後更新時間**：2026-11-01 23:10 (UTC+8)
-> **最後更新 Agent**：Cline (① 將 iOS 桌面小工具與鎖定畫面小工具 `targets/widget/PocketGuardianWidget.swift`、`core/summary.ts` 最醒目的主視覺大字改為「💰 總餘額（玉山銀行＋現金錢包）」，並將「今日可花費剩餘」收斂為次要輔助資訊；② 徹底移除「轉入自己帳戶（內部移轉，不計入支出）」忽略機制、修復玉山轉帳結果頁未遮罩完整對方帳號 `0222979124126` 擷取與 `sanitizeLedgerData` 自動補記)
+> **最後更新時間**：2026-11-14 (UTC+8)
+> **最後更新 Agent**：Claude Code（使用者於本次對話直接指定）— 全站 iOS 原生風格 UI／動畫重做（T2.17），**尚未 commit、尚未打包 IPA**
 > **專案路徑**：`C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger`
 > **Git 分支與最新狀態**：`main`（已同步寫入主工作區並推送 `origin/main` 觸發 IPA 打包）
 > **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `e1c0f72e-03fd-498e-af07-849dab5ef446`，前版可 Rollback ID: `1e12ae0d-666f-42bd-beb3-d061a3a2e4ec`)
@@ -11,6 +11,18 @@
 > - `C:\Users\mrhai\.cline\worktrees\40249\smart-ledger\PocketGuardian-SideStore.ipa`
 
 ---
+
+## 0. 最新變更（2026-11-14，T2.17 全站 iOS 原生風格重做，未 commit）
+
+- **新增**：`src/theme/index.ts`（iOS 系統語意色 light/dark、Dynamic Type 字級、`useThemedStyles`）、`src/components/ui/`（`Icon`/`IconTile` SF Symbols 對照表、`List`（Section/Row/Button/LargeTitle/Badge）、`Segmented`、`Field`/`AmountField`/`SearchField`、`FormRow`/`Chip`、`TxRow`、`PushedPage`、`txVisual`（分類圖示色、金額格式、`stripEmoji`））。
+- **依賴**：`expo-symbols ~58.0.5`（原生模組 → 必須重新打包 IPA 才會生效；web 預覽以 Material Symbols 字型後備）。
+- **App 殼層**：4 分頁（總覽/明細/欠款/設定），iOS 26 浮動膠囊導覽列（保留原生水平分頁滑動與導覽列滑動切換）；捷徑頁改由設定推入；頂部通知改 iOS 通知橫幅（顯示時去除 emoji，`⚠️` 開頭的錯誤 toast 顯示紅色警示圖示，store 內原字串未改動以保留錯誤判斷）。
+- **各頁**：總覽（大數字＋進度條＋三格統計、快速記帳 4 格、帳戶、工具、小金庫、最近 5 筆）；明細（搜尋、全部/最近刪除分段、依日期分組、點選展開詳細與操作）；欠款（摘要、+ 開啟表單、依對象/未結清/已結清）；設定（iOS 設定式清單＋推入子頁）。
+- **底部字卡**：`ActionSheetModals.tsx` 第 1～446 行的手勢／捲動交接邏輯保留，只調整開關動畫（無縮放／淡出、臨界阻尼彈簧）並重寫畫面為「取消／標題／完成」表單。
+- **被拿掉的小東西**：明細列內的「雙源已鎖／前端槽／銀行槽」標籤改為展開後的「來源」文字與鎖頭小圖示；捷徑頁重複的「近期收訊紀錄」移除（設定 → 收訊紀錄仍有）；金額欄旁的「清空」二次確認鈕移除。
+- **驗證**：`tsc --noEmit` 0 errors；`vitest run` 112/112 通過；web 預覽 393×852 淺色／深色逐頁目視檢查（總覽、明細展開、欠款、設定、捷徑推入頁、記一筆／ATM／校正餘額字卡）。**尚未在 iPhone 實機驗證**（SF Symbols、BlurView、字卡手勢需實機確認）。
+- **本機預覽**：`.claude/launch.json` 新增 `expo-web`（以完整 node 路徑啟動 `expo start --web`），未加入 git。
+- **下一步**：使用者確認後 commit → 推送觸發 IPA 打包 → 實機驗收 T2.17。
 
 ## 1. 已完成工作摘要（截至 `v3.3.0+` 黑曜鉑金×冰翡翠配色 ＋ 字卡上下滑動關閉 ＋ 設定全抽屜 ＋ 回收桶一鍵清空）
 

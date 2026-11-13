@@ -1,5 +1,4 @@
 import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Platform,
@@ -14,13 +13,10 @@ import {
 } from 'react-native';
 import Animated, {
   Easing,
-  FadeInDown,
+  FadeIn,
   LinearTransition,
   useAnimatedStyle,
   useSharedValue,
-  withDelay,
-  withRepeat,
-  withSequence,
   withSpring,
   withTiming,
   type SharedValue,
@@ -41,7 +37,7 @@ export function triggerHaptic(kind: HapticKind = 'light'): void {
   }
 }
 
-export const iosLayoutSpring = LinearTransition.springify().damping(19).stiffness(240).mass(0.8);
+export const iosLayoutSpring = LinearTransition.springify().damping(26).stiffness(300);
 
 export interface TactilePressableProps {
   children: React.ReactNode;
@@ -54,25 +50,22 @@ export interface TactilePressableProps {
   hitSlop?: number;
 }
 
+/** Subtle press feedback: slight scale + dim, like UIButton / CarPlay tiles. No glow. */
 export function TactilePressable({
   children,
   onPress,
   style,
   contentStyle,
-  activeScale = 0.94,
+  activeScale = 0.97,
   haptic = 'light',
   disabled = false,
   hitSlop,
 }: TactilePressableProps) {
-  const scale = useSharedValue(1);
-  const glow = useSharedValue(0);
+  const pressed = useSharedValue(0);
 
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const highlightStyle = useAnimatedStyle(() => ({
-    opacity: glow.value * 0.14,
+    opacity: 1 - pressed.value * 0.25,
+    transform: [{ scale: 1 - pressed.value * (1 - Math.max(0.95, activeScale)) }],
   }));
 
   return (
@@ -81,20 +74,17 @@ export function TactilePressable({
       hitSlop={hitSlop}
       style={style}
       onPressIn={() => {
-        scale.value = withSpring(activeScale, { damping: 18, stiffness: 420, mass: 0.65 });
-        glow.value = withTiming(1, { duration: 80 });
-        triggerHaptic(haptic);
+        pressed.value = withTiming(1, { duration: 90, easing: Easing.out(Easing.quad) });
       }}
       onPressOut={() => {
-        scale.value = withSpring(1, { damping: 12, stiffness: 300, mass: 0.7 });
-        glow.value = withTiming(0, { duration: 200 });
+        pressed.value = withTiming(0, { duration: 220, easing: Easing.out(Easing.quad) });
       }}
-      onPress={onPress}
+      onPress={(e) => {
+        triggerHaptic(haptic);
+        onPress?.(e);
+      }}
     >
-      <Animated.View style={[contentStyle, animStyle]}>
-        {children}
-        <Animated.View pointerEvents="none" style={[styles.tactileHighlightOverlay, highlightStyle]} />
-      </Animated.View>
+      <Animated.View style={[contentStyle, animStyle, disabled && { opacity: 0.4 }]}>{children}</Animated.View>
     </Pressable>
   );
 }
@@ -107,123 +97,85 @@ export interface AnimatedRollingNumberProps {
   duration?: number;
 }
 
+/** Counts smoothly to the new value (ease-out), no bounce. */
 export function AnimatedRollingNumber({
   value,
   prefix = '$',
   suffix = '',
   style,
-  duration = 460,
+  duration = 420,
 }: AnimatedRollingNumberProps) {
   const targetVal = Math.round(Number.isFinite(value) ? value : 0);
   const [displayVal, setDisplayVal] = useState(targetVal);
   const prevValRef = useRef(targetVal);
   const rafRef = useRef<number | null>(null);
-  const mountedRef = useRef(false);
-  const pulseScale = useSharedValue(1);
 
   useEffect(() => {
     const startVal = prevValRef.current;
     const endVal = targetVal;
     prevValRef.current = endVal;
-
-    if (!mountedRef.current) {
-      mountedRef.current = true;
+    if (startVal === endVal) {
       setDisplayVal(endVal);
       return;
     }
-    if (startVal === endVal) return;
-
-    pulseScale.value = withSequence(
-      withTiming(1.045, { duration: 110, easing: Easing.out(Easing.quad) }),
-      withSpring(1, { damping: 12, stiffness: 260, mass: 0.7 }),
-    );
-
     const startTime = Date.now();
     const diff = endVal - startVal;
     const step = () => {
-      const elapsed = Date.now() - startTime;
-      const t = Math.min(1, elapsed / duration);
-      const eased = 1 - Math.pow(1 - t, 3.6);
+      const t = Math.min(1, (Date.now() - startTime) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
       setDisplayVal(Math.round(startVal + diff * eased));
       if (t < 1) rafRef.current = requestAnimationFrame(step);
-      else setDisplayVal(endVal);
     };
-
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(step);
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
-  }, [targetVal, duration, pulseScale]);
-
-  const pulseStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulseScale.value }],
-  }));
+  }, [targetVal, duration]);
 
   return (
-    <Animated.View style={pulseStyle}>
-      <Text style={style}>
-        {displayVal < 0 ? '-' : ''}
-        {prefix}
-        {Math.abs(displayVal).toLocaleString()}
-        {suffix}
-      </Text>
-    </Animated.View>
+    <Text style={[{ fontVariant: ['tabular-nums'] }, style]}>
+      {displayVal < 0 ? '−' : ''}
+      {prefix}
+      {Math.abs(displayVal).toLocaleString()}
+      {suffix}
+    </Text>
   );
 }
 
 export interface LiquidLightTubeProps {
   percent: number;
   height?: number;
+  /** fill color; defaults to system green */
+  color?: string;
+  trackColor?: string;
+  /** @deprecated gradients removed */
   colors?: readonly [string, string, ...string[]];
 }
 
-export function LiquidLightTube({
-  percent,
-  height = 8,
-  colors = ['#059669', '#10B981', '#6EE7B7'],
-}: LiquidLightTubeProps) {
+/** Flat iOS progress bar (like Screen Time / Fitness). */
+export function LiquidLightTube({ percent, height = 6, color, trackColor }: LiquidLightTubeProps) {
   const clamped = Math.max(0, Math.min(100, percent));
   const widthPct = useSharedValue(0);
-  const shimmerProgress = useSharedValue(0);
 
   useEffect(() => {
-    widthPct.value = withSpring(clamped, { damping: 18, stiffness: 130, mass: 0.85 });
+    widthPct.value = withTiming(clamped, { duration: 600, easing: Easing.out(Easing.cubic) });
   }, [clamped, widthPct]);
 
-  useEffect(() => {
-    shimmerProgress.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 1900, easing: Easing.inOut(Easing.cubic) }),
-        withDelay(1400, withTiming(0, { duration: 0 })),
-      ),
-      -1,
-      false,
-    );
-  }, [shimmerProgress]);
-
   const fillAnimStyle = useAnimatedStyle(() => ({
-    width: `${Math.max(0, Math.min(100, widthPct.value))}%`,
-  }));
-
-  const shimmerAnimStyle = useAnimatedStyle(() => ({
-    left: `${-30 + shimmerProgress.value * 135}%`,
-    opacity: widthPct.value > 3 ? 0.75 : 0,
+    width: `${widthPct.value}%`,
   }));
 
   return (
-    <View style={[styles.lightTubeTrack, { height }]}>
-      <Animated.View style={[styles.lightTubeGlowWrap, fillAnimStyle]}>
-        <LinearGradient colors={colors} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.lightTubeGradient} />
-        <Animated.View pointerEvents="none" style={[styles.shimmerBlade, shimmerAnimStyle]}>
-          <LinearGradient
-            colors={['transparent', 'rgba(236, 253, 245, 0.72)', 'transparent']}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={StyleSheet.absoluteFill}
-          />
-        </Animated.View>
-      </Animated.View>
+    <View
+      style={[
+        styles.track,
+        { height, borderRadius: height / 2, backgroundColor: trackColor ?? 'rgba(120, 120, 128, 0.2)' },
+      ]}
+    >
+      <Animated.View
+        style={[{ height: '100%', borderRadius: height / 2, backgroundColor: color ?? '#34C759' }, fillAnimStyle]}
+      />
     </View>
   );
 }
@@ -291,10 +243,10 @@ export function StaggeredItem({
   style?: StyleProp<ViewStyle>;
   children: React.ReactNode;
 }) {
-  const delayMs = Math.min(index * 38, 260);
+  const delayMs = Math.min(index * 24, 120);
   return (
     <Animated.View
-      entering={FadeInDown.delay(delayMs).springify().damping(18).stiffness(230).mass(0.75)}
+      entering={FadeIn.delay(delayMs).duration(220)}
       layout={iosLayoutSpring}
       style={style}
     >
@@ -304,40 +256,7 @@ export function StaggeredItem({
 }
 
 const styles = StyleSheet.create({
-  tactileHighlightOverlay: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    borderRadius: 28,
-    backgroundColor: '#ECFDF5',
-  },
-  lightTubeTrack: {
-    borderRadius: 999,
-    backgroundColor: 'rgba(255, 255, 255, 0.07)',
-    borderWidth: 0.8,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+  track: {
     overflow: 'hidden',
-  },
-  lightTubeGlowWrap: {
-    height: '100%',
-    borderRadius: 999,
-    overflow: 'hidden',
-    position: 'relative',
-    shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45,
-    shadowRadius: 8,
-  },
-  lightTubeGradient: {
-    flex: 1,
-    borderRadius: 999,
-  },
-  shimmerBlade: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    width: '28%',
   },
 });

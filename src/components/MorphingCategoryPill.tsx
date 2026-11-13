@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
-import Animated, {
-  FadeIn,
-  FadeOut,
-  LinearTransition,
-} from 'react-native-reanimated';
+import { Pressable, Text, View } from 'react-native';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
+import { type, usePalette } from '../theme';
 import { triggerHaptic } from './iosAnimations';
+import { Icon } from './ui/Icon';
+import { categoryVisual } from './ui/txVisual';
 
-const CATEGORY_OPTIONS = ['超商', '食物', '飲料', '車費', '日用品', '娛樂', '轉帳'] as const;
+export const CATEGORY_OPTIONS = ['超商', '食物', '飲料', '車費', '日用品', '娛樂', '轉帳'] as const;
 
 export interface CategoryGlassTint {
   bg: string;
@@ -15,19 +14,9 @@ export interface CategoryGlassTint {
   text: string;
 }
 
-/**
- * 同色系金屬膠囊色溫：
- * - 『餐飲』（食物、飲料、早餐、午餐、晚餐、便當）：琥珀玻璃
- *   底 rgba(245, 158, 11, 0.14)、字 #FBBF24、邊框 rgba(251, 191, 36, 0.3)
- * - 『交通/日常』（車費、超商、日用品、娛樂、轉帳等）：大漠鈦金玻璃
- *   底 rgba(214, 195, 165, 0.12)、字 #E6D5B8、邊框 rgba(230, 213, 184, 0.25)
- */
+/** @deprecated kept for older call sites; returns neutral fill colors. */
 export function getCategoryGlassTint(_cat: string | null): CategoryGlassTint {
-  return {
-    bg: 'rgba(255, 255, 255, 0.055)',
-    border: 'rgba(255, 255, 255, 0.12)',
-    text: '#CBD5E1',
-  };
+  return { bg: 'rgba(118, 118, 128, 0.12)', border: 'transparent', text: '#8E8E93' };
 }
 
 interface MorphingCategoryPillProps {
@@ -35,152 +24,83 @@ interface MorphingCategoryPillProps {
   onSelectCategory: (category: string) => void;
 }
 
-const layoutSpring = LinearTransition.springify().damping(19).stiffness(240);
+const layout = LinearTransition.duration(220);
 
-export function MorphingCategoryPill({
-  currentCategory,
-  onSelectCategory,
-}: MorphingCategoryPillProps) {
+/**
+ * Inline category picker: a quiet text button that expands into a row of
+ * category chips (like an iOS menu, but inline so it works inside lists).
+ */
+export function MorphingCategoryPill({ currentCategory, onSelectCategory }: MorphingCategoryPillProps) {
+  const c = usePalette();
   const [expanded, setExpanded] = useState(false);
   const label = currentCategory || '日常';
-  const tint = getCategoryGlassTint(label);
+
+  if (!expanded) {
+    return (
+      <Animated.View layout={layout} entering={FadeIn.duration(150)}>
+        <Pressable
+          hitSlop={8}
+          onPress={() => {
+            triggerHaptic('selection');
+            setExpanded(true);
+          }}
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 3,
+            opacity: pressed ? 0.5 : 1,
+          })}
+        >
+          <Text style={[type.footnote, { color: c.secondaryLabel }]}>{label}</Text>
+          <Icon name="chevronDown" size={9} color={c.tertiaryLabel} weight="bold" />
+        </Pressable>
+      </Animated.View>
+    );
+  }
 
   return (
     <Animated.View
-      layout={layoutSpring}
-      style={[
-        styles.pillShell,
-        {
-          backgroundColor: expanded ? 'rgba(9, 14, 18, 0.95)' : tint.bg,
-          borderColor: expanded ? 'rgba(52, 211, 153, 0.32)' : tint.border,
-        },
-        expanded && styles.pillShellExpanded,
-      ]}
+      layout={layout}
+      entering={FadeIn.duration(180)}
+      exiting={FadeOut.duration(120)}
+      style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}
     >
-      {!expanded ? (
-        <Animated.View
-          key="collapsed"
-          entering={FadeIn.duration(140)}
-          exiting={FadeOut.duration(100)}
-        >
+      {CATEGORY_OPTIONS.map((cat) => {
+        const selected = cat === label;
+        const v = categoryVisual(cat, c);
+        return (
           <Pressable
+            key={cat}
             onPress={() => {
               triggerHaptic('selection');
-              setExpanded(true);
-            }}
-            style={styles.collapsedBtn}
-            hitSlop={6}
-          >
-            <Text style={[styles.collapsedText, { color: tint.text }]}>{label}</Text>
-            <Text style={[styles.chevronText, { color: tint.text }]}>▾</Text>
-          </Pressable>
-        </Animated.View>
-      ) : (
-        <Animated.View
-          key="expanded"
-          entering={FadeIn.duration(160)}
-          exiting={FadeOut.duration(110)}
-          style={styles.expandedRow}
-        >
-          {CATEGORY_OPTIONS.map((cat) => {
-            const isSelected = cat === label;
-            const optTint = getCategoryGlassTint(cat);
-            return (
-              <Pressable
-                key={cat}
-                onPress={() => {
-                  triggerHaptic('light');
-                  onSelectCategory(cat);
-                  setExpanded(false);
-                }}
-                style={[
-                  styles.optionPill,
-                  {
-                    backgroundColor: isSelected ? '#10B981' : optTint.bg,
-                    borderColor: isSelected ? '#34D399' : optTint.border,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.optionText,
-                    { color: isSelected ? '#04120C' : optTint.text },
-                  ]}
-                >
-                  {cat}
-                </Text>
-              </Pressable>
-            );
-          })}
-          <Pressable
-            onPress={() => {
-              triggerHaptic('selection');
+              onSelectCategory(cat);
               setExpanded(false);
             }}
-            style={styles.closeMiniBtn}
-            hitSlop={6}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 4,
+              height: 28,
+              paddingHorizontal: 10,
+              borderRadius: 14,
+              backgroundColor: selected ? c.label : c.fill,
+              opacity: pressed ? 0.6 : 1,
+            })}
           >
-            <Text style={styles.closeMiniText}>✕</Text>
+            <Icon name={v.icon} size={12} color={selected ? c.card : v.color} weight="semibold" />
+            <Text style={[type.footnote, { fontWeight: '500', color: selected ? c.card : c.label }]}>{cat}</Text>
           </Pressable>
-        </Animated.View>
-      )}
+        );
+      })}
+      <Pressable
+        hitSlop={8}
+        onPress={() => setExpanded(false)}
+        style={{ height: 28, width: 28, alignItems: 'center', justifyContent: 'center' }}
+      >
+        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: c.fill, alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="close" size={10} color={c.secondaryLabel} weight="bold" />
+        </View>
+      </Pressable>
     </Animated.View>
   );
 }
-
-const styles = StyleSheet.create({
-  pillShell: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    borderCurve: 'continuous',
-    borderWidth: 0.8,
-    overflow: 'hidden',
-  },
-  pillShellExpanded: {
-    borderRadius: 18,
-    paddingVertical: 4,
-    paddingHorizontal: 5,
-    marginTop: 4,
-  },
-  collapsedBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 3.5,
-    gap: 4,
-  },
-  collapsedText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-  },
-  chevronText: {
-    fontSize: 10,
-    opacity: 0.78,
-  },
-  expandedRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 5,
-  },
-  optionPill: {
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 0.8,
-  },
-  optionText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  closeMiniBtn: {
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-  },
-  closeMiniText: {
-    color: 'rgba(148, 163, 184, 0.72)',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-});
