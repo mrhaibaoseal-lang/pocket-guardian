@@ -491,6 +491,55 @@ function parseStandaloneAmountLine(line: string, nextLine?: string): number | nu
   return toNumber(m[1]);
 }
 
+const FEE_LABEL_ONLY = /^(?:交易|跨行|轉帳)?手續費\s*[:：]?$/;
+const FEE_SAME_LINE =
+  /^(?:交易|跨行|轉帳)?手續費\s*[:：]?\s*(?:NT\$|NTD|TWD|\$|新[台臺]幣)?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?\s*(?:元|TWD|NTD)?$/i;
+const FEE_FREE_SAME_LINE = /^(?:交易|跨行|轉帳)?手續費\s*[:：]?\s*(?:免收|免費|減免|無|-+)$/;
+/** Label-only lines whose value is a standalone number in a two-column (labels, then values) layout. */
+const NUMERIC_VALUE_LABEL = /^(?:(?:轉帳|交易|付款|扣款|轉出|實付|總|匯款|提款)?金額|(?:交易|跨行|轉帳)?手續費)\s*[:：]?$/;
+const ANY_LABEL_ONLY =
+  /^(?:(?:轉帳|交易|付款|扣款|轉出|實付|總|匯款|提款)?金額|(?:交易|跨行|轉帳)?手續費|轉入對象|轉入帳號|收款帳號|對方帳號|自己帳號|轉出帳號|扣款帳號|付款帳號|可用餘額|帳戶餘額|交易序號|銀行代號|轉帳留言|存摺備註)\s*[:：]?$/;
+
+/**
+ * Extract the transfer fee (手續費) from a transfer result screen.
+ * Supports "手續費 15 元", vertical "手續費\n15", and the two-column layout where all
+ * labels come first and the values follow in the same order.
+ */
+function extractTransferFee(lines: string[]): number | null {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (FEE_FREE_SAME_LINE.test(line)) return 0;
+    const same = line.match(FEE_SAME_LINE);
+    if (same) return toNumber(same[1]);
+    if (!FEE_LABEL_ONLY.test(line)) continue;
+
+    // Vertical layout: value right below the label.
+    const next = lines[i + 1];
+    if (next !== undefined && !ANY_LABEL_ONLY.test(next)) {
+      if (/^(?:免收|免費|減免|無)$/.test(next)) return 0;
+      const v = parseStandaloneAmountLine(next);
+      if (v !== null) return v;
+    }
+
+    // Two-column layout: find this label's position among the numeric labels of the label run,
+    // then take the value at the same position among the numbers after the run.
+    let runStart = i;
+    while (runStart > 0 && ANY_LABEL_ONLY.test(lines[runStart - 1])) runStart--;
+    let runEnd = i;
+    while (runEnd + 1 < lines.length && ANY_LABEL_ONLY.test(lines[runEnd + 1])) runEnd++;
+    let ordinal = 0;
+    for (let j = runStart; j < i; j++) if (NUMERIC_VALUE_LABEL.test(lines[j])) ordinal++;
+    const values: number[] = [];
+    for (let j = runEnd + 1; j < lines.length && values.length <= ordinal; j++) {
+      const v = parseStandaloneAmountLine(lines[j], lines[j + 1]);
+      if (v !== null) values.push(v);
+    }
+    if (values[ordinal] !== undefined) return values[ordinal];
+    return null;
+  }
+  return null;
+}
+
 function parseOwnSuffixList(ownSuffix: string): string[] {
   return ownSuffix
     .split(/[,，\s/]+/)
@@ -684,6 +733,10 @@ function parseTransferPage(p: ParsedEvent, text: string, ownSuffix: string): Par
   const resolvedBankCode =
     payeeIdx >= 0 ? bankCodes[payeeIdx] ?? bankCodes[0] ?? null : bankCodes[0] ?? null;
 
+  // Fees in Taiwan are at most a few dozen dollars; anything larger (or ≥ amount) is a misread.
+  const rawFee = extractTransferFee(lines);
+  const fee = rawFee !== null && rawFee >= 0 && rawFee <= 1000 && rawFee < amount ? rawFee : null;
+
   if (isIncomingTransfer) {
     const senderLabel = [
       counterpartyName,
@@ -717,6 +770,7 @@ function parseTransferPage(p: ParsedEvent, text: string, ownSuffix: string): Par
     payeeSuffix,
     payeeBankCode: resolvedBankCode,
     ownSuffix: ownFound,
+    fee,
     confidence: 'high',
     evidence,
     reason: iso ? '玉山轉帳成功畫面' : '轉帳成功畫面（以收到時間入帳）',
@@ -744,8 +798,10 @@ export function parseAiStructuredText(
         payeeSuffix?: string | null;
         occurredAt?: string | null;
         reason?: string | null;
+        fee?: number | string | null;
       };
       const amt = toNumber(obj.amount ?? null);
+      const aiFee = toNumber(obj.fee ?? null);
       const iso = obj.occurredAt ? taipeiLocalToIso(obj.occurredAt, p.occurredAt) : null;
       if (obj.kind === 'non_transaction' || obj.kind === 'unknown') {
         return {
@@ -783,6 +839,7 @@ export function parseAiStructuredText(
           payeeSuffix: obj.payeeSuffix ?? null,
           occurredAt: iso ?? p.occurredAt,
           timeSource: iso ? 'absolute' : 'notification_received',
+          fee: aiFee !== null && aiFee > 0 && aiFee <= 1000 && aiFee < amt ? aiFee : null,
           confidence: 'high',
           evidence: `AI:${amt}`,
           reason: 'AI 辨識轉帳支出',

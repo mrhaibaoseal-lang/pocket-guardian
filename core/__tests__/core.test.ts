@@ -216,7 +216,27 @@ describe('parsers (real samples)', () => {
       kind: 'transfer_out',
       amount: 1000,
       payeeSuffix: '55667',
+      fee: 15,
     });
+    expect(parseEvent('transfer_page', { text: singleWithFee }, T0, '83151').fee).toBe(15);
+  });
+
+  it('detects transfer fee in vertical / free layouts and books it as a separate expense once', () => {
+    const vertical = ['交易成功', '2026-11-02 10:00:00', '轉帳金額', '2,000', '手續費', '10', '轉入帳號 013 國泰世華 ********55667'].join('\n');
+    expect(parseEvent('transfer_page', { text: vertical }, T0, '83151')).toMatchObject({ amount: 2000, fee: 10 });
+    const free = ['轉帳成功', '轉帳金額 500 元', '手續費 免收', '轉入帳號 013 國泰世華 ********55667'].join('\n');
+    expect(parseEvent('transfer_page', { text: free }, T0, '83151').fee).toBe(0);
+
+    const l = ledger({ ownAccountSuffix: '83151' });
+    const res = l.ingest('transfer_page', { text: vertical }, T0);
+    expect(res.status).toBe('new_tx');
+    expect(res.message).toContain('手續費 $10');
+    const active = l.data.transactions.filter((t) => !t.deletedAt);
+    expect(active).toHaveLength(2);
+    expect(active.find((t) => t.category === '手續費')).toMatchObject({ type: 'expense', amount: 10, accountId: 'bank' });
+    // Same screenshot again → duplicate, no second fee
+    l.ingest('transfer_page', { text: vertical }, T0);
+    expect(l.data.transactions.filter((t) => !t.deletedAt)).toHaveLength(2);
   });
 
   it('never mistakes dates (2026-10-28, 2026/10/28, 115/10/28, 115年10月28日, 10/26 02:07) for amounts and parses transaction dates', () => {

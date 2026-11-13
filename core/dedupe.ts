@@ -450,6 +450,30 @@ export function createAtm(
   return out;
 }
 
+/** Idempotency key of the fee transaction attached to a transfer, so re-scans never double count it. */
+export function transferFeeKey(transferTxId: string): string {
+  return `fee:${transferTxId}`;
+}
+
+/**
+ * 轉帳手續費 detected on a transfer result screen. Booked as its own locked bank expense
+ * (method 'other' so it is never paired with / deduped against real transfers).
+ */
+export function createTransferFee(id: string, transfer: Transaction, fee: number, now: string): Transaction {
+  const f = blankTx(id, now);
+  f.amount = fee;
+  f.method = 'other';
+  f.accountId = 'bank';
+  f.merchant = '轉帳手續費';
+  f.category = '手續費';
+  f.note = transfer.merchant ? `${transfer.merchant} 的手續費` : null;
+  f.idempotencyKey = transferFeeKey(transfer.id);
+  f.timeSource = transfer.timeSource;
+  f.isLocked = true;
+  f.occurredAt = transfer.occurredAt;
+  return f;
+}
+
 /**
  * ⚖️ Reconcile: make `accountId` equal `actual` by adding one adjustment.
  * `affectsBudget` decides whether an unexplained loss eats this month's budget.

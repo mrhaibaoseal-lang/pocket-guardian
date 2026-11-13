@@ -247,10 +247,10 @@ async function enhanceWithWorkersAiIfNeeded(
 
   const systemPrompt = `你是台灣「靠北我錢呢 ImbrokeAF」記帳 App 的 AI 帳務解析引擎。
 請根據使用者傳入的手機截圖與 OCR 文字，判斷這是不是一筆真實的金融交易，並只輸出單行 JSON（不要 Markdown、不要任何解釋）：
-{"kind":"transfer_out"|"transfer_in"|"card_spend"|"non_transaction","amount":整數金額或null,"merchant":"店家或對象名稱或null","payeeBankCode":"3碼銀行代碼或null","payeeSuffix":"末5碼帳號或null","occurredAt":"YYYY-MM-DD HH:mm:ss或null","reason":"簡短說明"}
+{"kind":"transfer_out"|"transfer_in"|"card_spend"|"non_transaction","amount":整數金額或null,"merchant":"店家或對象名稱或null","payeeBankCode":"3碼銀行代碼或null","payeeSuffix":"末5碼帳號或null","occurredAt":"YYYY-MM-DD HH:mm:ss或null","fee":畫面上的手續費整數(沒有或0則為0),"reason":"簡短說明"}
 
 嚴格規則：
-1. 絕對不可把「西元年份(如2026)」、「時間(如10:29、11:39)」、「電量(如84)」、「銀行代碼(如808、013、812)」、「帳戶餘額/可用餘額(如2,040)」、「手續費(如0、15)」誤判為交易金額 amount！
+1. 絕對不可把「西元年份(如2026)」、「時間(如10:29、11:39)」、「電量(如84)」、「銀行代碼(如808、013、812)」、「帳戶餘額/可用餘額(如2,040)」、「手續費(如0、15)」誤判為交易金額 amount！手續費請另外填在 fee 欄位。
 2. 玉山銀行等轉帳結果與存摺交易明細（底部有「轉帳給此帳號」按鈕時，轉出與轉入都有該按鈕，不可單憑按鈕判斷！）：
    - 必須看金額旁邊的圓形圖示：若是【青色/綠色圓圈「存」】或有匯款人遮罩姓名（如「阮*豫」），代表別人轉錢給我，kind 必為 "transfer_in"，merchant 填「轉入：對方姓名或末碼」。
    - 若金額旁邊是【橘色/紅色圓圈「提」】或顯示「轉入對象 + 自己帳號」或「轉出/扣款」，代表我轉錢給別人，kind 必為 "transfer_out"，merchant 填「轉入對象」姓名（如「潘O杏」），payeeSuffix 填「轉入對象」帳號末 5 碼（如 "24126"，絕對不可填「自己帳號」${ownSuffix}！）。

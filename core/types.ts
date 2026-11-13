@@ -75,6 +75,8 @@ export interface ParsedEvent {
   payeeBankCode: string | null;
   payeeSuffix: string | null;
   ownSuffix: string | null;
+  /** Transfer fee (手續費) shown on the transfer result screen, if any. Booked as its own expense. */
+  fee?: number | null;
   /** Parser confidence level ('high' for structured/label-anchored, 'low' for fallback). */
   confidence?: 'high' | 'low';
   /** Matched structural evidence for debugging in the inbox. */

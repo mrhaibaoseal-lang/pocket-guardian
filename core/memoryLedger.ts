@@ -1,4 +1,14 @@
-import { createAdjustment, createIncome, createManualExpense, decideIngest, idempotencyKeyFor, PAIR_WINDOW_MIN, splitTransaction } from './dedupe';
+import {
+  createAdjustment,
+  createIncome,
+  createManualExpense,
+  createTransferFee,
+  decideIngest,
+  idempotencyKeyFor,
+  PAIR_WINDOW_MIN,
+  splitTransaction,
+  transferFeeKey,
+} from './dedupe';
 import type { IngestDecision, RecentEvent } from './dedupe';
 import { computeBalances, dueSubscriptions, matchSubscription } from './ledger';
 import { guessSource, maskSensitiveText, normalizeRawInput, normalizeText, parseEvent } from './parsers';
@@ -618,6 +628,23 @@ export class MemoryLedger {
       tx = this.data.transactions.find((t) => t.id === decision.transactionId) ?? null;
     }
 
+    // 轉帳手續費: book the fee shown on the transfer screen as its own expense (once per transfer).
+    let feeNote = '';
+    if (
+      tx &&
+      (decision.action === 'create' || decision.action === 'merge') &&
+      parsed.kind === 'transfer_out' &&
+      parsed.fee &&
+      parsed.fee > 0
+    ) {
+      const feeKey = transferFeeKey(tx.id);
+      const hasFee = this.data.transactions.some((t) => !t.deletedAt && t.idempotencyKey === feeKey);
+      if (!hasFee) {
+        this.data.transactions.push(createTransferFee(uuid(), tx, parsed.fee, now));
+        feeNote = `（含手續費 $${parsed.fee}）`;
+      }
+    }
+
     const status = statusOf(decision, parsed);
     const rawPreviewSource = (raw.text && raw.text.trim()) ? raw.text : fingerprint;
     const maskedRaw =
@@ -644,7 +671,7 @@ export class MemoryLedger {
     if (this.data.events.length > 300) this.data.events.splice(0, this.data.events.length - 300);
 
     const summary = this.summary(now);
-    const baseMsg = messageFor(decision, tx, summary);
+    const baseMsg = `${messageFor(decision, tx, summary)}${feeNote}`;
     return {
       status,
       reason: decision.reason,
