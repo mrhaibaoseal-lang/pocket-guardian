@@ -178,8 +178,13 @@ export function sanitizeLedgerData(data: LedgerData): LedgerData {
       continue;
     }
 
-    // 3. Repair or drop astronomically large OCR digit-concatenation bugs (e.g. 1.032e+42)
-    if (!Number.isFinite(tx.amount) || tx.amount <= 0 || tx.amount > 10_000_000) {
+    // 3. Repair or drop astronomically large OCR digit-concatenation bugs (e.g. 1.032e+42).
+    //    Adjustments are signed (negative = reconcile down), so only their magnitude is checked.
+    const isBadAmount =
+      tx.type === 'adjustment'
+        ? !Number.isFinite(tx.amount) || tx.amount === 0 || Math.abs(tx.amount) > 10_000_000
+        : !Number.isFinite(tx.amount) || tx.amount <= 0 || tx.amount > 10_000_000;
+    if (isBadAmount) {
       if (tx.merchant && /(轉帳金額|轉入對象|交易成功)/.test(tx.merchant)) {
         const reparsed = parseEvent('transfer_page', { text: tx.merchant }, tx.createdAt, ownSuffix);
         if (reparsed.kind === 'transfer_out' && reparsed.amount && reparsed.amount <= 10_000_000) {

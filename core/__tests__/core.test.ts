@@ -12,6 +12,7 @@ import {
   parseEvent,
   budgetCycle,
   DEFAULT_SETTINGS,
+  sanitizeLedgerData,
 } from '../index';
 import type { Settings } from '../index';
 
@@ -488,6 +489,15 @@ describe('ATM and reconcile', () => {
     expect(computeSafeToSpend(l.data.settings, l.data.transactions, [], T0).spentToday).toBe(700);
     l.reconcile('cash', 300, true, T0);
     expect(l.data.transactions).toHaveLength(1); // no-op when already equal
+  });
+
+  it('reconcile adjustments in both directions survive sanitize (reload/sync)', () => {
+    const l = ledger();
+    l.reconcile('cash', 300, false, T0); // down: -700
+    l.reconcile('bank', 25000, false, T0); // up: +5000
+    const healed = sanitizeLedgerData(l.data);
+    expect(healed.transactions).toHaveLength(2);
+    expect(computeBalances(healed.settings, healed.transactions)).toEqual({ bank: 25000, cash: 300 });
   });
 
   it('reconcile can be excluded from the budget', () => {
