@@ -1,6 +1,7 @@
 import AppIntents
 import Foundation
 import SwiftUI
+import UIKit
 import WidgetKit
 
 // MARK: - Models & Local Cache
@@ -241,7 +242,7 @@ struct PocketProvider: TimelineProvider {
     }
 }
 
-// MARK: - Helpers & Theme (Obsidian Platinum & Jade)
+// MARK: - Helpers & Theme (iOS system palette, matches src/theme/index.ts)
 
 private func ledgerURL(_ path: String, category: String? = nil) -> URL {
     var comps = URLComponents()
@@ -257,70 +258,127 @@ private func formatMoney(_ value: Double) -> String {
     let formatter = NumberFormatter()
     formatter.numberStyle = .decimal
     formatter.maximumFractionDigits = 0
-    let num = NSNumber(value: Int(value.rounded()))
-    return formatter.string(from: num) ?? "\(Int(value.rounded()))"
+    let rounded = Int(value.rounded())
+    let body = formatter.string(from: NSNumber(value: abs(rounded))) ?? "\(abs(rounded))"
+    return rounded < 0 ? "-$\(body)" : "$\(body)"
 }
 
 private func formatIntMoney(_ value: Int) -> String {
     return formatMoney(Double(value))
 }
 
-private let obsidianBgTop = Color(red: 0.06, green: 0.09, blue: 0.11)
-private let obsidianBgBottom = Color(red: 0.02, green: 0.04, blue: 0.05)
-private let glassFill = Color.white.opacity(0.065)
-private let glassStroke = Color.white.opacity(0.14)
-private let jadePrimary = Color(red: 0.06, green: 0.73, blue: 0.51)
-private let jadeBright = Color(red: 0.20, green: 0.83, blue: 0.60)
-private let textPrimary = Color(red: 0.97, green: 0.98, blue: 0.99)
-private let textSecondary = Color(red: 0.75, green: 0.80, blue: 0.86)
-private let textMuted = Color(red: 0.54, green: 0.60, blue: 0.68)
+/// Strip a leading "✓ " style marker so status text reads like a plain caption.
+private func cleanStatus(_ text: String) -> String {
+    var s = text
+    for prefix in ["✓ ", "✓", "⚠️ ", "⚠️"] where s.hasPrefix(prefix) {
+        s = String(s.dropFirst(prefix.count))
+    }
+    return s
+}
+
+private enum PG {
+    static let accent = Color(uiColor: .systemGreen)
+    static let negative = Color(uiColor: .systemRed)
+    static let warning = Color(uiColor: .systemOrange)
+    static let blue = Color(uiColor: .systemBlue)
+    static let cyan = Color(uiColor: .systemCyan)
+    static let teal = Color(uiColor: .systemTeal)
+    static let indigo = Color(uiColor: .systemIndigo)
+    static let brown = Color(uiColor: .systemBrown)
+    static let gray = Color(uiColor: .systemGray)
+    static let canvas = Color(uiColor: .systemBackground)
+    static let cell = Color(uiColor: .secondarySystemBackground)
+    static let fill = Color(uiColor: .tertiarySystemFill)
+    static let track = Color(uiColor: .systemFill)
+}
 
 extension View {
-    @ViewBuilder
+    /// Home-screen widgets: plain system background (white / black), follows light & dark.
     func pocketWidgetBackground() -> some View {
-        if #available(iOS 17.0, *) {
-            self.containerBackground(for: .widget) {
-                ZStack {
-                    LinearGradient(colors: [obsidianBgTop, obsidianBgBottom], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    Circle().fill(jadePrimary.opacity(0.14)).frame(width: 150, height: 150).blur(radius: 36).offset(x: -55, y: -45)
-                }
-            }
-        } else {
-            self.background(LinearGradient(colors: [obsidianBgTop, obsidianBgBottom], startPoint: .topLeading, endPoint: .bottomTrailing))
-        }
+        self.containerBackground(for: .widget) { PG.canvas }
+    }
+
+    /// Lock-screen accessories: let the system draw its own vibrant material.
+    func pocketAccessoryBackground() -> some View {
+        self.containerBackground(for: .widget) { Color.clear }
     }
 }
 
-// MARK: - Widget 1: Real-Time Balance & Safe-To-Spend Dashboard
+/// Rounded-square SF Symbol tile, same as the app's IconTile.
+private struct SymbolTile: View {
+    let symbol: String
+    let color: Color
+    var size: CGFloat = 22
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: size * 0.5, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(color, in: RoundedRectangle(cornerRadius: size * 0.27, style: .continuous))
+            .widgetAccentable()
+    }
+}
+
+private struct RefreshButton: View {
+    var body: some View {
+        Button(intent: RefreshWidgetIntent()) {
+            Image(systemName: "arrow.clockwise")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 24, height: 24)
+                .background(PG.fill, in: Circle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct BudgetBar: View {
+    let fraction: CGFloat
+    let color: Color
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(PG.track)
+                Capsule()
+                    .fill(color)
+                    .frame(width: max(4, geo.size.width * fraction))
+                    .widgetAccentable()
+            }
+        }
+        .frame(height: 4)
+    }
+}
+
+// MARK: - Widget 1: Total Balance
 
 struct PocketGuardianWidgetEntryView: View {
     var entry: PocketProvider.Entry
     @Environment(\.widgetFamily) var family
 
-    var themeColor: Color {
+    var budgetColor: Color {
         switch entry.payload.weather {
-        case "red": return Color(red: 0.96, green: 0.32, blue: 0.32)
-        case "yellow": return Color(red: 0.98, green: 0.72, blue: 0.14)
-        default: return jadeBright
+        case "red": return PG.negative
+        case "yellow": return PG.warning
+        default: return PG.accent
         }
     }
 
-    var heroBalanceColor: Color {
-        entry.payload.displayTotalBalance < 0
-            ? Color(red: 0.96, green: 0.32, blue: 0.32)
-            : jadeBright
+    var balanceColor: Color {
+        entry.payload.displayTotalBalance < 0 ? PG.negative : Color.primary
     }
 
-    var timeString: String {
+    var statusString: String {
         if let status = entry.statusText, !status.isEmpty {
-            return status
+            return cleanStatus(status)
         }
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
-        return "更新 \(formatter.string(from: entry.date))"
+        return "\(formatter.string(from: entry.date)) 更新"
     }
 
-    var clampedBattery: CGFloat {
+    var budgetFraction: CGFloat {
         CGFloat(min(max(entry.payload.batteryPercent, 0), 100)) / 100.0
     }
 
@@ -328,227 +386,160 @@ struct PocketGuardianWidgetEntryView: View {
         switch family {
         case .accessoryCircular:
             Gauge(value: Double(min(max(entry.payload.batteryPercent, 0), 100)), in: 0...100) {
-                Text("💰")
+                Image(systemName: "dollarsign")
             } currentValueLabel: {
-                Text("$\(formatMoney(entry.payload.displayTotalBalance))")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .minimumScaleFactor(0.55)
+                Text(formatMoney(entry.payload.displayTotalBalance))
+                    .font(.system(size: 11, weight: .semibold))
+                    .monospacedDigit()
+                    .minimumScaleFactor(0.5)
             }
             .gaugeStyle(.accessoryCircular)
-            .pocketWidgetBackground()
+            .pocketAccessoryBackground()
 
         case .accessoryRectangular:
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Text("💰 總餘額")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    Spacer()
+            VStack(alignment: .leading, spacing: 1) {
+                Text("總餘額")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text(formatMoney(entry.payload.displayTotalBalance))
+                    .font(.system(size: 20, weight: .bold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .widgetAccentable()
+                HStack(spacing: 6) {
+                    Label(formatMoney(entry.payload.bank), systemImage: "building.columns.fill")
+                    Label(formatMoney(entry.payload.cash), systemImage: "wallet.bifold.fill")
                 }
-                Text("$\(formatMoney(entry.payload.displayTotalBalance))")
-                    .font(.system(size: 16, weight: .heavy, design: .rounded))
-                Text("🏦 $\(formatMoney(entry.payload.bank)) · 💵 $\(formatMoney(entry.payload.cash))")
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundColor(.secondary)
+                .font(.system(size: 11, weight: .medium))
+                .labelStyle(CompactLabelStyle())
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
             }
-            .pocketWidgetBackground()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .pocketAccessoryBackground()
 
         case .systemMedium:
-            mediumDashboardBody
+            mediumBody
 
         default:
-            smallDashboardBody
+            smallBody
         }
     }
 
-    var mediumDashboardBody: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 5) {
-                    Text("💰 總餘額")
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .foregroundColor(textSecondary)
-                    Spacer(minLength: 2)
-                    if #available(iOS 17.0, *) {
-                        Button(intent: RefreshWidgetIntent()) {
-                            HStack(spacing: 2) {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.system(size: 9, weight: .bold))
-                                Text("刷新")
-                                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                            }
-                            .foregroundColor(textPrimary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(glassFill)
-                            .clipShape(Capsule())
-                            .overlay(Capsule().stroke(glassStroke, lineWidth: 0.8))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
+    // Header + hero number + budget bar, shared by small & medium.
+    var balanceBlock: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .center) {
+                Text("總餘額")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 4)
+                RefreshButton()
+            }
+            Text(formatMoney(entry.payload.displayTotalBalance))
+                .font(.system(size: 30, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(balanceColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.55)
+                .widgetAccentable()
+            BudgetBar(fraction: budgetFraction, color: budgetColor)
+                .padding(.top, 2)
+            Text("今日可用 \(formatIntMoney(entry.payload.todayLeft))")
+                .font(.system(size: 12, weight: .regular))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+    }
 
-                Text("$\(formatMoney(entry.payload.displayTotalBalance))")
-                    .font(.system(size: 28, weight: .black, design: .rounded))
-                    .foregroundColor(heroBalanceColor)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.65)
+    var smallBody: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            balanceBlock
+            Spacer(minLength: 6)
+            VStack(spacing: 5) {
+                accountRow(symbol: "building.columns.fill", color: PG.blue, title: "銀行", amount: entry.payload.bank)
+                accountRow(symbol: "wallet.bifold.fill", color: PG.accent, title: "現金", amount: entry.payload.cash)
+            }
+        }
+        .padding(16)
+        .pocketWidgetBackground()
+        .widgetURL(ledgerURL("dashboard"))
+    }
 
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color.white.opacity(0.10)).frame(height: 6)
-                        Capsule()
-                            .fill(LinearGradient(colors: [jadePrimary, themeColor], startPoint: .leading, endPoint: .trailing))
-                            .frame(width: max(6, geo.size.width * clampedBattery), height: 6)
-                    }
-                }
-                .frame(height: 6)
-
-                HStack(spacing: 6) {
-                    accountMiniCard(title: "🏦 玉山銀行", amount: entry.payload.bank)
-                    accountMiniCard(title: "💵 現金錢包", amount: entry.payload.cash)
-                }
-
-                HStack {
-                    Text("今日還可花 $\(formatIntMoney(entry.payload.todayLeft))")
-                        .font(.system(size: 9, weight: .semibold, design: .rounded))
-                        .foregroundColor(textMuted)
-                    Spacer()
-                    Text(timeString)
-                        .font(.system(size: 9, weight: .semibold, design: .rounded))
-                        .foregroundColor(jadeBright.opacity(0.9))
-                        .lineLimit(1)
+    var mediumBody: some View {
+        HStack(alignment: .top, spacing: 14) {
+            VStack(alignment: .leading, spacing: 0) {
+                balanceBlock
+                Spacer(minLength: 6)
+                VStack(spacing: 5) {
+                    accountRow(symbol: "building.columns.fill", color: PG.blue, title: "銀行", amount: entry.payload.bank)
+                    accountRow(symbol: "wallet.bifold.fill", color: PG.accent, title: "現金", amount: entry.payload.cash)
                 }
             }
             .frame(maxWidth: .infinity)
 
-            VStack(spacing: 6) {
-                HStack(spacing: 6) {
-                    Link(destination: ledgerURL("expense")) {
-                        VStack(spacing: 3) {
-                            Text("➕").font(.system(size: 14))
-                            Text("記收支")
-                                .font(.system(size: 11, weight: .heavy, design: .rounded))
-                                .foregroundColor(Color(red: 0.02, green: 0.08, blue: 0.05))
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(LinearGradient(colors: [jadeBright, jadePrimary], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
-                    quickTileLink(icon: "🏧", label: "ATM", path: "atm")
+            VStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    actionTile(symbol: "plus", color: PG.accent, label: "記一筆", path: "expense")
+                    actionTile(symbol: "arrow.left.arrow.right", color: PG.cyan, label: "ATM", path: "atm")
                 }
-                HStack(spacing: 6) {
-                    quickTileLink(icon: "🤬", label: "罵醒我", path: "scold")
-                    quickTileLink(icon: "🤝", label: "欠款", path: "debts")
+                HStack(spacing: 8) {
+                    actionTile(symbol: "bolt.fill", color: PG.warning, label: "罵醒我", path: "scold")
+                    actionTile(symbol: "person.2.fill", color: PG.indigo, label: "欠款", path: "debts")
                 }
             }
-            .frame(width: 122)
+            .frame(width: 136)
         }
-        .padding(12)
+        .padding(16)
         .pocketWidgetBackground()
+        .widgetURL(ledgerURL("dashboard"))
     }
 
-    var smallDashboardBody: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 4) {
-                Text("💰 總餘額")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundColor(textSecondary)
-                Spacer(minLength: 2)
-                if #available(iOS 17.0, *) {
-                    Button(intent: RefreshWidgetIntent()) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(textPrimary)
-                            .frame(width: 20, height: 20)
-                            .background(glassFill)
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(glassStroke, lineWidth: 0.7))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
-            Text("$\(formatMoney(entry.payload.displayTotalBalance))")
-                .font(.system(size: 25, weight: .black, design: .rounded))
-                .foregroundColor(heroBalanceColor)
-                .lineLimit(1)
-                .minimumScaleFactor(0.65)
-
-            VStack(spacing: 3) {
-                HStack {
-                    Text("🏦 玉山").font(.system(size: 10, weight: .semibold, design: .rounded)).foregroundColor(textMuted)
-                    Spacer()
-                    Text("$\(formatMoney(entry.payload.bank))").font(.system(size: 11, weight: .heavy, design: .rounded)).foregroundColor(textPrimary)
-                }
-                HStack {
-                    Text("💵 現金").font(.system(size: 10, weight: .semibold, design: .rounded)).foregroundColor(textMuted)
-                    Spacer()
-                    Text("$\(formatMoney(entry.payload.cash))").font(.system(size: 11, weight: .heavy, design: .rounded)).foregroundColor(textPrimary)
-                }
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(glassFill)
-            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).stroke(glassStroke, lineWidth: 0.7))
-
-            HStack(spacing: 4) {
-                Text("今日剩 $\(formatIntMoney(entry.payload.todayLeft))")
-                    .font(.system(size: 9.5, weight: .semibold, design: .rounded))
-                    .foregroundColor(textMuted)
-                    .lineLimit(1)
-                Spacer(minLength: 2)
-                Link(destination: ledgerURL("expense")) {
-                    Text("＋記帳")
-                        .font(.system(size: 10, weight: .heavy, design: .rounded))
-                        .foregroundColor(Color(red: 0.02, green: 0.08, blue: 0.05))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(jadeBright)
-                        .clipShape(Capsule())
-                }
-            }
-        }
-        .padding(11)
-        .pocketWidgetBackground()
-    }
-
-    private func accountMiniCard(title: String, amount: Double) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
+    private func accountRow(symbol: String, color: Color, title: String, amount: Double) -> some View {
+        HStack(spacing: 6) {
+            SymbolTile(symbol: symbol, color: color, size: 18)
             Text(title)
-                .font(.system(size: 9, weight: .semibold, design: .rounded))
-                .foregroundColor(textMuted)
-            Text("$\(formatMoney(amount))")
-                .font(.system(size: 12, weight: .heavy, design: .rounded))
-                .foregroundColor(textPrimary)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 4)
+            Text(formatMoney(amount))
+                .font(.system(size: 13, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(amount < 0 ? PG.negative : Color.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 5)
-        .background(glassFill)
-        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).stroke(glassStroke, lineWidth: 0.7))
     }
 
-    private func quickTileLink(icon: String, label: String, path: String) -> some View {
+    private func actionTile(symbol: String, color: Color, label: String, path: String) -> some View {
         Link(destination: ledgerURL(path)) {
-            VStack(spacing: 3) {
-                Text(icon).font(.system(size: 14))
+            VStack(spacing: 5) {
+                SymbolTile(symbol: symbol, color: color, size: 26)
                 Text(label)
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundColor(textPrimary)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(glassFill)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(glassStroke, lineWidth: 0.8))
+            .background(PG.cell, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
     }
 }
 
-// MARK: - Widget 2: Quick Bookkeeping & 1-Tap Instant Deduct Widget
+private struct CompactLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 3) {
+            configuration.icon.font(.system(size: 9))
+            configuration.title
+        }
+    }
+}
+
+// MARK: - Widget 2: Quick Bookkeeping
 
 struct PocketQuickAddWidgetEntryView: View {
     var entry: PocketProvider.Entry
@@ -556,176 +547,178 @@ struct PocketQuickAddWidgetEntryView: View {
 
     var statusLabel: String {
         if let status = entry.statusText, !status.isEmpty {
-            return status
+            return cleanStatus(status)
         }
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
-        return "同步 \(formatter.string(from: entry.date))"
+        return "\(formatter.string(from: entry.date)) 同步"
+    }
+
+    var balanceColor: Color {
+        entry.payload.displayTotalBalance < 0 ? PG.negative : Color.primary
     }
 
     var body: some View {
         switch family {
         case .systemMedium:
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(spacing: 6) {
-                    Text("💰 總餘額 $\(formatMoney(entry.payload.displayTotalBalance))")
-                        .font(.system(size: 12, weight: .heavy, design: .rounded))
-                        .foregroundColor(jadeBright)
-                    Text("｜").font(.system(size: 10)).foregroundColor(textMuted)
-                    Text("🏦 $\(formatMoney(entry.payload.bank))")
-                        .font(.system(size: 10.5, weight: .bold, design: .rounded))
-                        .foregroundColor(textPrimary)
-                    Text("💵 $\(formatMoney(entry.payload.cash))")
-                        .font(.system(size: 10.5, weight: .bold, design: .rounded))
-                        .foregroundColor(textSecondary)
-                    Spacer(minLength: 2)
-                    Text(statusLabel)
-                        .font(.system(size: 9, weight: .semibold, design: .rounded))
-                        .foregroundColor(jadeBright.opacity(0.9))
-                        .lineLimit(1)
-                    if #available(iOS 17.0, *) {
-                        Button(intent: RefreshWidgetIntent()) {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(textPrimary)
-                                .frame(width: 20, height: 20)
-                                .background(glassFill)
-                                .clipShape(Circle())
-                                .overlay(Circle().stroke(glassStroke, lineWidth: 0.7))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-
-                HStack(spacing: 6) {
-                    Link(destination: ledgerURL("expense")) {
-                        HStack(spacing: 4) {
-                            Text("✍️").font(.system(size: 12))
-                            Text("自訂記收支")
-                                .font(.system(size: 11, weight: .heavy, design: .rounded))
-                                .foregroundColor(Color(red: 0.02, green: 0.08, blue: 0.05))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 7)
-                        .background(LinearGradient(colors: [jadeBright, jadePrimary], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    }
-                    sheetLinkPill(icon: "🏧", label: "ATM 存提", path: "atm")
-                    sheetLinkPill(icon: "🪄", label: "魔術平帳", path: "reconcile")
-                }
-
-                if #available(iOS 17.0, *) {
-                    HStack(spacing: 6) {
-                        instantDeductButton(title: "🏪 超商", amount: 65, merchant: "超商消費", category: "超商")
-                        instantDeductButton(title: "🍱 便當", amount: 120, merchant: "午餐便當", category: "午餐/便當")
-                        instantDeductButton(title: "🥤 飲料", amount: 60, merchant: "手搖飲料", category: "飲料")
-                        instantDeductButton(title: "🚇 車費", amount: 40, merchant: "大眾運輸", category: "車費")
-                    }
-                }
-            }
-            .padding(11)
-            .pocketWidgetBackground()
-
+            mediumBody
         default:
-            smallQuickAddBody
+            smallBody
         }
     }
 
-    var smallQuickAddBody: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 4) {
-                Text("💰 總餘額 $\(formatMoney(entry.payload.displayTotalBalance))")
-                    .font(.system(size: 11, weight: .heavy, design: .rounded))
-                    .foregroundColor(jadeBright)
+    var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("總餘額")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text(formatMoney(entry.payload.displayTotalBalance))
+                    .font(.system(size: 20, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(balanceColor)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                Spacer(minLength: 2)
-                if #available(iOS 17.0, *) {
-                    Button(intent: RefreshWidgetIntent()) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(textPrimary)
-                            .frame(width: 18, height: 18)
-                            .background(glassFill)
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(glassStroke, lineWidth: 0.7))
+                    .minimumScaleFactor(0.6)
+                    .widgetAccentable()
+            }
+            Spacer(minLength: 4)
+            RefreshButton()
+        }
+    }
+
+    var mediumBody: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 6) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("總餘額")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    Text(formatMoney(entry.payload.displayTotalBalance))
+                        .font(.system(size: 22, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(balanceColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .widgetAccentable()
+                }
+                Spacer(minLength: 4)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(statusLabel)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    HStack(spacing: 8) {
+                        Label(formatMoney(entry.payload.bank), systemImage: "building.columns.fill")
+                        Label(formatMoney(entry.payload.cash), systemImage: "wallet.bifold.fill")
                     }
-                    .buttonStyle(.plain)
+                    .labelStyle(CompactLabelStyle())
+                    .font(.system(size: 12, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                 }
+                RefreshButton()
             }
 
-            Link(destination: ledgerURL("expense")) {
-                HStack(spacing: 4) {
-                    Text("➕").font(.system(size: 11))
-                    Text("自訂金額記帳")
-                        .font(.system(size: 11, weight: .heavy, design: .rounded))
-                        .foregroundColor(Color(red: 0.02, green: 0.08, blue: 0.05))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
-                .background(LinearGradient(colors: [jadeBright, jadePrimary], startPoint: .topLeading, endPoint: .bottomTrailing))
-                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            HStack(spacing: 8) {
+                primaryLink(label: "記一筆", path: "expense")
+                pillLink(symbol: "arrow.left.arrow.right", color: PG.cyan, label: "ATM", path: "atm")
+                pillLink(symbol: "slider.horizontal.3", color: PG.gray, label: "校正", path: "reconcile")
             }
 
-            VStack(spacing: 5) {
-                HStack(spacing: 5) {
-                    categoryTile(label: "🏪 超商", path: "expense", category: "超商")
-                    categoryTile(label: "🍱 食物", path: "expense", category: "食物")
-                }
-                HStack(spacing: 5) {
-                    categoryTile(label: "🥤 飲料", path: "expense", category: "飲料")
-                    categoryTile(label: "🏧 ATM", path: "atm", category: nil)
-                }
+            HStack(spacing: 8) {
+                instantDeductButton(symbol: "storefront.fill", color: PG.blue, title: "超商", amount: 65, merchant: "超商消費", category: "超商")
+                instantDeductButton(symbol: "fork.knife", color: PG.warning, title: "便當", amount: 120, merchant: "午餐便當", category: "午餐/便當")
+                instantDeductButton(symbol: "cup.and.saucer.fill", color: PG.brown, title: "飲料", amount: 60, merchant: "手搖飲料", category: "飲料")
+                instantDeductButton(symbol: "car.fill", color: PG.teal, title: "車費", amount: 40, merchant: "大眾運輸", category: "車費")
             }
         }
-        .padding(11)
+        .padding(16)
         .pocketWidgetBackground()
     }
 
-    private func sheetLinkPill(icon: String, label: String, path: String) -> some View {
+    var smallBody: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            header
+            primaryLink(label: "記一筆", path: "expense")
+            VStack(spacing: 6) {
+                HStack(spacing: 6) {
+                    categoryTile(symbol: "storefront.fill", color: PG.blue, label: "超商", path: "expense", category: "超商")
+                    categoryTile(symbol: "fork.knife", color: PG.warning, label: "食物", path: "expense", category: "食物")
+                }
+                HStack(spacing: 6) {
+                    categoryTile(symbol: "cup.and.saucer.fill", color: PG.brown, label: "飲料", path: "expense", category: "飲料")
+                    categoryTile(symbol: "arrow.left.arrow.right", color: PG.cyan, label: "ATM", path: "atm", category: nil)
+                }
+            }
+        }
+        .padding(14)
+        .pocketWidgetBackground()
+    }
+
+    private func primaryLink(label: String, path: String) -> some View {
         Link(destination: ledgerURL(path)) {
             HStack(spacing: 4) {
-                Text(icon).font(.system(size: 12))
+                Image(systemName: "plus")
+                    .font(.system(size: 12, weight: .bold))
                 Text(label)
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundColor(textPrimary)
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 7)
+            .background(PG.accent, in: Capsule())
+            .widgetAccentable()
+        }
+    }
+
+    private func pillLink(symbol: String, color: Color, label: String, path: String) -> some View {
+        Link(destination: ledgerURL(path)) {
+            HStack(spacing: 4) {
+                Image(systemName: symbol)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(color)
+                Text(label)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.primary)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 7)
-            .background(glassFill)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(glassStroke, lineWidth: 0.8))
+            .background(PG.cell, in: Capsule())
         }
     }
 
-    private func categoryTile(label: String, path: String, category: String?) -> some View {
+    private func categoryTile(symbol: String, color: Color, label: String, path: String, category: String?) -> some View {
         Link(destination: ledgerURL(path, category: category)) {
-            Text(label)
-                .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundColor(textPrimary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(glassFill)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(glassStroke, lineWidth: 0.7))
+            HStack(spacing: 5) {
+                SymbolTile(symbol: symbol, color: color, size: 18)
+                Text(label)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 7)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(PG.cell, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
     }
 
-    @available(iOS 17.0, *)
-    private func instantDeductButton(title: String, amount: Int, merchant: String, category: String) -> some View {
+    private func instantDeductButton(symbol: String, color: Color, title: String, amount: Int, merchant: String, category: String) -> some View {
         Button(intent: QuickWidgetExpenseIntent(amount: amount, merchant: merchant, category: category)) {
-            VStack(spacing: 2) {
+            VStack(spacing: 3) {
+                SymbolTile(symbol: symbol, color: color, size: 20)
                 Text(title)
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundColor(textSecondary)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
                 Text("-$\(amount)")
-                    .font(.system(size: 12, weight: .heavy, design: .rounded))
-                    .foregroundColor(jadeBright)
+                    .font(.system(size: 12, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(.primary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.vertical, 5)
-            .background(glassFill)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(glassStroke, lineWidth: 0.7))
+            .background(PG.cell, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -740,8 +733,8 @@ struct PocketGuardianWidget: Widget {
         StaticConfiguration(kind: kind, provider: PocketProvider()) { entry in
             PocketGuardianWidgetEntryView(entry: entry)
         }
-        .configurationDisplayName("💰 總餘額＆實時帳戶")
-        .description("一眼看清總餘額（玉山銀行＋現金錢包），附桌面一鍵刷新與快速記帳。")
+        .configurationDisplayName("總餘額")
+        .description("一眼看清總餘額（銀行＋現金）與今日可用額度。")
         .supportedFamilies([
             .systemSmall,
             .systemMedium,
@@ -759,8 +752,8 @@ struct PocketQuickBookkeepingWidget: Widget {
         StaticConfiguration(kind: kind, provider: PocketProvider()) { entry in
             PocketQuickAddWidgetEntryView(entry: entry)
         }
-        .configurationDisplayName("⚡ 極速記帳＆閃電扣款")
-        .description("桌面一鍵開啟記收支/ATM/平帳面板，或免開 App 直接閃電記下超商、便當、飲料、車費。")
+        .configurationDisplayName("快速記帳")
+        .description("一鍵開啟記一筆／ATM／校正餘額，或免開 App 直接記下超商、便當、飲料、車費。")
         .supportedFamilies([
             .systemSmall,
             .systemMedium

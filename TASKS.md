@@ -101,5 +101,12 @@
     4. 各頁改為大標題＋inset grouped 清單；設定頁各區改為推入子頁；底部字卡改為「取消／標題／完成」表單樣式，保留原有上下滑動關閉手勢邏輯。
     5. 動畫收斂為 iOS 式臨界阻尼彈簧與淡入，移除光管流光、數字脈衝放大、圖示彈跳等裝飾動畫。
     6. 需重新打包 IPA（新增原生模組 `expo-symbols`，無法 OTA）。
+- [x] **T2.18：桌面／鎖定畫面小工具改為 iOS 原生風格（與 T2.17 一致）**
+  - **關聯檔案**：`targets/widget/PocketGuardianWidget.swift`（只改畫面層；資料抓取、快取、`RefreshWidgetIntent`／`QuickWidgetExpenseIntent` 未動）
+  - **驗收條件**：
+    1. 背景改 `systemBackground`，淺色／深色跟隨系統；移除黑曜漸層、光球、玻璃描邊與 emoji。
+    2. 圖示改 SF Symbols 彩色圓角方塊（與 App `IconTile` 同色）；唯一強調色系統綠，負數／超支用系統紅。
+    3. 支援 iOS 18 染色／強調模式（`widgetAccentable`）；鎖定畫面配件改用系統透明背景。
+    4. 需重新打包 IPA 才會生效（Swift 擴充無法 OTA）。
 - [ ] **T2.2：更多行動支付（LINE Pay / 街口支付 / 全支付）專用通知模板細化**
 - [ ] **T3.1：財政部電子發票載具明細補完（選配）**

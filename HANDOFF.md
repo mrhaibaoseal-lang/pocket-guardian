@@ -24,6 +24,13 @@
 - **本機預覽**：`.claude/launch.json` 新增 `expo-web`（以完整 node 路徑啟動 `expo start --web`），未加入 git。
 - **下一步**：使用者確認後 commit → 推送觸發 IPA 打包 → 實機驗收 T2.17。
 
+## 0.1 最新變更（2026-11-14，T2.18 小工具 iOS 原生風格，未 commit）
+
+- `targets/widget/PocketGuardianWidget.swift` 畫面層重寫：系統背景色（淺／深色跟隨系統）、SF Symbols 彩色方塊圖示、系統綠強調、`widgetAccentable` 支援染色模式；鎖定畫面配件用透明背景。資料、快取與兩個 AppIntent 邏輯未改。
+- 小工具名稱改為「總餘額」「快速記帳」；「魔術平帳」按鈕改稱「校正」（深連結仍是 `reconcile`）。
+- **驗證**：Windows 無法編譯 Swift，**尚未經 Xcode 編譯與實機驗證**；需推送後由 GitHub Actions 打包 IPA 確認編譯通過。
+- **下一步**：commit → 推送觸發 IPA → 實機確認小工具（可能需移除舊小工具重新加入）。
+
 ## 1. 已完成工作摘要（截至 `v3.3.0+` 黑曜鉑金×冰翡翠配色 ＋ 字卡上下滑動關閉 ＋ 設定全抽屜 ＋ 回收桶一鍵清空）
 
 0. **本次 Session 完成之 4 大更新（2026-10-31 18:52）**：
