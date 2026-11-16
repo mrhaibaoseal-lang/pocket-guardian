@@ -12,6 +12,9 @@ on:
       - main
       - master
 
+permissions:
+  contents: write
+
 jobs:
   build-unsigned-ipa:
     runs-on: ${{ inputs.runner || 'macos-26-intel' }}
@@ -180,3 +183,9 @@ jobs:
         with:
           name: PocketGuardian-SideStore-IPA
           path: PocketGuardian-SideStore.ipa
+
+      - name: Publish to private Feather source
+        uses: mrhaibaoseal-lang/feather-source@main
+        with:
+          ipa: PocketGuardian-SideStore.ipa
+          icon: assets/icon.png
