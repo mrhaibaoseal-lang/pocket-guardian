@@ -1,7 +1,7 @@
 # HANDOFF.md — 跨工具／跨模型交接紀錄
 
-> **最後更新時間**：2026-11-14 (UTC+8)
-> **最後更新 Agent**：Claude Code（使用者於本次對話直接指定）— 全站 iOS 原生風格 UI／動畫重做（T2.17），**尚未 commit、尚未打包 IPA**
+> **最後更新時間**：2026-11-22 (UTC+8)
+> **最後更新 Agent**：Claude Code（雲端 session）— T2.19 雲端上傳失敗自動補傳，v3.3.1
 > **專案路徑**：`C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger`
 > **Git 分支與最新狀態**：`main`（已同步寫入主工作區並推送 `origin/main` 觸發 IPA 打包）
 > **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `e1c0f72e-03fd-498e-af07-849dab5ef446`，前版可 Rollback ID: `1e12ae0d-666f-42bd-beb3-d061a3a2e4ec`)
@@ -12,7 +12,14 @@
 
 ---
 
-## 0. 最新變更（2026-11-14，T2.17 全站 iOS 原生風格重做，未 commit）
+## 0.0 最新變更（2026-11-22，T2.19 雲端上傳失敗自動補傳，v3.3.1）
+
+- **問題**：小工具停在舊餘額、App 偶爾「雲端連線失敗」。查證：Worker `/api/widget-summary` 正常回應，但雲端玉山 $2,407、App 本機 $1,598 → App 的上傳失敗被靜默吞掉，雲端一直是舊的，小工具如實顯示雲端。
+- **修改**：只動 `src/store/useLedger.tsx`（見 TASKS T2.19）。Worker、小工具 Swift、`core/` 未動。
+- **驗證**：`tsc --noEmit` 0 errors；`vitest run` 64/64。尚未實機驗證。
+- **待觀察**：「偶爾連不到雲端」的根因未確認，懷疑 Cloudflare 免費方案 10ms CPU 上限（每次請求都解析整份帳本 JSON）；可到 Cloudflare 後台 Worker → Logs 查是否有 Exceeded CPU。補傳機制讓偶發失敗不再造成資料不一致。
+
+## 0. 最新變更（2026-11-14，T2.17 全站 iOS 原生風格重做，已 commit）
 
 - **新增**：`src/theme/index.ts`（iOS 系統語意色 light/dark、Dynamic Type 字級、`useThemedStyles`）、`src/components/ui/`（`Icon`/`IconTile` SF Symbols 對照表、`List`（Section/Row/Button/LargeTitle/Badge）、`Segmented`、`Field`/`AmountField`/`SearchField`、`FormRow`/`Chip`、`TxRow`、`PushedPage`、`txVisual`（分類圖示色、金額格式、`stripEmoji`））。
 - **依賴**：`expo-symbols ~58.0.5`（原生模組 → 必須重新打包 IPA 才會生效；web 預覽以 Material Symbols 字型後備）。
@@ -24,7 +31,7 @@
 - **本機預覽**：`.claude/launch.json` 新增 `expo-web`（以完整 node 路徑啟動 `expo start --web`），未加入 git。
 - **下一步**：使用者確認後 commit → 推送觸發 IPA 打包 → 實機驗收 T2.17。
 
-## 0.1 最新變更（2026-11-14，T2.18 小工具 iOS 原生風格，未 commit）
+## 0.1 最新變更（2026-11-14，T2.18 小工具 iOS 原生風格，已 commit）
 
 - `targets/widget/PocketGuardianWidget.swift` 畫面層重寫：系統背景色（淺／深色跟隨系統）、SF Symbols 彩色方塊圖示、系統綠強調、`widgetAccentable` 支援染色模式；鎖定畫面配件用透明背景。資料、快取與兩個 AppIntent 邏輯未改。
 - 小工具名稱改為「總餘額」「快速記帳」；「魔術平帳」按鈕改稱「校正」（深連結仍是 `reconcile`）。

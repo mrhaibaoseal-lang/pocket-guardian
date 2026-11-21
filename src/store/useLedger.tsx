@@ -35,6 +35,22 @@ import type {
 
 const STORAGE_KEY = 'POCKET_GUARDIAN_LEDGER_V3_2_CLEAN';
 const META_KEY = 'POCKET_GUARDIAN_META_V3_2';
+// '1' = local ledger has changes the cloud has not confirmed yet; '0' = in sync.
+// Missing (first launch after this was added) is treated as '1' when a local ledger exists,
+// so a cloud copy that drifted under the old fire-and-forget upload gets repaired once.
+const PENDING_PUSH_KEY = 'POCKET_GUARDIAN_PENDING_PUSH_V1';
+const CLOUD_TIMEOUT_MS = 15000;
+const PUSH_FAIL_NOTICE_AFTER = 3;
+
+async function fetchWithTimeout(url: string, init: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CLOUD_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export interface AppMeta {
   workerUrl: string;
@@ -148,29 +164,76 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
   const hydratedRef = useRef<boolean>(false);
   const inFlightPushCountRef = useRef<number>(0);
   const localMutationSeqRef = useRef<number>(0);
+  const pendingPushRef = useRef<boolean>(false);
+  const pushGenRef = useRef<number>(0);
+  const pushChainRef = useRef<Promise<void>>(Promise.resolve());
+  const pushFailStreakRef = useRef<number>(0);
 
   const setLastToast = useCallback((msg: string | null) => {
     setLastToastState(msg);
     if (msg) setToastSeq((n) => n + 1);
   }, []);
 
-  const pushStateToCloudSilent = useCallback((payload: LedgerData, replace = false) => {
+  const markPendingPush = useCallback((pending: boolean) => {
+    if (pendingPushRef.current === pending) return;
+    pendingPushRef.current = pending;
+    AsyncStorage.setItem(PENDING_PUSH_KEY, pending ? '1' : '0').catch(() => undefined);
+  }, []);
+
+  /** One PUT to /api/state; resolves true only when the Worker confirms `ok: true`. */
+  const putStateToCloud = useCallback(async (payload: LedgerData, replace: boolean): Promise<boolean> => {
     const baseUrl = metaRef.current.workerUrl.replace(/\/+$/, '');
-    if (!baseUrl) return;
-    inFlightPushCountRef.current += 1;
-    fetch(`${baseUrl}/api/state`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(metaRef.current.ingestToken ? { 'X-Ingest-Token': metaRef.current.ingestToken } : {}),
-      },
-      body: JSON.stringify(replace ? { data: payload, replace: true } : { data: payload }),
-    })
-      .catch(() => undefined)
-      .finally(() => {
+    if (!baseUrl) return false;
+    try {
+      const res = await fetchWithTimeout(`${baseUrl}/api/state`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(metaRef.current.ingestToken ? { 'X-Ingest-Token': metaRef.current.ingestToken } : {}),
+        },
+        body: JSON.stringify(replace ? { data: payload, replace: true } : { data: payload }),
+      });
+      if (!res.ok) return false;
+      const json = (await res.json()) as { ok?: boolean };
+      return json.ok === true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  /**
+   * Uploads are queued one after another so an older snapshot can never land after a newer one.
+   * A failed upload leaves the pending flag set; the next cloud sync retries it.
+   */
+  const pushStateToCloudSilent = useCallback(
+    (payload: LedgerData, replace = false): Promise<boolean> => {
+      const gen = ++pushGenRef.current;
+      markPendingPush(true);
+      inFlightPushCountRef.current += 1;
+      const run = pushChainRef.current.then(async () => {
+        const ok = await putStateToCloud(payload, replace);
+        if (ok) {
+          pushFailStreakRef.current = 0;
+          // A newer upload is still queued: it will clear the flag when it lands.
+          if (gen === pushGenRef.current) markPendingPush(false);
+        } else {
+          pushFailStreakRef.current += 1;
+          if (pushFailStreakRef.current === PUSH_FAIL_NOTICE_AFTER) {
+            setLastToast('⚠️ 有修改還沒上傳到雲端，連上後會自動補傳');
+          }
+        }
+        return ok;
+      });
+      pushChainRef.current = run.then(
+        () => undefined,
+        () => undefined,
+      );
+      return run.finally(() => {
         inFlightPushCountRef.current = Math.max(0, inFlightPushCountRef.current - 1);
       });
-  }, []);
+    },
+    [markPendingPush, putStateToCloud, setLastToast],
+  );
 
   const pullAndMergeFromCloud = useCallback(
     async (silent = false) => {
@@ -179,7 +242,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
         const baseUrl = metaRef.current.workerUrl.replace(/\/+$/, '');
         if (!baseUrl) return;
         const seqBeforeFetch = localMutationSeqRef.current;
-        const res = await fetch(`${baseUrl}/api/state`, {
+        const res = await fetchWithTimeout(`${baseUrl}/api/state`, {
           headers: metaRef.current.ingestToken ? { 'X-Ingest-Token': metaRef.current.ingestToken } : {},
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -196,6 +259,17 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
             dataRef.current = merged;
             setData(merged);
             AsyncStorage.setItem(STORAGE_KEY, mergedJson).catch(() => undefined);
+          }
+          if (pendingPushRef.current) {
+            // An earlier upload never got confirmed, so the cloud copy is behind this phone.
+            // `merged` already holds everything the cloud had plus the local edits; make it the cloud copy.
+            const ok = await pushStateToCloudSilent(merged, true);
+            if (!silent) {
+              setLastToast(
+                ok ? '☁️ 已把本機修改補傳到 Cloudflare D1' : '⚠️ 有修改還沒上傳到雲端，連上後會自動補傳',
+              );
+            }
+            return;
           }
           if (newlySyncedTxs.length > 0) {
             pushStateToCloudSilent(merged);
@@ -242,10 +316,15 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
-        const [savedData, savedMeta] = await Promise.all([
+        const [savedData, savedMeta, savedPending] = await Promise.all([
           AsyncStorage.getItem(STORAGE_KEY),
           AsyncStorage.getItem(META_KEY),
+          AsyncStorage.getItem(PENDING_PUSH_KEY),
         ]);
+        // Only a real saved ledger may be pushed back; never the in-memory starter ledger.
+        if (savedData && (savedPending === '1' || savedPending === null)) {
+          markPendingPush(true);
+        }
         if (savedMeta) {
           const parsedMeta = JSON.parse(savedMeta) as Partial<AppMeta>;
           setMeta((prev) => {
@@ -270,7 +349,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
         pullAndMergeFromCloud(true).catch(() => undefined);
       }
     })();
-  }, [pullAndMergeFromCloud]);
+  }, [markPendingPush, pullAndMergeFromCloud]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (nextState) => {
@@ -801,21 +880,15 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
   }, [pullAndMergeFromCloud, triggerHaptic]);
 
   const pushToCloud = useCallback(async () => {
-    const baseUrl = meta.workerUrl.replace(/\/+$/, '');
-    const res = await fetch(`${baseUrl}/api/state`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(meta.ingestToken ? { 'X-Ingest-Token': meta.ingestToken } : {}),
-      },
-      body: JSON.stringify({ data, replace: true }),
-    });
-    const json = (await res.json()) as { ok?: boolean };
-    if (json.ok) {
+    const ok = await pushStateToCloudSilent(dataRef.current, true);
+    if (ok) {
       setLastToast('☁️ 已將本機帳本備份至 Cloudflare D1');
       triggerHaptic('success');
+    } else {
+      setLastToast('⚠️ 備份到雲端失敗，連上後會自動補傳');
+      triggerHaptic('warning');
     }
-  }, [data, meta.ingestToken, meta.workerUrl, triggerHaptic]);
+  }, [pushStateToCloudSilent, setLastToast, triggerHaptic]);
 
   const resetDemoData = useCallback(() => {
     const fresh = createInitialDemoLedger();
