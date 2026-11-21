@@ -12,11 +12,30 @@
 
 ---
 
+## ⚠️ 待辦（使用者有空時做）：重新部署 Cloudflare Worker（T2.20）
+
+**現況（2026-11-22 已裝 v3.3.1 實機確認）**：小工具仍比 App 多 $809（小工具銀行 $2,277／App 玉山 $1,468）。
+**原因**：11/13 用「校正餘額」把玉山往下調 $809，存成一筆 **-$809 adjustment**。舊版 `sanitizeLedgerData` 會刪掉所有金額 ≤ 0 的交易，這個 bug 已在 commit `4c0fdd1`（11/14）修好，但**雲端 Worker 之後沒有重新部署**，仍跑舊的 `core/`。每次 App 上傳，Worker 就把 -$809 刪掉，所以雲端和小工具永遠多 $809。App 端不用再改。
+
+**步驟（Windows PowerShell）**：
+```powershell
+cd C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger
+git pull origin main
+cd cloudflare-worker
+npx wrangler deploy
+```
+（跳出瀏覽器就登入 Cloudflare；看到 `Deployed pocket-guardian-api` 即成功。部署也會一併帶上 `e7c72a9` 轉帳手續費等 11/14 之後的 `core/` 修改。）
+
+**部署後**：
+1. App →「設定 → 雲端同步 → 備份到雲端」，重新上傳含 -$809 調整的帳本。
+2. 按小工具右上角刷新鈕，應與 App 的玉山餘額、可用總額一致。
+3. 完成後把 HANDOFF 開頭的 Worker Version ID 換成新的，並勾選 TASKS T2.20。
+
 ## 0.0 最新變更（2026-11-22，T2.19 雲端上傳失敗自動補傳，v3.3.1）
 
 - **問題**：小工具停在舊餘額、App 偶爾「雲端連線失敗」。查證：Worker `/api/widget-summary` 正常回應，但雲端玉山 $2,407、App 本機 $1,598 → App 的上傳失敗被靜默吞掉，雲端一直是舊的，小工具如實顯示雲端。
 - **修改**：只動 `src/store/useLedger.tsx`（見 TASKS T2.19）。Worker、小工具 Swift、`core/` 未動。
-- **驗證**：`tsc --noEmit` 0 errors；`vitest run` 64/64。尚未實機驗證。
+- **驗證**：`tsc --noEmit` 0 errors；`vitest run` 64/64。已合併 main（PR #1），v3.3.1 實機已安裝；剩下的 $809 差額是 Worker 未部署造成，見上方 T2.20。
 - **待觀察**：「偶爾連不到雲端」的根因未確認，懷疑 Cloudflare 免費方案 10ms CPU 上限（每次請求都解析整份帳本 JSON）；可到 Cloudflare 後台 Worker → Logs 查是否有 Exceeded CPU。補傳機制讓偶發失敗不再造成資料不一致。
 
 ## 0. 最新變更（2026-11-14，T2.17 全站 iOS 原生風格重做，已 commit）
