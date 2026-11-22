@@ -4,7 +4,7 @@
 > **最後更新 Agent**：Claude Code（雲端 session）— T2.20 雲端寫入成功後立即刷新小工具
 > **專案路徑**：`C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger`
 > **Git 分支與最新狀態**：`main`（已同步寫入主工作區並推送 `origin/main` 觸發 IPA 打包）
-> **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `e1c0f72e-03fd-498e-af07-849dab5ef446`，前版可 Rollback ID: `1e12ae0d-666f-42bd-beb3-d061a3a2e4ec`)
+> **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `4cffd974-ab18-43bf-b6b4-09933f8f1385`，2026-11-22 部署，含 `4c0fdd1` 校正修正與 `e7c72a9` 手續費；前版可 Rollback ID: `e1c0f72e-03fd-498e-af07-849dab5ef446`)
 > **最新無簽名 IPA 位置（v3.3.0+ 底部字卡上下滑動跟手關閉修復 ＋ 固定扣款預留刪除不復活／防當月回溯扣款版，GitHub Actions Run ID: 41202906351，11.10 MB）**：
 > - `C:\Users\mrhai\Downloads\PocketGuardian-SideStore.ipa`
 > - `C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger\PocketGuardian-SideStore.ipa`
@@ -12,7 +12,10 @@
 
 ---
 
-## 🔴 待處理（2026-11-22）：線上 Worker 是舊版，會吃掉「校正餘額往下調」
+## ✅ 已部署（2026-11-22，Version `4cffd974`）：線上 Worker 原為舊版，會吃掉「校正餘額往下調」
+
+- **狀態**：使用者已在 Windows 執行 `wrangler deploy` 成功（wrangler 4.166.0）。待使用者在 App「設定 → 備份到雲端」覆蓋 D1 並確認小工具餘額。
+- **Windows 部署提示**：先 `$env:PATH = "C:\Program Files\nodejs;$env:APPDATA\npm;$env:PATH"`，再 `npm install -g wrangler@4.166.0 --allow-scripts=esbuild,workerd`，之後在 `cloudflare-worker/` 執行 `wrangler deploy`（npx 會因找不到 node 與 EBUSY 失敗）。
 
 - **根因**：修正 `4c0fdd1`（2026-11-14，`sanitizeLedgerData` 保留負數校正）只在 repo 與 App 裡，**線上 Worker 還沒重新部署**。Worker `loadLedger` 每次讀 D1 都會經過 `new MemoryLedger()` → `sanitizeLedgerData`，舊版會把 `amount < 0` 的校正交易刪掉，且內容有變就直接寫回 D1。
 - **影響**：小工具（讀 `/api/widget-summary`）看到的是「少了往下校正」的餘額，所以比 App 高（實例：雲端 $2,407、App $1,598）。T2.19 當時判斷為「上傳失敗」，實際更可能是上傳成功、但被舊 Worker 清掉。T2.20 只解決刷新時機，**解決不了這個問題**。
