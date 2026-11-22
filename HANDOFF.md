@@ -12,6 +12,13 @@
 
 ---
 
+## 🔴 待處理（2026-11-22）：線上 Worker 是舊版，會吃掉「校正餘額往下調」
+
+- **根因**：修正 `4c0fdd1`（2026-11-14，`sanitizeLedgerData` 保留負數校正）只在 repo 與 App 裡，**線上 Worker 還沒重新部署**。Worker `loadLedger` 每次讀 D1 都會經過 `new MemoryLedger()` → `sanitizeLedgerData`，舊版會把 `amount < 0` 的校正交易刪掉，且內容有變就直接寫回 D1。
+- **影響**：小工具（讀 `/api/widget-summary`）看到的是「少了往下校正」的餘額，所以比 App 高（實例：雲端 $2,407、App $1,598）。T2.19 當時判斷為「上傳失敗」，實際更可能是上傳成功、但被舊 Worker 清掉。T2.20 只解決刷新時機，**解決不了這個問題**。
+- **修法**：使用者在 Windows 本機 `cloudflare-worker/` 執行 `npx wrangler deploy`（雲端 session 無法連到 Cloudflare）。部署後在 App「設定 → 備份到雲端」，用 App 本機正確的帳本整份覆蓋 D1，再看小工具。
+- 已確認目前 `cloudflare-worker/src/index.ts` 搭配現行 `core/` 可正常打包。
+
 ## 0.00 最新變更（2026-11-22，T2.20 雲端寫入成功後立即刷新小工具，尚未推送）
 
 - **問題**：T2.19 修好雲端資料不一致後，小工具仍會停在舊餘額。原因在刷新時機：App 只在離開前景時叫 iOS 刷新小工具（CI 注入的 `PocketWidgetBridge.m`），這時上傳往往還沒完成；小工具 3 秒快取判斷又讓 1.5 秒／3.5 秒的補刷新只讀快取；之後就要等 iOS 自己排程。
