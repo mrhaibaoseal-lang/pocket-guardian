@@ -222,7 +222,9 @@ struct PocketProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<PocketEntry>) -> Void) {
-        if PocketWidgetStorage.isFreshWithin(seconds: 3) {
+        // Only skip the network when an intent saved a payload a moment ago. Kept short so the
+        // app's follow-up reloads (0s / 1.5s / 3.5s) can still pick up an upload that landed late.
+        if PocketWidgetStorage.isFreshWithin(seconds: 1) {
             let now = Date()
             let cached = PocketWidgetStorage.loadCachedPayload()
             let status = PocketWidgetStorage.recentStatusText()

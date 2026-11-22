@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
+import { reloadWidgets } from '../../modules/widget-reloader';
 import {
   buildSummary,
   clampedDate,
@@ -214,6 +215,8 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
         const ok = await putStateToCloud(payload, replace);
         if (ok) {
           pushFailStreakRef.current = 0;
+          // The cloud copy (which the widget reads) is now current: redraw the widgets right away.
+          reloadWidgets();
           // A newer upload is still queued: it will clear the flag when it lands.
           if (gen === pushGenRef.current) markPendingPush(false);
         } else {

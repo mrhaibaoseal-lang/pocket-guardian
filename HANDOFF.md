@@ -1,7 +1,7 @@
 # HANDOFF.md — 跨工具／跨模型交接紀錄
 
 > **最後更新時間**：2026-11-22 (UTC+8)
-> **最後更新 Agent**：Claude Code（雲端 session）— T2.19 雲端上傳失敗自動補傳，v3.3.1
+> **最後更新 Agent**：Claude Code（雲端 session）— T2.20 雲端寫入成功後立即刷新小工具
 > **專案路徑**：`C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger`
 > **Git 分支與最新狀態**：`main`（已同步寫入主工作區並推送 `origin/main` 觸發 IPA 打包）
 > **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `e1c0f72e-03fd-498e-af07-849dab5ef446`，前版可 Rollback ID: `1e12ae0d-666f-42bd-beb3-d061a3a2e4ec`)
@@ -11,6 +11,13 @@
 > - `C:\Users\mrhai\.cline\worktrees\40249\smart-ledger\PocketGuardian-SideStore.ipa`
 
 ---
+
+## 0.00 最新變更（2026-11-22，T2.20 雲端寫入成功後立即刷新小工具，尚未推送）
+
+- **問題**：T2.19 修好雲端資料不一致後，小工具仍會停在舊餘額。原因在刷新時機：App 只在離開前景時叫 iOS 刷新小工具（CI 注入的 `PocketWidgetBridge.m`），這時上傳往往還沒完成；小工具 3 秒快取判斷又讓 1.5 秒／3.5 秒的補刷新只讀快取；之後就要等 iOS 自己排程。
+- **修改**：新增本地 Expo 模組 `modules/widget-reloader/`（Swift，`WidgetReloader.reloadAll()`，由 autolinking 自動編入，CI 不必改）；`useLedger.tsx` 在 Worker 確認 `ok: true` 後呼叫；小工具快取判斷 3 秒 → 1 秒。Worker、`core/` 未動。
+- **驗證**：`tsc --noEmit` 0 errors；`vitest run` 64/64；`expo-modules-autolinking resolve -p apple` 有找到 `WidgetReloader` pod。`expo lint` 因專案無 ESLint 設定且雲端環境無法下載而未執行。**Swift 尚未經 Xcode 編譯**，需推送後由 GitHub Actions 打包確認，再實機驗收。
+- **另一個風險（未改）**：小工具請求 `/api/widget-summary` 不帶 token。若日後在 Worker 設定 `INGEST_TOKEN` secret，小工具會一直 401 並永遠顯示快取。
 
 ## 0.0 最新變更（2026-11-22，T2.19 雲端上傳失敗自動補傳，v3.3.1）
 
