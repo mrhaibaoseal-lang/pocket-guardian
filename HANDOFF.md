@@ -1,61 +1,66 @@
 # HANDOFF.md — 跨工具／跨模型交接紀錄
 
 > **最後更新時間**：2026-11-22 (UTC+8)
-> **最後更新 Agent**：Claude Code（雲端 session）— T2.20 雲端寫入成功後立即刷新小工具
+> **最後更新 Agent**：Claude Code（雲端 session）— 小工具舊餘額修復收尾、整理本文件
 > **專案路徑**：`C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger`
-> **Git 分支與最新狀態**：`main`（已同步寫入主工作區並推送 `origin/main` 觸發 IPA 打包）
-> **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev` (Version ID: `4cffd974-ab18-43bf-b6b4-09933f8f1385`，2026-11-22 部署，含 `4c0fdd1` 校正修正與 `e7c72a9` 手續費；前版可 Rollback ID: `e1c0f72e-03fd-498e-af07-849dab5ef446`)
-> **最新無簽名 IPA 位置（v3.3.0+ 底部字卡上下滑動跟手關閉修復 ＋ 固定扣款預留刪除不復活／防當月回溯扣款版，GitHub Actions Run ID: 41202906351，11.10 MB）**：
-> - `C:\Users\mrhai\Downloads\PocketGuardian-SideStore.ipa`
-> - `C:\Users\mrhai\.gemini\antigravity\scratch\smart-ledger\PocketGuardian-SideStore.ipa`
-> - `C:\Users\mrhai\.cline\worktrees\40249\smart-ledger\PocketGuardian-SideStore.ipa`
+> **Git**：`origin/main` = `f64d021`（含 T2.19、T2.20）；本機主工作區需 `git pull` 才會同步
+> **App 版號**：`3.3.1`（`app.json`）
+> **Cloudflare Worker 線上版本**：`https://pocket-guardian-api.mr-haibaoseal.workers.dev`，Version ID `4cffd974-ab18-43bf-b6b4-09933f8f1385`（2026-11-22 部署，含 `4c0fdd1` 校正修正與 `e7c72a9` 手續費）；可 Rollback 至前版 `e1c0f72e-03fd-498e-af07-849dab5ef446`
+> **最新 IPA**：GitHub Actions Run #34（ID `44999564189`，commit `f64d021`）打包中；成功後自動發布到私人 Feather 來源。版號未升，Feather 可能不提示更新，需手動重裝。
 
 ---
 
-## ✅ 已部署（2026-11-22，Version `4cffd974`）：線上 Worker 原為舊版，會吃掉「校正餘額往下調」
+## 0. 目前狀態與待辦
 
-- **狀態**：使用者已在 Windows 執行 `wrangler deploy` 成功（wrangler 4.166.0）。待使用者在 App「設定 → 備份到雲端」覆蓋 D1 並確認小工具餘額。
-- **Windows 部署提示**：先 `$env:PATH = "C:\Program Files\nodejs;$env:APPDATA\npm;$env:PATH"`，再 `npm install -g wrangler@4.166.0 --allow-scripts=esbuild,workerd`，之後在 `cloudflare-worker/` 執行 `wrangler deploy`（npx 會因找不到 node 與 EBUSY 失敗）。
+- ✅ **小工具停在舊餘額：已修好並經使用者確認**（雲端與 App 餘額一致）。
+- ⏳ **Run #34 打包結果待確認**：第一次編譯新的 Swift 模組 `modules/widget-reloader/`。失敗時優先檢查這個模組（podspec、`ExpoModulesCore` 匯入）。
+- ⏳ **實機驗收（裝 Run #34 的 IPA 後）**：
+  1. T2.20：App 記一筆 → 回桌面，小工具數秒內更新（不更新就移除小工具再加回）。
+  2. T2.17 全站 iOS 原生風格、T2.18 小工具新外觀：SF Symbols、BlurView、底部字卡手勢都還沒在 iPhone 上確認過。
+- ⚠️ **未處理風險**：小工具請求 `/api/widget-summary` 不帶 token。若日後在 Worker 設定 `INGEST_TOKEN` secret，小工具會一直 401、永遠顯示快取。
+- ⚠️ **待觀察**：App 偶爾「雲端連線失敗」的根因未確認，懷疑 Cloudflare 免費方案每次請求 10ms CPU 上限（每次都解析整份帳本 JSON）。可到 Cloudflare 後台 Worker → Logs 查是否有 `Exceeded CPU`。
 
-- **根因**：修正 `4c0fdd1`（2026-11-14，`sanitizeLedgerData` 保留負數校正）只在 repo 與 App 裡，**線上 Worker 還沒重新部署**。Worker `loadLedger` 每次讀 D1 都會經過 `new MemoryLedger()` → `sanitizeLedgerData`，舊版會把 `amount < 0` 的校正交易刪掉，且內容有變就直接寫回 D1。
-- **影響**：小工具（讀 `/api/widget-summary`）看到的是「少了往下校正」的餘額，所以比 App 高（實例：雲端 $2,407、App $1,598）。T2.19 當時判斷為「上傳失敗」，實際更可能是上傳成功、但被舊 Worker 清掉。T2.20 只解決刷新時機，**解決不了這個問題**。
-- **修法**：使用者在 Windows 本機 `cloudflare-worker/` 執行 `npx wrangler deploy`（雲端 session 無法連到 Cloudflare）。部署後在 App「設定 → 備份到雲端」，用 App 本機正確的帳本整份覆蓋 D1，再看小工具。
-- 已確認目前 `cloudflare-worker/src/index.ts` 搭配現行 `core/` 可正常打包。
+## 1. 近期變更（新到舊）
 
-## 0.00 最新變更（2026-11-22，T2.20 雲端寫入成功後立即刷新小工具，尚未推送）
+### 2026-11-22：小工具停在舊餘額（T2.19 → Worker 部署 → T2.20）
 
-- **問題**：T2.19 修好雲端資料不一致後，小工具仍會停在舊餘額。原因在刷新時機：App 只在離開前景時叫 iOS 刷新小工具（CI 注入的 `PocketWidgetBridge.m`），這時上傳往往還沒完成；小工具 3 秒快取判斷又讓 1.5 秒／3.5 秒的補刷新只讀快取；之後就要等 iOS 自己排程。
-- **修改**：新增本地 Expo 模組 `modules/widget-reloader/`（Swift，`WidgetReloader.reloadAll()`，由 autolinking 自動編入，CI 不必改）；`useLedger.tsx` 在 Worker 確認 `ok: true` 後呼叫；小工具快取判斷 3 秒 → 1 秒。Worker、`core/` 未動。
-- **驗證**：`tsc --noEmit` 0 errors；`vitest run` 64/64；`expo-modules-autolinking resolve -p apple` 有找到 `WidgetReloader` pod。`expo lint` 因專案無 ESLint 設定且雲端環境無法下載而未執行。**Swift 尚未經 Xcode 編譯**，需推送後由 GitHub Actions 打包確認，再實機驗收。
-- **另一個風險（未改）**：小工具請求 `/api/widget-summary` 不帶 token。若日後在 Worker 設定 `INGEST_TOKEN` secret，小工具會一直 401 並永遠顯示快取。
+- **真正根因：線上 Worker 是舊版**。修正 `4c0fdd1`（2026-11-14，`sanitizeLedgerData` 保留負數校正）只進了 repo 與 App，Worker 沒重新部署。Worker `loadLedger` 每次讀 D1 都經過 `new MemoryLedger()` → `sanitizeLedgerData`，舊版會刪掉 `amount < 0` 的校正交易，內容有變就寫回 D1。小工具讀 `/api/widget-summary`，所以餘額比 App 高（雲端 $2,407、App $1,598）。
+  - **處理**：使用者在 Windows 部署新版 Worker（`4cffd974`），再用 App「設定 → 備份到雲端」覆蓋 D1。使用者已確認一致。
+- **T2.19（v3.3.1）上傳失敗自動補傳**：只改 `src/store/useLedger.tsx`。上傳要收到 `ok: true` 才算成功，失敗留 `POCKET_GUARDIAN_PENDING_PUSH_V1` 旗標，下次同步補傳。當時以為根因是上傳失敗，後來證實主因是上面的舊 Worker；這個補傳機制仍保留，用來防偶發失敗。
+- **T2.20 雲端寫入成功後立即刷新小工具**：
+  - 原因：App 只在離開前景時叫 iOS 刷新小工具（CI 注入的 `PocketWidgetBridge.m`），那時上傳常還沒完成。小工具「3 秒內抓過就用快取」的判斷，又讓 1.5 秒／3.5 秒的補刷新只讀快取。
+  - 修改：新增本地 Expo 模組 `modules/widget-reloader/`（Swift，由 autolinking 自動編入，CI 不必改）；`useLedger.tsx` 在 `ok: true` 後呼叫 `reloadWidgets()`；`targets/widget/PocketGuardianWidget.swift` 快取判斷 3 秒 → 1 秒。舊版 IPA／web／Expo Go 沒有此模組時安全略過。
 
-## 0.0 最新變更（2026-11-22，T2.19 雲端上傳失敗自動補傳，v3.3.1）
-
-- **問題**：小工具停在舊餘額、App 偶爾「雲端連線失敗」。查證：Worker `/api/widget-summary` 正常回應，但雲端玉山 $2,407、App 本機 $1,598 → App 的上傳失敗被靜默吞掉，雲端一直是舊的，小工具如實顯示雲端。
-- **修改**：只動 `src/store/useLedger.tsx`（見 TASKS T2.19）。Worker、小工具 Swift、`core/` 未動。
-- **驗證**：`tsc --noEmit` 0 errors；`vitest run` 64/64。尚未實機驗證。
-- **待觀察**：「偶爾連不到雲端」的根因未確認，懷疑 Cloudflare 免費方案 10ms CPU 上限（每次請求都解析整份帳本 JSON）；可到 Cloudflare 後台 Worker → Logs 查是否有 Exceeded CPU。補傳機制讓偶發失敗不再造成資料不一致。
-
-## 0. 最新變更（2026-11-14，T2.17 全站 iOS 原生風格重做，已 commit）
+### 2026-11-14：T2.17 全站 iOS 原生風格重做
 
 - **新增**：`src/theme/index.ts`（iOS 系統語意色 light/dark、Dynamic Type 字級、`useThemedStyles`）、`src/components/ui/`（`Icon`/`IconTile` SF Symbols 對照表、`List`（Section/Row/Button/LargeTitle/Badge）、`Segmented`、`Field`/`AmountField`/`SearchField`、`FormRow`/`Chip`、`TxRow`、`PushedPage`、`txVisual`（分類圖示色、金額格式、`stripEmoji`））。
-- **依賴**：`expo-symbols ~58.0.5`（原生模組 → 必須重新打包 IPA 才會生效；web 預覽以 Material Symbols 字型後備）。
-- **App 殼層**：4 分頁（總覽/明細/欠款/設定），iOS 26 浮動膠囊導覽列（保留原生水平分頁滑動與導覽列滑動切換）；捷徑頁改由設定推入；頂部通知改 iOS 通知橫幅（顯示時去除 emoji，`⚠️` 開頭的錯誤 toast 顯示紅色警示圖示，store 內原字串未改動以保留錯誤判斷）。
-- **各頁**：總覽（大數字＋進度條＋三格統計、快速記帳 4 格、帳戶、工具、小金庫、最近 5 筆）；明細（搜尋、全部/最近刪除分段、依日期分組、點選展開詳細與操作）；欠款（摘要、+ 開啟表單、依對象/未結清/已結清）；設定（iOS 設定式清單＋推入子頁）。
-- **底部字卡**：`ActionSheetModals.tsx` 第 1～446 行的手勢／捲動交接邏輯保留，只調整開關動畫（無縮放／淡出、臨界阻尼彈簧）並重寫畫面為「取消／標題／完成」表單。
-- **被拿掉的小東西**：明細列內的「雙源已鎖／前端槽／銀行槽」標籤改為展開後的「來源」文字與鎖頭小圖示；捷徑頁重複的「近期收訊紀錄」移除（設定 → 收訊紀錄仍有）；金額欄旁的「清空」二次確認鈕移除。
-- **驗證**：`tsc --noEmit` 0 errors；`vitest run` 112/112 通過；web 預覽 393×852 淺色／深色逐頁目視檢查（總覽、明細展開、欠款、設定、捷徑推入頁、記一筆／ATM／校正餘額字卡）。**尚未在 iPhone 實機驗證**（SF Symbols、BlurView、字卡手勢需實機確認）。
-- **本機預覽**：`.claude/launch.json` 新增 `expo-web`（以完整 node 路徑啟動 `expo start --web`），未加入 git。
-- **下一步**：使用者確認後 commit → 推送觸發 IPA 打包 → 實機驗收 T2.17。
+- **依賴**：`expo-symbols ~58.0.5`（原生模組，需重新打包 IPA；web 預覽以 Material Symbols 字型後備）。
+- **App 殼層**：4 分頁（總覽／明細／欠款／設定），iOS 26 浮動膠囊導覽列（保留水平分頁滑動）；捷徑頁改由設定推入；頂部通知改 iOS 通知橫幅（顯示時去除 emoji，`⚠️` 開頭顯示紅色警示圖示，store 內原字串未改以保留錯誤判斷）。
+- **各頁**：總覽（大數字＋進度條＋三格統計、快速記帳 4 格、帳戶、工具、小金庫、最近 5 筆）；明細（搜尋、全部／最近刪除分段、依日期分組、點選展開）；欠款（摘要、+ 開啟表單、依對象／未結清／已結清）；設定（iOS 設定式清單＋推入子頁）。
+- **底部字卡**：`ActionSheetModals.tsx` 第 1～446 行的手勢／捲動交接邏輯保留，只改開關動畫並重寫畫面為「取消／標題／完成」表單。
+- **拿掉的小東西**：明細列內「雙源已鎖／前端槽／銀行槽」標籤改為展開後的「來源」文字與鎖頭圖示；捷徑頁重複的「近期收訊紀錄」移除（設定 → 收訊紀錄仍有）；金額欄旁「清空」二次確認鈕移除。
+- **本機預覽**：`.claude/launch.json` 有 `expo-web`（以完整 node 路徑啟動 `expo start --web`），未加入 git。
 
-## 0.1 最新變更（2026-11-14，T2.18 小工具 iOS 原生風格，已 commit）
+### 2026-11-14：T2.18 小工具 iOS 原生風格
 
-- `targets/widget/PocketGuardianWidget.swift` 畫面層重寫：系統背景色（淺／深色跟隨系統）、SF Symbols 彩色方塊圖示、系統綠強調、`widgetAccentable` 支援染色模式；鎖定畫面配件用透明背景。資料、快取與兩個 AppIntent 邏輯未改。
+- `targets/widget/PocketGuardianWidget.swift` 畫面層重寫：系統背景色（淺／深色跟隨系統）、SF Symbols 彩色方塊圖示、系統綠強調、`widgetAccentable` 染色模式；鎖定畫面配件用透明背景。資料、快取與兩個 AppIntent 邏輯未改。
 - 小工具名稱改為「總餘額」「快速記帳」；「魔術平帳」按鈕改稱「校正」（深連結仍是 `reconcile`）。
-- **驗證**：Windows 無法編譯 Swift，**尚未經 Xcode 編譯與實機驗證**；需推送後由 GitHub Actions 打包 IPA 確認編譯通過。
-- **下一步**：commit → 推送觸發 IPA → 實機確認小工具（可能需移除舊小工具重新加入）。
 
-## 1. 已完成工作摘要（截至 `v3.3.0+` 黑曜鉑金×冰翡翠配色 ＋ 字卡上下滑動關閉 ＋ 設定全抽屜 ＋ 回收桶一鍵清空）
+## 2. 測試與環境
+
+- **TypeScript (`tsc --noEmit`)**：✅ 0 errors（2026-11-22）
+- **Vitest (`vitest run`)**：✅ 1 test file、64/64 通過（2026-11-22）。涵蓋轉帳截圖與存摺解析、刪除後重掃不吃單、回收桶永久刪除、負數校正保留、Workers AI 結構化 JSON 解析等。
+- **`expo lint`**：專案沒有 ESLint 設定，雲端環境也無法下載，未執行。
+- **Swift**：Windows 與雲端環境都無法編譯，只能靠 GitHub Actions 打包確認。
+- **Windows 部署 Worker**：npx 會因子程序找不到 `node` 與 `EBUSY` 失敗。wrangler 已全域安裝，以後在 `cloudflare-worker/` 執行：
+  ```powershell
+  $env:PATH = "C:\Program Files\nodejs;$env:APPDATA\npm;$env:PATH"
+  wrangler deploy
+  ```
+  重裝 wrangler 時要加 `--allow-scripts=esbuild,workerd`（npm 12 預設不跑安裝腳本）。
+- **重要：改到 `core/` 或 `cloudflare-worker/` 一定要重新部署 Worker**，否則線上 Worker 與 App 邏輯不一致（這次的舊餘額問題就是這樣造成的）。雲端 session 連不到 Cloudflare，需使用者在 Windows 執行。
+
+## 3. 歷史紀錄：已完成工作摘要（截至 `v3.3.0+` 黑曜鉑金×冰翡翠配色 ＋ 字卡上下滑動關閉 ＋ 設定全抽屜 ＋ 回收桶一鍵清空）
 
 0. **本次 Session 完成之 4 大更新（2026-10-31 18:52）**：
    - **① 全站 UI 配色升級為「方案 1：🏛️ 黑曜鉑金 × 冰翡翠 (Obsidian Platinum & Jade)」(`App.tsx`, `src/components/LiquidGlassView.tsx`, `src/components/iosAnimations.tsx`, `src/components/MorphingCategoryPill.tsx`, `src/components/SafeConfirmButton.tsx`, `src/components/ActionSheetModals.tsx`, `src/screens/*.tsx`)**：
@@ -109,21 +114,9 @@
 
 ---
 
-## 2. 最新測試與環境狀態
+## 4. 接手 Agent 注意事項
 
-- **Windows 環境注意事項**：本機 Node.js 位於 `C:\Program Files\nodejs`，若在終端機執行 `npx` / `vitest` / `wrangler` 遇到找不到 `node`，請先確保 `$env:PATH = "C:\Program Files\nodejs;$env:PATH"`。
-- **TypeScript 型別檢查 (`npx tsc --noEmit`)**：✅ **通過（0 Errors）**
-- **Vitest 單元測試 (`npx vitest run`)**：✅ **通過（1 Test File, 62/62 Tests Passed）**
-  - 涵蓋實機 7724/7794 轉出截圖、7717 玉山存摺明細轉入收入（`網路非約轉帳 ... 轉帳給此帳號` -> `轉入：阮*豫 ****88173 +$500`，排除年份 `2026` 與 `帳戶餘額 2,040`）、7793 錯誤截圖精簡提示、刪除舊交易後重掃不吃單（`mergeLedgerData` 忽略已刪除交易的 `idempotencyKey`）、7天回收桶一鍵全部永久刪除 (`emptyTrash`) 與單筆永久刪除 (`hardDelete`)、以及 Cloudflare Workers AI / iOS 捷徑 AI 結構化 JSON 解析。
-
----
-
-## 3. 下一步行動（供接手的 Cline Agent 參考）
-
-1. **禁止全倉掃描與禁止重寫已完成模組**：
-   - 請先閱讀 `AGENTS.md`、`HANDOFF.md`、`TASKS.md`，並檢查 `git status`。
-   - 只讀取與使用者當前指令直接相關的 1～3 個檔案，嚴禁掃描 `node_modules`、`.expo`、`dist-ipa`。
-2. **等待使用者實機測試 `v3.2.3` 回饋**：
-   - 若使用者回報特定銀行通知或轉帳截圖文字格式需微調：只讀取並修改 `core/parsers.ts` 與 `core/__tests__/core.test.ts`，跑過 `npx vitest run` 後，可在獲得使用者同意後於 `cloudflare-worker/` 執行 `npx wrangler deploy` 即時更新雲端解析器（0 元免費，免重裝 App）。
-   - 若使用者要求調整 UI 細節：只修改對應的 `src/screens/*.tsx` 或 `App.tsx`，確認 `npx tsc --noEmit` 通過。
-   - **重要成本護欄**：未經使用者明確指示「打包 IPA / 推送 GitHub」，切勿主動執行 `git push` 或 `gh workflow run` 以免消耗 GitHub Actions macOS 分鐘數。
+1. 先讀 `AGENTS.md`、本文件、`TASKS.md`，檢查 `git status`。只讀與當前任務相關的 1～3 個檔案，不掃 `node_modules`、`.expo`、`dist-ipa`。
+2. 解析器微調：只改 `core/parsers.ts` 與 `core/__tests__/core.test.ts`，跑過 `vitest run`，經使用者同意後部署 Worker（免重裝 App）。
+3. UI 微調：只改對應的 `src/screens/*.tsx`、`src/components/` 或 `App.tsx`，確認 `tsc --noEmit` 通過。
+4. **成本護欄**：推到 `main` 會觸發 IPA 打包（消耗 GitHub Actions macOS 分鐘數）。未經使用者明確指示，不要 `git push` 或 `gh workflow run`。
